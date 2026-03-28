@@ -1,0 +1,318 @@
+/**
+ * 动画设计令牌 (Animation Design Tokens)
+ * 用于创建流畅的过渡和微交互效果
+ */
+
+:root {
+    /* ========================================
+       持续时间 (Durations)
+    ======================================== */
+    --duration-instant: 0ms;
+    --duration-fast: 100ms;
+    --duration-normal: 200ms;
+    --duration-slow: 300ms;
+    --duration-slower: 500ms;
+    --duration-slowest: 700ms;
+
+    /* ========================================
+       缓动函数 (Easing Functions)
+    ======================================== */
+    /* 标准缓动 */
+    --ease-linear: linear;
+    --ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* 弹性缓动 */
+    --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    --ease-elastic: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+    /* 专用缓动 */
+    --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+    --ease-decelerated: cubic-bezier(0, 0, 0.2, 1);
+    --ease-accelerated: cubic-bezier(0.4, 0, 1, 1);
+
+    /* ========================================
+       过渡组合 (Transition Compositions)
+    ======================================== */
+    --transition-fast: var(--duration-fast) var(--ease-out);
+    --transition-normal: var(--duration-normal) var(--ease-out);
+    --transition-slow: var(--duration-slow) var(--ease-out);
+
+    --transition-bounce: var(--duration-normal) var(--ease-bounce);
+    --transition-elastic: var(--duration-slow) var(--ease-elastic);
+
+    /* ========================================
+       动画延迟 (Animation Delays)
+    ======================================== */
+    --delay-none: 0ms;
+    --delay-short: 100ms;
+    --delay-medium: 200ms;
+    --delay-long: 300ms;
+}
+
+/* ========================================
+   关键帧动画 (Keyframe Animations)
+======================================== */
+
+/* 淡入 */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* 淡出 */
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
+/* 从下方滑入 */
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 从上方滑入 */
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 从左侧滑入 */
+@keyframes slideLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* 从右侧滑入 */
+@keyframes slideRight {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* 缩放进入 */
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* 缩放退出 */
+@keyframes scaleOut {
+    from {
+        opacity: 1;
+        transform: scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+}
+
+/* 脉冲 */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* 弹跳 */
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+/* 旋转 */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* 抖动 */
+@keyframes shake {
+    0%, 100% {
+        transform: translateX(0);
+    }
+    10%, 30%, 50%, 70%, 90% {
+        transform: translateX(-5px);
+    }
+    20%, 40%, 60%, 80% {
+        transform: translateX(5px);
+    }
+}
+
+/* 闪烁 */
+@keyframes flash {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0;
+    }
+}
+
+/* 心跳 */
+@keyframes heartbeat {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+/* 边框脉冲 */
+@keyframes borderPulse {
+    0% {
+        border-color: var(--color-border-default);
+    }
+    50% {
+        border-color: var(--color-primary);
+    }
+    100% {
+        border-color: var(--color-border-default);
+    }
+}
+
+/* 浮动 */
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+/* 渐变背景动画 */
+@keyframes gradientShift {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+/* ========================================
+   动画工具类 (Animation Utilities)
+======================================== */
+
+.animate-fade-in {
+    animation: fadeIn var(--duration-normal) var(--ease-out) forwards;
+}
+
+.animate-fade-out {
+    animation: fadeOut var(--duration-normal) var(--ease-out) forwards;
+}
+
+.animate-slide-up {
+    animation: slideUp var(--duration-slow) var(--ease-out) forwards;
+}
+
+.animate-slide-down {
+    animation: slideDown var(--duration-slow) var(--ease-out) forwards;
+}
+
+.animate-slide-left {
+    animation: slideLeft var(--duration-slow) var(--ease-out) forwards;
+}
+
+.animate-slide-right {
+    animation: slideRight var(--duration-slow) var(--ease-out) forwards;
+}
+
+.animate-scale-in {
+    animation: scaleIn var(--duration-normal) var(--ease-out) forwards;
+}
+
+.animate-scale-out {
+    animation: scaleOut var(--duration-normal) var(--ease-out) forwards;
+}
+
+.animate-pulse {
+    animation: pulse 2s var(--ease-in-out) infinite;
+}
+
+.animate-bounce {
+    animation: bounce 1s var(--ease-in-out) infinite;
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+.animate-shake {
+    animation: shake 0.5s var(--ease-in-out);
+}
+
+.animate-flash {
+    animation: flash 1s var(--ease-in-out);
+}
+
+.animate-heartbeat {
+    animation: heartbeat 1.5s var(--ease-in-out) infinite;
+}
+
+.animate-float {
+    animation: float 3s var(--ease-in-out) infinite;
+}
+
+/* 延迟类 */
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }

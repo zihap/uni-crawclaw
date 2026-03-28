@@ -1,0 +1,130 @@
+/**
+ * 现代CSS重置 (Modern CSS Reset)
+ * 基于Andy Bell的现代CSS重置方案
+ */
+
+/* Box-sizing规则 */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+/* 移除默认边距和填充 */
+* {
+    margin: 0;
+    padding: 0;
+}
+
+/* 设置核心根默认值 */
+html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+/* 设置body默认值 */
+body {
+    min-height: 100vh;
+    line-height: 1.5;
+    font-family: var(--font-family-base, system-ui, -apple-system, sans-serif);
+    color: var(--color-text-primary, #171717);
+    background-color: var(--color-bg-primary, #ffffff);
+}
+
+/* 设置媒体元素默认值 */
+img,
+picture,
+video,
+canvas,
+svg {
+    display: block;
+    max-width: 100%;
+}
+
+/* 设置表单元素继承字体 */
+input,
+button,
+textarea,
+select {
+    font: inherit;
+    color: inherit;
+}
+
+/* 设置按钮样式 */
+button {
+    cursor: pointer;
+    background: none;
+    border: none;
+}
+
+/* 设置文本区域默认值 */
+textarea {
+    resize: vertical;
+}
+
+/* 设置表格默认值 */
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+/* 设置列表样式 */
+ul,
+ol {
+    list-style: none;
+}
+
+/* 设置链接样式 */
+a {
+    text-decoration: none;
+    color: inherit;
+}
+
+/* 设置标题文本包裹 */
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    overflow-wrap: break-word;
+}
+
+/* 设置根元素堆叠上下文 */
+#root,
+#__next {
+    isolation: isolate;
+}
+
+/* 移除触摸高亮 */
+* {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* 设置滚动条样式 */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--color-neutral-300, #d4d4d4);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-neutral-400, #a3a3a3);
+}
+
+/* 设置选择文本样式 */
+::selection {
+    background: var(--color-primary-200, #c7d2fe);
+    color: var(--color-primary-900, #312e81);
+}

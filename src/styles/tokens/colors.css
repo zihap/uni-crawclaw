@@ -1,0 +1,199 @@
+/**
+ * 颜色设计令牌 (Color Design Tokens)
+ * 基于现代设计系统的色彩理论
+ * 支持亮色/暗黑主题切换
+ */
+
+:root {
+    /* ========================================
+       主色调 (Primary Colors)
+       用于主要操作、品牌标识
+    ======================================== */
+    --color-primary-50: #eef2ff;
+    --color-primary-100: #e0e7ff;
+    --color-primary-200: #c7d2fe;
+    --color-primary-300: #a5b4fc;
+    --color-primary-400: #818cf8;
+    --color-primary-500: #667eea;  /* 主色 */
+    --color-primary-600: #5a6fd6;  /* 主色-深 */
+    --color-primary-700: #4f46e5;
+    --color-primary-800: #3730a3;
+    --color-primary-900: #312e81;
+
+    /* ========================================
+       辅助色 (Secondary Colors)
+       用于次要操作、装饰元素
+    ======================================== */
+    --color-secondary-50: #fdf4ff;
+    --color-secondary-100: #fae8ff;
+    --color-secondary-200: #f5d0fe;
+    --color-secondary-300: #f0abfc;
+    --color-secondary-400: #e879f9;
+    --color-secondary-500: #f093fb;  /* 辅助色 */
+    --color-secondary-600: #e880f0;  /* 辅助色-深 */
+    --color-secondary-700: #c026d3;
+    --color-secondary-800: #a21caf;
+    --color-secondary-900: #701a75;
+
+    /* ========================================
+       语义色 (Semantic Colors)
+       用于状态反馈、信息提示
+    ======================================== */
+    /* 成功色 */
+    --color-success-50: #f0fdf4;
+    --color-success-100: #dcfce7;
+    --color-success-200: #bbf7d0;
+    --color-success-300: #86efac;
+    --color-success-400: #4ade80;
+    --color-success-500: #4CAF50;  /* 成功 */
+    --color-success-600: #16a34a;
+    --color-success-700: #15803d;
+    --color-success-800: #166534;
+    --color-success-900: #14532d;
+
+    /* 警告色 */
+    --color-warning-50: #fffbeb;
+    --color-warning-100: #fef3c7;
+    --color-warning-200: #fde68a;
+    --color-warning-300: #fcd34d;
+    --color-warning-400: #fbbf24;
+    --color-warning-500: #FF9800;  /* 警告 */
+    --color-warning-600: #d97706;
+    --color-warning-700: #b45309;
+    --color-warning-800: #92400e;
+    --color-warning-900: #78350f;
+
+    /* 错误色 */
+    --color-error-50: #fef2f2;
+    --color-error-100: #fee2e2;
+    --color-error-200: #fecaca;
+    --color-error-300: #fca5a5;
+    --color-error-400: #f87171;
+    --color-error-500: #F44336;  /* 错误 */
+    --color-error-600: #dc2626;
+    --color-error-700: #b91c1c;
+    --color-error-800: #991b1b;
+    --color-error-900: #7f1d1d;
+
+    /* 信息色 */
+    --color-info-50: #eff6ff;
+    --color-info-100: #dbeafe;
+    --color-info-200: #bfdbfe;
+    --color-info-300: #93c5fd;
+    --color-info-400: #60a5fa;
+    --color-info-500: #2196F3;  /* 信息 */
+    --color-info-600: #2563eb;
+    --color-info-700: #1d4ed8;
+    --color-info-800: #1e40af;
+    --color-info-900: #1e3a8a;
+
+    /* ========================================
+       中性色 (Neutral Colors)
+       用于文本、背景、边框
+    ======================================== */
+    --color-neutral-0: #ffffff;
+    --color-neutral-50: #fafafa;
+    --color-neutral-100: #f5f5f5;
+    --color-neutral-200: #e5e5e5;
+    --color-neutral-300: #d4d4d4;
+    --color-neutral-400: #a3a3a3;
+    --color-neutral-500: #737373;
+    --color-neutral-600: #525252;
+    --color-neutral-700: #404040;
+    --color-neutral-800: #262626;
+    --color-neutral-900: #171717;
+    --color-neutral-950: #0a0a0a;
+
+    /* ========================================
+       主题别名 (Theme Aliases)
+       便于主题切换和语义化使用
+    ======================================== */
+    /* 主题色 */
+    --color-primary: var(--color-primary-500);
+    --color-primary-dark: var(--color-primary-600);
+    --color-primary-light: var(--color-primary-400);
+    
+    --color-secondary: var(--color-secondary-500);
+    --color-secondary-dark: var(--color-secondary-600);
+    --color-secondary-light: var(--color-secondary-400);
+
+    /* 语义色别名 */
+    --color-success: var(--color-success-500);
+    --color-warning: var(--color-warning-500);
+    --color-error: var(--color-error-500);
+    --color-info: var(--color-info-500);
+
+    /* 背景色 */
+    --color-bg-primary: var(--color-neutral-0);
+    --color-bg-secondary: var(--color-neutral-50);
+    --color-bg-tertiary: var(--color-neutral-100);
+    --color-bg-inverse: var(--color-neutral-900);
+
+    /* 文本色 */
+    --color-text-primary: var(--color-neutral-900);
+    --color-text-secondary: var(--color-neutral-600);
+    --color-text-tertiary: var(--color-neutral-400);
+    --color-text-inverse: var(--color-neutral-0);
+    --color-text-disabled: var(--color-neutral-400);
+
+    /* 边框色 */
+    --color-border-light: var(--color-neutral-200);
+    --color-border-default: var(--color-neutral-300);
+    --color-border-strong: var(--color-neutral-400);
+
+    /* ========================================
+       游戏专用色 (Game Specific Colors)
+    ======================================== */
+    --color-player-1: var(--color-primary-500);
+    --color-player-2: var(--color-success-500);
+    --color-player-3: var(--color-error-500);
+    --color-player-4: var(--color-warning-500);
+
+    /* 奖牌色 */
+    --color-gold: #ffd700;
+    --color-silver: #c0c0c0;
+    --color-bronze: #cd7f32;
+}
+
+/* ========================================
+   暗黑主题 (Dark Theme)
+======================================== */
+@media (prefers-color-scheme: dark) {
+    :root {
+        /* 背景色 - 暗黑 */
+        --color-bg-primary: var(--color-neutral-900);
+        --color-bg-secondary: var(--color-neutral-800);
+        --color-bg-tertiary: var(--color-neutral-700);
+        --color-bg-inverse: var(--color-neutral-0);
+
+        /* 文本色 - 暗黑 */
+        --color-text-primary: var(--color-neutral-0);
+        --color-text-secondary: var(--color-neutral-300);
+        --color-text-tertiary: var(--color-neutral-500);
+        --color-text-inverse: var(--color-neutral-900);
+        --color-text-disabled: var(--color-neutral-600);
+
+        /* 边框色 - 暗黑 */
+        --color-border-light: var(--color-neutral-700);
+        --color-border-default: var(--color-neutral-600);
+        --color-border-strong: var(--color-neutral-500);
+    }
+}
+
+/* 手动暗黑主题类 */
+.theme-dark {
+    --color-bg-primary: var(--color-neutral-900);
+    --color-bg-secondary: var(--color-neutral-800);
+    --color-bg-tertiary: var(--color-neutral-700);
+    --color-bg-inverse: var(--color-neutral-0);
+
+    --color-text-primary: var(--color-neutral-0);
+    --color-text-secondary: var(--color-neutral-300);
+    --color-text-tertiary: var(--color-neutral-500);
+    --color-text-inverse: var(--color-neutral-900);
+    --color-text-disabled: var(--color-neutral-600);
+
+    --color-border-light: var(--color-neutral-700);
+    --color-border-default: var(--color-neutral-600);
+    --color-border-strong: var(--color-neutral-500);
+}

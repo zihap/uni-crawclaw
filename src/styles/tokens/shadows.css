@@ -1,0 +1,130 @@
+/**
+ * 阴影设计令牌 (Shadow Design Tokens)
+ * 用于创建视觉深度和层次感
+ */
+
+:root {
+    /* ========================================
+       基础阴影 (Base Shadows)
+       基于Material Design的阴影系统
+    ======================================== */
+    --shadow-none: none;
+    
+    /* 小阴影 - 用于按钮、输入框等 */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    
+    /* 默认阴影 - 用于卡片、面板等 */
+    --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 
+               0 1px 2px -1px rgba(0, 0, 0, 0.1);
+    
+    /* 中等阴影 - 用于悬浮卡片、下拉菜单等 */
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 
+                 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    
+    /* 大阴影 - 用于模态框、对话框等 */
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 
+                 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+    
+    /* 超大阴影 - 用于全屏覆盖层等 */
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 
+                 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    
+    /* 2XL阴影 */
+    --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    
+    /* 内阴影 */
+    --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+
+    /* ========================================
+       彩色阴影 (Colored Shadows)
+       用于强调和品牌元素
+    ======================================== */
+    --shadow-primary-sm: 0 1px 2px 0 rgba(102, 126, 234, 0.3);
+    --shadow-primary: 0 4px 6px -1px rgba(102, 126, 234, 0.3), 
+                       0 2px 4px -2px rgba(102, 126, 234, 0.3);
+    --shadow-primary-lg: 0 10px 15px -3px rgba(102, 126, 234, 0.3), 
+                          0 4px 6px -4px rgba(102, 126, 234, 0.3);
+
+    --shadow-success-sm: 0 1px 2px 0 rgba(76, 175, 80, 0.3);
+    --shadow-success: 0 4px 6px -1px rgba(76, 175, 80, 0.3), 
+                       0 2px 4px -2px rgba(76, 175, 80, 0.3);
+
+    --shadow-error-sm: 0 1px 2px 0 rgba(244, 67, 54, 0.3);
+    --shadow-error: 0 4px 6px -1px rgba(244, 67, 54, 0.3), 
+                     0 2px 4px -2px rgba(244, 67, 54, 0.3);
+
+    /* ========================================
+       语义化阴影 (Semantic Shadows)
+       便于理解和使用
+    ======================================== */
+    /* 卡片阴影 */
+    --shadow-card: var(--shadow);
+    --shadow-card-hover: var(--shadow-md);
+    --shadow-card-active: var(--shadow-sm);
+
+    /* 按钮阴影 */
+    --shadow-button: var(--shadow-sm);
+    --shadow-button-hover: var(--shadow);
+    --shadow-button-active: var(--shadow-inner);
+
+    /* 输入框阴影 */
+    --shadow-input: var(--shadow-inner);
+    --shadow-input-focus: 0 0 0 3px rgba(102, 126, 234, 0.1);
+
+    /* 模态框阴影 */
+    --shadow-modal: var(--shadow-xl);
+    
+    /* 下拉菜单阴影 */
+    --shadow-dropdown: var(--shadow-lg);
+    
+    /* 工具提示阴影 */
+    --shadow-tooltip: var(--shadow-md);
+
+    /* ========================================
+       游戏专用阴影 (Game Specific Shadows)
+    ======================================== */
+    --shadow-game-card: 0 4px 12px rgba(0, 0, 0, 0.15);
+    --shadow-game-card-hover: 0 8px 24px rgba(0, 0, 0, 0.2);
+    
+    --shadow-player-1: 0 4px 12px rgba(102, 126, 234, 0.4);
+    --shadow-player-2: 0 4px 12px rgba(76, 175, 80, 0.4);
+    --shadow-player-3: 0 4px 12px rgba(244, 67, 54, 0.4);
+    --shadow-player-4: 0 4px 12px rgba(255, 152, 0, 0.4);
+
+    /* 奖牌阴影 */
+    --shadow-gold: 0 4px 16px rgba(255, 215, 0, 0.4);
+    --shadow-silver: 0 4px 16px rgba(192, 192, 192, 0.4);
+    --shadow-bronze: 0 4px 16px rgba(205, 127, 50, 0.4);
+}
+
+/* ========================================
+   暗黑主题阴影 (Dark Theme Shadows)
+   调整阴影透明度以适应深色背景
+======================================== */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+        --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 
+                   0 1px 2px -1px rgba(0, 0, 0, 0.4);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 
+                     0 2px 4px -2px rgba(0, 0, 0, 0.4);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 
+                     0 4px 6px -4px rgba(0, 0, 0, 0.4);
+        --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 
+                     0 8px 10px -6px rgba(0, 0, 0, 0.4);
+        --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+}
+
+.theme-dark {
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 
+               0 1px 2px -1px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 
+                 0 2px 4px -2px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 
+                 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 
+                 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+    --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}

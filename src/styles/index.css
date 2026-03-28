@@ -1,0 +1,33 @@
+/**
+ * 主样式入口文件 (Main Styles Entry)
+ * 导入所有样式模块
+ */
+
+/* ========================================
+   设计令牌 (Design Tokens)
+======================================== */
+@import './tokens/colors.css';
+@import './tokens/typography.css';
+@import './tokens/spacing.css';
+@import './tokens/shadows.css';
+@import './tokens/animations.css';
+
+/* ========================================
+   核心样式 (Core Styles)
+======================================== */
+@import './core/reset.css';
+@import './core/base.css';
+
+/* ========================================
+   组件样式 (Component Styles)
+======================================== */
+@import './components/buttons.css';
+@import './components/cards.css';
+
+/* ========================================
+   页面样式 (Page Styles)
+   按需导入具体页面样式
+======================================== */
+@import './pages/index.css';
+@import './pages/game.css';
+@import './pages/result.css';

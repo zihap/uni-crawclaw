@@ -1,0 +1,116 @@
+/**
+ * 排版设计令牌 (Typography Design Tokens)
+ * 基于现代排版系统，确保可读性和视觉层次
+ */
+
+:root {
+    /* ========================================
+       字体家族 (Font Families)
+    ======================================== */
+    --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --font-family-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    --font-family-display: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    
+    /* 主字体 */
+    --font-family-base: var(--font-family-sans);
+    --font-family-heading: var(--font-family-display);
+
+    /* ========================================
+       字体大小 (Font Sizes)
+       使用等比数列，确保视觉节奏
+    ======================================== */
+    /* 基础字号 */
+    --font-size-base: 16px;
+    
+    /* 字号比例尺 */
+    --font-size-2xs: 0.625rem;   /* 10px */
+    --font-size-xs: 0.75rem;     /* 12px */
+    --font-size-sm: 0.875rem;    /* 14px */
+    --font-size-md: 1rem;        /* 16px - 基础 */
+    --font-size-lg: 1.125rem;    /* 18px */
+    --font-size-xl: 1.25rem;     /* 20px */
+    --font-size-2xl: 1.5rem;     /* 24px */
+    --font-size-3xl: 1.875rem;   /* 30px */
+    --font-size-4xl: 2.25rem;    /* 36px */
+    --font-size-5xl: 3rem;       /* 48px */
+    --font-size-6xl: 3.75rem;    /* 60px */
+
+    /* ========================================
+       字重 (Font Weights)
+    ======================================== */
+    --font-weight-thin: 100;
+    --font-weight-extralight: 200;
+    --font-weight-light: 300;
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --font-weight-extrabold: 800;
+    --font-weight-black: 900;
+
+    /* ========================================
+       行高 (Line Heights)
+    ======================================== */
+    --line-height-none: 1;
+    --line-height-tight: 1.25;
+    --line-height-snug: 1.375;
+    --line-height-normal: 1.5;
+    --line-height-relaxed: 1.625;
+    --line-height-loose: 2;
+
+    /* ========================================
+       字间距 (Letter Spacing)
+    ======================================== */
+    --letter-spacing-tighter: -0.05em;
+    --letter-spacing-tight: -0.025em;
+    --letter-spacing-normal: 0;
+    --letter-spacing-wide: 0.025em;
+    --letter-spacing-wider: 0.05em;
+    --letter-spacing-widest: 0.1em;
+
+    /* ========================================
+       排版组合 (Typography Compositions)
+       预定义的文本样式组合
+    ======================================== */
+    
+    /* 标题样式 */
+    --text-h1: var(--font-weight-bold) var(--font-size-5xl)/var(--line-height-tight) var(--font-family-heading);
+    --text-h2: var(--font-weight-bold) var(--font-size-4xl)/var(--line-height-tight) var(--font-family-heading);
+    --text-h3: var(--font-weight-semibold) var(--font-size-3xl)/var(--line-height-snug) var(--font-family-heading);
+    --text-h4: var(--font-weight-semibold) var(--font-size-2xl)/var(--line-height-snug) var(--font-family-heading);
+    --text-h5: var(--font-weight-semibold) var(--font-size-xl)/var(--line-height-snug) var(--font-family-heading);
+    --text-h6: var(--font-weight-medium) var(--font-size-lg)/var(--line-height-normal) var(--font-family-heading);
+
+    /* 正文样式 */
+    --text-body-lg: var(--font-weight-normal) var(--font-size-lg)/var(--line-height-relaxed) var(--font-family-base);
+    --text-body: var(--font-weight-normal) var(--font-size-md)/var(--line-height-normal) var(--font-family-base);
+    --text-body-sm: var(--font-weight-normal) var(--font-size-sm)/var(--line-height-normal) var(--font-family-base);
+
+    /* 辅助文本 */
+    --text-caption: var(--font-weight-normal) var(--font-size-xs)/var(--line-height-normal) var(--font-family-base);
+    --text-overline: var(--font-weight-medium) var(--font-size-xs)/var(--line-height-normal) var(--font-family-base);
+
+    /* 按钮文本 */
+    --text-button-lg: var(--font-weight-semibold) var(--font-size-lg)/var(--line-height-none) var(--font-family-base);
+    --text-button: var(--font-weight-semibold) var(--font-size-md)/var(--line-height-none) var(--font-family-base);
+    --text-button-sm: var(--font-weight-semibold) var(--font-size-sm)/var(--line-height-none) var(--font-family-base);
+}
+
+/* ========================================
+   响应式排版 (Responsive Typography)
+   根据屏幕尺寸调整基础字号
+======================================== */
+@media (max-width: 640px) {
+    :root {
+        --font-size-base: 14px;
+        --text-h1: var(--font-weight-bold) var(--font-size-4xl)/var(--line-height-tight) var(--font-family-heading);
+        --text-h2: var(--font-weight-bold) var(--font-size-3xl)/var(--line-height-tight) var(--font-family-heading);
+        --text-h3: var(--font-weight-semibold) var(--font-size-2xl)/var(--line-height-snug) var(--font-family-heading);
+    }
+}
+
+@media (min-width: 1536px) {
+    :root {
+        --font-size-base: 18px;
+    }
+}
