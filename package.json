@@ -1,0 +1,43 @@
+{
+  "name": "uni-crawclaw",
+  "version": "1.0.0",
+  "description": "龙争虾斗 - 一款基于uni-app开发的桌游应用",
+  "main": "main.js",
+  "scripts": {
+    "dev:h5": "uni",
+    "dev:mp-weixin": "uni --open",
+    "dev:mp-alipay": "uni --open",
+    "dev:app": "uni --open",
+    "build:h5": "uni build",
+    "build:mp-weixin": "uni build",
+    "build:mp-alipay": "uni build",
+    "build:app": "uni build"
+  },
+  "keywords": [
+    "uni-app",
+    "vue3",
+    "pinia",
+    "game",
+    "boardgame"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@dcloudio/uni-app": "3.0.0-alpha-4010520240409001",
+    "@dcloudio/uni-app-plus": "3.0.0-alpha-4010520240409001",
+    "@dcloudio/uni-h5": "3.0.0-alpha-4010520240409001",
+    "@dcloudio/uni-mp-alipay": "3.0.0-alpha-4010520240409001",
+    "@dcloudio/uni-mp-weixin": "3.0.0-alpha-4010520240409001",
+    "pinia": "^2.1.7",
+    "vue": "^3.4.21",
+    "vue-i18n": "^9.10.2"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "^3.4.8",
+    "@dcloudio/uni-automator": "3.0.0-alpha-4010520240409001",
+    "@dcloudio/uni-cli-shared": "3.0.0-alpha-4010520240409001",
+    "@dcloudio/vite-plugin-uni": "3.0.0-alpha-4010520240409001",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.8"
+  }
+}
