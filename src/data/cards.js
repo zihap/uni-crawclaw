@@ -22,6 +22,68 @@ export const titleCards = [
     name: '闪电钳',
     skill: null,
     description: '留空，随龙虾斗场一起稍后完善'
+  },
+  {
+    id: 'doubleRoll',
+    name: '勇者龙虾',
+    description: '非常骁勇善战',
+    skill: {
+      description: '可抛两次骰子，选择较优结果',
+      canReroll: true,
+      getDiceSides: () => 12
+    }
+  },
+  {
+    id: 'readyToMove',
+    name: '急先锋龙虾',
+    description: '',
+    skill: {
+      description: '出场即可移动，使用10面骰',
+      startStarted: true,
+      getDiceSides: () => 10
+    }
+  },
+  {
+    id: 'counterStrike',
+    name: '铁壁龙虾',
+    description: '',
+    skill: {
+      description: '被覆盖时反败为胜',
+      onCovered: true,
+      getDiceSides: () => 12
+    }
+  },
+  {
+    id: 'longStrike',
+    name: '长鳌虾',
+    description: '',
+    skill: {
+      description: '紧贴对方一格即可获胜',
+      nearWinOnAdjacent: true,
+      getDiceSides: () => 12
+    }
+  },
+  {
+    id: 'steady',
+    name: '稳健龙虾',
+    description: '天生沉稳，谋定而后动',
+    skill: {
+      description: '每次移动额外+1步',
+      apply: (context) => {
+        context.bonusSteps = (context.bonusSteps || 0) + 1
+      },
+      getDiceSides: () => 12
+    }
+  },
+  {
+    id: 'lucky',
+    name: '幸运龙虾',
+    description: '',
+    skill: {
+      description: '掷出1、2、3点视为6点',
+      modifyDice: (value) => value <= 3 ? 6 : value,
+      getDiceSides: () => 12
+    }
   }
 ]
 
@@ -158,3 +220,12 @@ export const marketplaceCards = [
     description: '1只龙虾换2金币，或1德换5金币'
   }
 ]
+
+export function getSkill(lobsterId) {
+  const card = titleCards.find(c => c.id === lobsterId)
+  if (lobsterId === 'grade3') return {getDiceSides: () => 6}
+  else if (lobsterId === 'grade2') return {getDiceSides: () => 8}
+  else if (lobsterId === 'grade1') return {getDiceSides: () => 10}
+  else if (lobsterId === 'royal') return{getDiceSides: () => 12}
+  else return card?.skill || null
+}
