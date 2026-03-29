@@ -3,7 +3,7 @@
  * 用于创建视觉深度和层次感
  */
 
-:root {
+page {
     /* ========================================
        基础阴影 (Base Shadows)
        基于Material Design的阴影系统
@@ -102,7 +102,7 @@
    调整阴影透明度以适应深色背景
 ======================================== */
 @media (prefers-color-scheme: dark) {
-    :root {
+    page {
         --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
         --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 
                    0 1px 2px -1px rgba(0, 0, 0, 0.4);

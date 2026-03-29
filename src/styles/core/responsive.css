@@ -16,19 +16,19 @@
    容器响应式 (Container Responsive)
 ======================================== */
 @media (min-width: 640px) {
-    :root {
+    page {
         --container-padding: var(--space-6);
     }
 }
 
 @media (min-width: 1024px) {
-    :root {
+    page {
         --container-padding: var(--space-8);
     }
 }
 
 @media (min-width: 1280px) {
-    :root {
+    page {
         --container-max-width: 1280px;
     }
 }

@@ -3,7 +3,7 @@
  * 基于4px网格系统，确保视觉一致性
  */
 
-:root {
+page {
     /* ========================================
        基础间距 (Base Spacing)
        基于4px网格
@@ -102,7 +102,7 @@
    根据屏幕尺寸调整间距
 ======================================== */
 @media (max-width: 640px) {
-    :root {
+    page {
         --page-padding-x: var(--space-3);
         --page-padding-y: var(--space-4);
         --section-gap: var(--space-8);
@@ -111,7 +111,7 @@
 }
 
 @media (min-width: 1024px) {
-    :root {
+    page {
         --page-padding-x: var(--space-6);
         --page-padding-y: var(--space-8);
         --section-gap: var(--space-16);

@@ -33,4 +33,14 @@
 		padding-top: constant(safe-area-inset-top);
 		padding-top: env(safe-area-inset-top);
 	}
+
+  /* #ifdef MP-WEIXIN */
+  view, text, button, image, navigator, input, textarea, cover-view, cover-image {
+    box-sizing: border-box;
+  }
+  page {
+    margin: 0;
+    padding: 0;
+  }
+  /* #endif */
 </style>

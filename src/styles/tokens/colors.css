@@ -4,7 +4,7 @@
  * 支持亮色/暗黑主题切换
  */
 
-:root {
+page {
     /* ========================================
        主色调 (Primary Colors)
        用于主要操作、品牌标识
@@ -159,7 +159,7 @@
    暗黑主题 (Dark Theme)
 ======================================== */
 @media (prefers-color-scheme: dark) {
-    :root {
+    page {
         /* 背景色 - 暗黑 */
         --color-bg-primary: var(--color-neutral-900);
         --color-bg-secondary: var(--color-neutral-800);

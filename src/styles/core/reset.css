@@ -1,23 +1,27 @@
 /**
  * 现代CSS重置 (Modern CSS Reset)
- * 基于Andy Bell的现代CSS重置方案
+ * 移除了微信小程序不支持的 * 通配符选择器，使用具体标签替代兼容多端
  */
 
-/* Box-sizing规则 */
-*,
-*::before,
-*::after {
+/* Box-sizing规则、移除默认边距和填充、移除触摸高亮 */
+page, view, scroll-view, swiper, swiper-item, cover-view, cover-image, icon, text, rich-text, progress, button, checkbox, form, input, label, picker, picker-view, picker-view-column, radio, slider, switch, textarea, navigator, audio, camera, image, video, map, canvas, web-view, div, span, p, a, h1, h2, h3, h4, h5, h6, ul, ol, li, dl, dt, dd, form, img {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
+page::before, page::after,
+view::before, view::after,
+text::before, text::after,
+button::before, button::after,
+div::before, div::after,
+span::before, span::after {
     box-sizing: border-box;
 }
 
-/* 移除默认边距和填充 */
-* {
-    margin: 0;
-    padding: 0;
-}
-
 /* 设置核心根默认值 */
-html {
+page, html {
     -webkit-text-size-adjust: 100%;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -25,7 +29,7 @@ html {
 }
 
 /* 设置body默认值 */
-body {
+page, body {
     min-height: 100vh;
     line-height: 1.5;
     font-family: var(--font-family-base, system-ui, -apple-system, sans-serif);
@@ -34,7 +38,7 @@ body {
 }
 
 /* 设置媒体元素默认值 */
-img,
+image, img,
 picture,
 video,
 canvas,
@@ -77,31 +81,22 @@ ol {
 }
 
 /* 设置链接样式 */
-a {
+a, navigator {
     text-decoration: none;
     color: inherit;
 }
 
 /* 设置标题文本包裹 */
-p,
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
+p, text,
+h1, h2, h3, h4, h5, h6 {
     overflow-wrap: break-word;
 }
 
 /* 设置根元素堆叠上下文 */
 #root,
-#__next {
+#__next,
+#app {
     isolation: isolate;
-}
-
-/* 移除触摸高亮 */
-* {
-    -webkit-tap-highlight-color: transparent;
 }
 
 /* 设置滚动条样式 */

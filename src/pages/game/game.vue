@@ -177,12 +177,112 @@
                 <text class="log-title">游戏日志</text>
                 <text class="log-toggle">{{ showLog ? '收起' : '展开' }}</text>
             </view>
-            <view class="log-content" v-if="showLog">
+            <view class="log-content" :class="{ expanded: showLog }">
                 <view class="log-scroll">
                     <view v-for="(log, index) in gameStore.logs.slice().reverse()" :key="index"
-                        :class="['log-item', log.type || 'info']">
+                          :class="['log-item', log.type || 'info']">
                         <text class="log-text">{{ log.message }}</text>
                     </view>
+                </view>
+            </view>
+        </view>
+
+        <!-- 养蛊区结算弹窗 -->
+        <view class="modal-overlay" v-if="gameStore.pendingBreeding">
+            <view class="modal-content breeding-modal">
+                <view class="modal-header">
+                    <view class="modal-title-group">
+                        <text class="modal-title">{{ currentPendingBreeding.player.name }} 的培养行动</text>
+                        <text class="modal-subtitle">剩余次数:
+                            <text class="highlight">{{ currentPendingBreeding.actionCount }}</text>
+                        </text>
+                    </view>
+                </view>
+
+                <view class="modal-body">
+                    <!-- 第一步：选择龙虾 -->
+                    <view v-if="breedingState.lobsterIndex === -1" class="lobster-selection">
+                        <text class="section-label">请选择要进行培养的龙虾：</text>
+                        <view class="lobster-grid">
+                            <view v-for="(lobster, index) in currentPendingBreeding.player.lobsters" :key="lobster.id"
+                                  class="lobster-card" :class="{'max-royal': lobster.grade === LOBSTER_GRADES.ROYAL}"
+                                  @click="lobster.grade !== LOBSTER_GRADES.ROYAL && selectLobsterForBreeding(index)">
+                                <text class="lobster-icon">🦞</text>
+                                <text class="lobster-grade">{{ getLobsterGradeName(lobster.grade) }}</text>
+                                <text class="lobster-title" v-if="lobster.title">{{ lobster.title.name }}</text>
+                                <view v-if="lobster.grade === LOBSTER_GRADES.ROYAL" class="max-grade-mask">已满级</view>
+                            </view>
+                        </view>
+                        <view v-if="currentPendingBreeding.player.lobsters.length === 0" class="empty-hint">
+                            您目前没有任何龙虾。
+                        </view>
+                    </view>
+
+                    <!-- 第二步：选择升级配置 -->
+                    <view v-else class="breeding-action-panel">
+                        <view class="upgrade-path">
+                            <view class="grade-box current">
+                                <text>当前</text>
+                                <text class="val">{{ getLobsterGradeName(targetLobster.grade) }}</text>
+                            </view>
+                            <text class="arrow">➔</text>
+                            <view class="grade-box target">
+                                <text>目标</text>
+                                <text class="val highlight">{{ getLobsterGradeName(projectedGrade) }}</text>
+                            </view>
+                        </view>
+
+                        <view class="options-group">
+                            <view class="checkbox-wrapper" @click="toggleSeaweed"
+                                  :class="{disabled: (currentPendingBreeding.player.seaweed < 1 && !breedingState.useSeaweed) || !isSeaweedUseful}">
+                                <view class="custom-checkbox" :class="{checked: breedingState.useSeaweed}"></view>
+                                <text class="checkbox-text">消耗 1 海草 额外升一品 (拥有:
+                                    {{ currentPendingBreeding.player.seaweed }})
+                                </text>
+                            </view>
+                        </view>
+
+                        <!-- 突破至皇家时的附加消耗要求 -->
+                        <view v-if="isUpgradingToRoyal" class="royal-requirements animate-fade-in">
+                            <text class="req-title">突破至皇家级需支付额外费用：</text>
+                            <view class="cost-options">
+                                <button class="cost-btn" :class="{active: breedingState.royalCostType === 'cage'}"
+                                        :disabled="currentPendingBreeding.player.cages < 1"
+                                        @click="breedingState.royalCostType = 'cage'">
+                                    🦞 1 虾笼 (拥有: {{ currentPendingBreeding.player.cages }})
+                                </button>
+                                <button class="cost-btn" :class="{active: breedingState.royalCostType === 'coin'}"
+                                        :disabled="currentPendingBreeding.player.coins < 3"
+                                        @click="breedingState.royalCostType = 'coin'">
+                                    🪙 3 金币 (拥有: {{ currentPendingBreeding.player.coins }})
+                                </button>
+                            </view>
+
+                            <!-- 如果本回合还有剩余称号卡，玩家升到皇家必须强制获取 -->
+                            <view v-if="gameStore.gameTitleCards.length > 0" class="title-selection">
+                                <text class="req-title">请挑选一个霸气称号：</text>
+                                <view class="title-cards">
+                                    <view v-for="card in gameStore.gameTitleCards" :key="card.id"
+                                          class="title-card"
+                                          :class="{active: breedingState.selectedTitleId === card.id}"
+                                          @click="breedingState.selectedTitleId = card.id">
+                                        {{ card.name }}
+                                    </view>
+                                </view>
+                            </view>
+                        </view>
+
+                        <view class="modal-actions">
+                            <button class="btn btn-ghost" @click="cancelBreedingAction">返回重选</button>
+                            <button class="btn btn-primary" :disabled="!canConfirmBreeding"
+                                    @click="confirmBreedingAction">确认培养
+                            </button>
+                        </view>
+                    </view>
+                </view>
+
+                <view class="modal-footer" v-if="breedingState.lobsterIndex === -1">
+                    <button class="btn btn-secondary w-full" @click="finishBreeding">放弃剩余次数并结束</button>
                 </view>
             </view>
         </view>
@@ -190,19 +290,17 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { useGameStore, GAME_PHASES } from '@stores/game.js'
+import {ref, computed, reactive} from 'vue'
+import {useGameStore, GAME_PHASES, LOBSTER_GRADES} from '@stores/game.js'
 import { DEFAULT_SLOT_STYLE, getOccupiedSlotStyle, PLAYER_COLORS } from '@utils/slotConstants.js'
+import {getLobsterGradeName, getNextLobsterGrade} from '@utils/gameUtils.js'
 
 const gameStore = useGameStore()
 const showLog = ref(false)
 
 // ============ 计算属性 ============
 const isPlacementPhase = computed(() => gameStore.currentPhase === GAME_PHASES.PLACEMENT)
-
-const currentPlacementPlayerName = computed(() => {
-    return gameStore.currentPlacementPlayer?.name || ''
-})
+const currentPlacementPlayerName = computed(() => gameStore.currentPlacementPlayer?.name || '')
 
 // ============ 视觉样式方法 ============
 
@@ -212,12 +310,8 @@ const currentPlacementPlayerName = computed(() => {
  */
 const getPlayerItemStyle = (playerId) => {
     if (!isCurrentPlacementPlayer(playerId)) return {}
-
     const color = PLAYER_COLORS[playerId]
-    return {
-        borderColor: color.bg,
-        boxShadow: `0 0 10px ${color.bg}40`
-    }
+    return {borderColor: color.bg, boxShadow: `0 0 10px ${color.bg}40`}
 }
 
 /**
@@ -226,7 +320,6 @@ const getPlayerItemStyle = (playerId) => {
  */
 const getSlotStyle = (area, slotIndex) => {
     const slotStatus = gameStore.getSlotStatus(area, slotIndex)
-
     if (slotStatus.status === 'occupied') {
         const style = getOccupiedSlotStyle(slotStatus.playerId)
         return {
@@ -236,20 +329,14 @@ const getSlotStyle = (area, slotIndex) => {
             color: style.color
         }
     }
-
     // 未占用状态
-    return {
-        background: DEFAULT_SLOT_STYLE.background,
-        opacity: isPlacementPhase.value ? 1 : 0.6
-    }
+    return {background: DEFAULT_SLOT_STYLE.background, opacity: isPlacementPhase.value ? 1 : 0.6}
 }
 
 /**
  * 检查行动格是否被占用
  */
-const isSlotOccupied = (area, slotIndex) => {
-    return gameStore.isSlotOccupied(area, slotIndex)
-}
+const isSlotOccupied = (area, slotIndex) => gameStore.isSlotOccupied(area, slotIndex)
 
 /**
  * 获取占用行动格的玩家标签
@@ -257,10 +344,7 @@ const isSlotOccupied = (area, slotIndex) => {
  */
 const getSlotOccupantLabel = (area, slotIndex) => {
     const status = gameStore.getSlotStatus(area, slotIndex)
-    if (status.status === 'occupied') {
-        const style = getOccupiedSlotStyle(status.playerId)
-        return style.playerLabel
-    }
+    if (status.status === 'occupied') return getOccupiedSlotStyle(status.playerId).playerLabel
     return null
 }
 
@@ -285,11 +369,8 @@ const canPlaceOnSlot = (area, slotIndex) => {
  * 检查是否是当前轮到放置的玩家
  */
 const isCurrentPlacementPlayer = (playerId) => {
-    if (!isPlacementPhase.value) return false
-    if (gameStore.isPlacementComplete) return false
-
-    const currentId = gameStore.placementOrder[gameStore.currentPlacementIndex]
-    return currentId === playerId
+    if (!isPlacementPhase.value || gameStore.isPlacementComplete) return false
+    return gameStore.placementOrder[gameStore.currentPlacementIndex] === playerId
 }
 
 // ============ 交互处理方法 ============
@@ -299,13 +380,7 @@ const isCurrentPlacementPlayer = (playerId) => {
  * @param {string} message - 提示内容
  * @param {string} icon - 图标类型
  */
-const showToast = (message, icon = 'none') => {
-    uni.showToast({
-        title: message,
-        icon: icon,
-        duration: 2000
-    })
-}
+const showToast = (message, icon = 'none') => uni.showToast({title: message, icon, duration: 2000})
 
 /**
  * 处理行动格点击事件
@@ -314,21 +389,20 @@ const showToast = (message, icon = 'none') => {
 const handleSlotClick = (area, slotIndex) => {
     // 如果不是工放阶段，显示提示
     if (!isPlacementPhase.value) {
-        showToast('当前不是工放阶段，无法放置里长')
+        showToast('当前不是工放阶段，无法放置里长');
         return
     }
 
     // 如果所有玩家都已放置完毕
     if (gameStore.isPlacementComplete) {
-        showToast('工放阶段已结束')
+        showToast('工放阶段已结束');
         return
     }
 
     // 如果行动格已被占用，显示占用者信息
     if (isSlotOccupied(area, slotIndex)) {
         const status = gameStore.getSlotStatus(area, slotIndex)
-        const occupantName = gameStore.players[status.playerId]?.name || '未知玩家'
-        showToast(`该行动格已被${occupantName}占用`)
+        showToast(`该行动格已被${gameStore.players[status.playerId]?.name || '未知玩家'}占用`)
         return
     }
 
@@ -337,93 +411,149 @@ const handleSlotClick = (area, slotIndex) => {
 
     // 处理放置结果
     if (!result.success) {
-        // 根据错误类型显示不同的提示
-        if (result.error === '当前不是工放阶段') {
-            showToast('当前不是工放阶段')
-        } else if (result.error === '该行动格已被占用') {
-            showToast('该行动格已被占用')
-        } else if (result.error === '没有剩余的里长可以放置') {
-            showToast(`${result.message}，将自动跳过`)
-        } else {
-            showToast(result.message)
+        if (result.error === '没有剩余的里长可以放置') showToast(`${result.message}，将自动跳过`)
+        else showToast(result.message || result.error)
+    }
+}
+
+// ============ 养蛊区交互逻辑 (Breeding Actions) ============
+const currentPendingBreeding = computed(() => gameStore.pendingBreeding)
+const breedingState = reactive({
+    lobsterIndex: -1,
+    useSeaweed: false,
+    royalCostType: '', // 'cage' | 'coin'
+    selectedTitleId: ''
+})
+
+const targetLobster = computed(() => {
+    if (!currentPendingBreeding.value) return null
+    return currentPendingBreeding.value.player.lobsters[breedingState.lobsterIndex]
+})
+
+// 修复：判断当前吃海草是否还能起作用 (一品龙虾免费升就到皇家满级了，吃草无效)
+const isSeaweedUseful = computed(() => {
+    if (!targetLobster.value) return false
+    return targetLobster.value.grade !== LOBSTER_GRADES.GRADE1 && targetLobster.value.grade !== LOBSTER_GRADES.ROYAL
+})
+
+// 目标推演：免费一品 + 选配海草额外一品
+const projectedGrade = computed(() => {
+    if (!targetLobster.value) return null
+    let grade = getNextLobsterGrade(targetLobster.value.grade) // 免费一品
+    if (breedingState.useSeaweed) {
+        grade = getNextLobsterGrade(grade) // 海草额外一品
+    }
+    return grade
+})
+
+const isUpgradingToRoyal = computed(() => {
+    return targetLobster.value && targetLobster.value.grade !== LOBSTER_GRADES.ROYAL && projectedGrade.value === LOBSTER_GRADES.ROYAL
+})
+
+const canAffordRoyal = computed(() => {
+    if (!isUpgradingToRoyal.value) return true
+    if (breedingState.royalCostType === 'cage' && currentPendingBreeding.value.player.cages >= 1) return true
+    if (breedingState.royalCostType === 'coin' && currentPendingBreeding.value.player.coins >= 3) return true
+    return false
+})
+
+const canConfirmBreeding = computed(() => {
+    if (!targetLobster.value) return false
+    if (breedingState.useSeaweed && currentPendingBreeding.value.player.seaweed < 1) return false
+    if (isUpgradingToRoyal.value && !canAffordRoyal.value) return false
+    if (isUpgradingToRoyal.value && gameStore.gameTitleCards.length > 0 && !breedingState.selectedTitleId) return false
+    return true
+})
+
+const selectLobsterForBreeding = (index) => {
+    breedingState.lobsterIndex = index
+    breedingState.useSeaweed = false
+    breedingState.royalCostType = ''
+    breedingState.selectedTitleId = ''
+}
+
+const toggleSeaweed = () => {
+    // 修复：如果海草无效（已达一品升皇家阶段），禁止点击
+    if (!isSeaweedUseful.value) {
+        showToast('已达满级，无需消耗海草')
+        return
+    }
+
+    const player = currentPendingBreeding.value.player
+    if (player.seaweed >= 1 || breedingState.useSeaweed) {
+        breedingState.useSeaweed = !breedingState.useSeaweed
+    } else {
+        showToast('海草数量不足')
+    }
+}
+
+const cancelBreedingAction = () => {
+    breedingState.lobsterIndex = -1
+}
+
+const confirmBreedingAction = () => {
+    if (!canConfirmBreeding.value) return
+    const player = currentPendingBreeding.value.player
+    const lobster = targetLobster.value
+    let logMsg = `${player.name}将龙虾从[${getLobsterGradeName(lobster.grade)}]培养至[${getLobsterGradeName(projectedGrade.value)}]，`
+
+    if (breedingState.useSeaweed) {
+        player.seaweed -= 1
+        logMsg += `消耗1海草，`
+    }
+
+    if (isUpgradingToRoyal.value) {
+        if (breedingState.royalCostType === 'cage') {
+            player.cages -= 1
+            logMsg += `消耗1虾笼支付皇家费用，`
+        } else if (breedingState.royalCostType === 'coin') {
+            player.coins -= 3
+            logMsg += `消耗3金币支付皇家费用，`
         }
+        if (breedingState.selectedTitleId) {
+            const titleIndex = gameStore.gameTitleCards.findIndex(c => c.id === breedingState.selectedTitleId)
+            if (titleIndex > -1) {
+                // UI层直接切走被选中的称号卡，后续玩家只能在剩下的卡里选
+                const titleCard = gameStore.gameTitleCards.splice(titleIndex, 1)[0]
+                lobster.title = titleCard
+                logMsg += `并夺得霸气称号【${titleCard.name}】`
+            }
+        }
+    }
+
+    lobster.grade = projectedGrade.value
+    if (logMsg.endsWith('，')) logMsg = logMsg.slice(0, -1)
+
+    gameStore.addLog(logMsg, 'success')
+    currentPendingBreeding.value.actionCount -= 1
+    cancelBreedingAction()
+
+    if (currentPendingBreeding.value.actionCount <= 0) {
+        finishBreeding()
+    }
+}
+
+const finishBreeding = () => {
+    if (currentPendingBreeding.value && currentPendingBreeding.value.resolve) {
+        currentPendingBreeding.value.resolve()
     }
 }
 
 // ============ 工具方法 ============
+const getPhaseText = () => `${gameStore.getPhaseText()}阶段`
+const getShrimpCatchingSlotDesc = (i) => ['1虾笼,夺起始,1次捕虾', '1虾笼,2次捕虾', '1金币,3次捕虾', '4次捕虾'][i - 1]
+const getSeafoodMarketSlotDesc = (i) => ['1金币,2次交易', '3次交易', '1金币,3次交易', '2金币,3次交易'][i - 1]
+const getBreedingSlotDesc = (i) => ['1草,1次培养', '2次培养', '1金币,2次培养', '3次培养'][i - 1]
+const getTributeSlotDesc = (i) => i <= 3 ? (i === 3 ? '第4回合可用,1次上供' : '1次上供') : `挑战${i - 3}号位,1次上供`
+const getMarketplaceSlotDesc = (i) => ['第2回合可用,1次闹市', '1金币,第3回合可用,1次闹市', '2金币,第4回合可用,1次闹市'][i - 1]
 
-const getPhaseText = () => {
-    const phase = gameStore.getPhaseText()
-    return `${phase}阶段`
-}
+const isMarketplaceAvailable = (slotIndex) => gameStore.currentRound >= slotIndex + 2
 
-const getShrimpCatchingSlotDesc = (i) => {
-    const descs = [
-        '1虾笼,夺起始,1次捕虾',
-        '1虾笼,2次捕虾',
-        '1金币,3次捕虾',
-        '4次捕虾'
-    ]
-    return descs[i - 1]
-}
-
-const getSeafoodMarketSlotDesc = (i) => {
-    const descs = [
-        '1金币,2次交易',
-        '3次交易',
-        '1金币,3次交易',
-        '2金币,3次交易'
-    ]
-    return descs[i - 1]
-}
-
-const getBreedingSlotDesc = (i) => {
-    const descs = [
-        '1草,1次培养',
-        '2次培养',
-        '1金币,2次培养',
-        '3次培养'
-    ]
-    return descs[i - 1]
-}
-
-const getTributeSlotDesc = (i) => {
-    if (i <= 3) {
-        return i === 3 ? '第4回合可用,1次上供' : '1次上供'
+const handleNextPhase = async () => {
+    if (gameStore.currentRound >= gameStore.maxRounds && gameStore.currentPhase === GAME_PHASES.CLEANUP) {
+        uni.navigateTo({url: '/pages/result/result'})
     } else {
-        return `挑战${i - 3}号位,1次上供`
-    }
-}
-
-const getMarketplaceSlotDesc = (i) => {
-    const descs = [
-        '第2回合可用,1次闹市',
-        '1金币,第3回合可用,1次闹市',
-        '2金币,第4回合可用,1次闹市'
-    ]
-    return descs[i - 1]
-}
-
-/**
- * 检查闹市区行动格是否可用
- * 闹市区有回合限制
- */
-const isMarketplaceAvailable = (slotIndex) => {
-    const currentRound = gameStore.currentRound
-    // 1号格第2回合可用，2号格第3回合可用，3号格第4回合可用
-    return currentRound >= slotIndex + 2
-}
-
-const handleNextPhase = () => {
-    if (gameStore.currentRound >= gameStore.maxRounds &&
-        gameStore.currentPhase === GAME_PHASES.CLEANUP) {
-        uni.navigateTo({
-            url: '/pages/result/result'
-        })
-    } else {
-        gameStore.nextPhase()
+        await gameStore.nextPhase()
     }
 }
 </script>
-
-

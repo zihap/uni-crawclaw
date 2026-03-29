@@ -15,6 +15,7 @@ import {
     calculateShrimpCatchingReward,
     exchangeBubbles
 } from '@utils/shrimpCatchingUtils'
+import {BREEDING_SLOTS, calculateBreedingReward} from '@utils/breedingUtils'
 import { usePlayerStore } from '@stores/player'
 
 export const LOBSTER_GRADES = {
@@ -57,12 +58,16 @@ export const useGameStore = defineStore('game', () => {
     // ============ 游戏资源状态 ============
     const wildLobsterPool = ref([])
     const seafoodMarketLobsters = ref(0)
+    const titleCardDeck = ref([]) // 新增：全局称号卡牌堆，防止重复抽取
     const gameTitleCards = ref([])
     const gameTributeCards = ref([])
     const gameMarketplaceCards = ref([])
     const taverns = ref([])
     const royalLobsterCount = ref(0)
     const logs = ref([])
+
+    // 挂起状态：用于通知前端UI弹出养蛊面板并等待操作完成
+    const pendingBreeding = ref(null)
 
     // ============ 放置机制核心状态 ============
     /*
@@ -173,12 +178,14 @@ export const useGameStore = defineStore('game', () => {
         // 重置资源状态
         wildLobsterPool.value = []
         seafoodMarketLobsters.value = 0
-        gameTitleCards.value = []
+        titleCardDeck.value = [] // 重置全局称号牌堆
+        gameTitleCards.value = [] // 清空桌面称号卡
         gameTributeCards.value = []
         gameMarketplaceCards.value = []
         taverns.value = Array.from({ length: 6 }, () => ({ cards: [], completions: 0 }))
         royalLobsterCount.value = 0
         logs.value = []
+        pendingBreeding.value = null
 
         // 重置放置机制状态
         slotOccupancy.value = {}
@@ -195,7 +202,7 @@ export const useGameStore = defineStore('game', () => {
         // 初始化卡牌
         gameTributeCards.value = shuffleArray([...tributeCards])
         gameMarketplaceCards.value = shuffleArray([...marketplaceCards])
-        gameTitleCards.value = shuffleArray([...titleCards])
+        titleCardDeck.value = shuffleArray([...titleCards]) // 新增：初始化洗混称号卡池
 
         addLog(`游戏初始化完成，${playerCount}名玩家`, 'success')
     }
@@ -203,23 +210,20 @@ export const useGameStore = defineStore('game', () => {
     /**
      * 初始化放置顺序
      * 核心逻辑：为每个里长创建放置机会，按顺时针顺序循环
-     * 
-     * 实现原理：
+     * * 实现原理：
      * 1. 计算所有玩家中的最大里长数量
      * 2. 外层循环：按里长数量从 0 到 maxLiZhangCt - 1
      * 3. 内层循环：按顺时针顺序遍历所有玩家
      * 4. 检查玩家是否还有剩余里长（liZhang > 当前循环次数）
      * 5. 如果有，将玩家添加到放置顺序中
-     * 
-     * 示例：
+     * * 示例：
      * - 玩家1: 3里长, 玩家2: 2里长
      * - 最大里长数量: 3
      * - 循环1 (i=0): 玩家1, 玩家2 → [1, 2]
      * - 循环2 (i=1): 玩家1, 玩家2 → [1, 2, 1, 2]
      * - 循环3 (i=2): 玩家1 → [1, 2, 1, 2, 1]
      * - 最终顺序: 1 → 2 → 1 → 2 → 1
-     * 
-     * 特点：
+     * * 特点：
      * - 里长多的玩家获得更多的放置机会
      * - 放置顺序保持顺时针方向
      * - 确保每个里长都有放置机会
@@ -248,8 +252,7 @@ export const useGameStore = defineStore('game', () => {
     /**
      * 放置里长到行动格
      * 实现行动格独占机制的核心逻辑
-     * 
-     * @param {string} area - 区域标识
+     * * @param {string} area - 区域标识
      * @param {number} slotIndex - 行动格索引
      * @returns {object} { success: boolean, message: string, error?: string }
      */
@@ -400,7 +403,7 @@ export const useGameStore = defineStore('game', () => {
      * 执行捕虾区结算
      * 按照行动格序号依次执行捕虾行动
      */
-    const executeShrimpCatchingSettlement = () => {
+    const executeShrimpCatchingSettlement = async () => {
         addLog('执行捕虾区结算', 'info')
         for (const slot of SHRIMP_CATCHING_SLOTS) {
             const slotIndex = slot.id
@@ -422,7 +425,7 @@ export const useGameStore = defineStore('game', () => {
             const slotConfig = SHRIMP_CATCHING_SLOTS[slotIndex]
             if (slotConfig) {
                 const actionCount = slotConfig.actions
-                const result = executeShrimpCatching(player, actionCount, wildLobsterPool.value, (indicatorType, indicatorResult) => {
+                const result = await executeShrimpCatching(player, actionCount, wildLobsterPool.value, (indicatorType, indicatorResult) => {
                     if (indicatorResult.success) {
                         addLog(`${player.name}${indicatorResult.message}`, 'info')
                     }
@@ -436,16 +439,57 @@ export const useGameStore = defineStore('game', () => {
         addLog('捕虾区结算完成', 'success')
     }
 
+    /**
+     * 执行养蛊区结算 (新增功能)
+     */
+    const executeBreedingSettlement = async () => {
+        addLog('执行养蛊区结算', 'info')
+        for (const slot of BREEDING_SLOTS) {
+            const slotIndex = slot.id
+            const playerId = getSlotStatus('breeding', slotIndex).playerId
+            if (playerId === null) continue
+
+            const player = playerStore.getPlayerById(playerId)
+            if (!player) continue
+
+            const rewardResult = calculateBreedingReward(player, slotIndex)
+
+            if (rewardResult.success && rewardResult.message) {
+                addLog(`${player.name}${rewardResult.message}`, 'info')
+            }
+
+            const actionCount = slot.actions
+            if (player.lobsters.length === 0) {
+                addLog(`${player.name}没有龙虾可以培养，跳过行动`, 'warning')
+                continue;
+            }
+
+            addLog(`${player.name}开始执行${actionCount}次培养行动`, 'info')
+
+            // 挂起引擎，等待 UI 的玩家交互返回 Promise
+            await new Promise((resolve) => {
+                pendingBreeding.value = {
+                    player,
+                    actionCount,
+                    resolve: () => {
+                        pendingBreeding.value = null
+                        resolve()
+                    }
+                }
+            })
+        }
+        addLog('养蛊区结算完成', 'success')
+    }
+
     const executePreparationPhase = () => {
         addLog('执行准备阶段', 'info')
 
         wildLobsterPool.value = Array.from({ length: 8 }, () => createLobster())
         addLog('捕虾区：添加8只野生龙虾', 'info')
 
-        gameTitleCards.value = gameTitleCards.value.slice(2)
-        const newTitleCards = shuffleArray([...titleCards]).slice(0, 2)
-        gameTitleCards.value = [...gameTitleCards.value, ...newTitleCards]
-        addLog('养蛊区：更新称号卡', 'info')
+        // 修复：每回合弃置场上剩余称号卡，直接从牌堆抽取2张全新的
+        gameTitleCards.value = titleCardDeck.value.splice(0, 2)
+        addLog('养蛊区：刷新2张待获取的称号卡', 'info')
 
         taverns.value.forEach(tavern => {
             if (tavern.cards.length < 2 && gameTributeCards.value.length > 0) {
@@ -467,16 +511,18 @@ export const useGameStore = defineStore('game', () => {
      * 执行结算阶段
      * 按顺序结算各个区域
      */
-    const executeSettlementPhase = () => {
+    const executeSettlementPhase = async () => {
         addLog('执行结算阶段', 'info')
 
         // 按顺序结算各个区域
         // 1. 捕虾区结算
-        executeShrimpCatchingSettlement()
+        await executeShrimpCatchingSettlement()
+
+        // 3. 养蛊区结算
+        await executeBreedingSettlement()
 
         // 后续可以添加其他区域的结算逻辑
         // 2. 海鲜市场结算
-        // 3. 养蛊区结算
         // 4. 上供区结算
         // 5. 闹市区结算
 
@@ -511,10 +557,13 @@ export const useGameStore = defineStore('game', () => {
         [GAME_PHASES.CLEANUP]: executeCleanupPhase
     }
 
-    const nextPhase = () => {
+    const nextPhase = async () => {
         // 执行当前阶段的预处理
         if (phaseHandlers[currentPhase.value]) {
-            phaseHandlers[currentPhase.value]()
+            const result = phaseHandlers[currentPhase.value]()
+            if (result instanceof Promise) {
+                await result
+            }
         }
 
         // 计算下一个阶段
@@ -564,12 +613,14 @@ export const useGameStore = defineStore('game', () => {
         // 资源状态
         wildLobsterPool,
         seafoodMarketLobsters,
+        titleCardDeck, // 导出新增的全局牌堆
         gameTitleCards,
         gameTributeCards,
         gameMarketplaceCards,
         taverns,
         royalLobsterCount,
         logs,
+        pendingBreeding, // 挂起状态
 
         // 放置机制状态
         slotOccupancy,
