@@ -18,24 +18,18 @@
                 <text class="placement-text">
                     {{ gameStore.isPlacementComplete ? '工放阶段结束' : `轮到 ${currentPlacementPlayerName} 放置里长` }}
                 </text>
-                <text v-if="!gameStore.isPlacementComplete" class="placement-hint"> 点击空闲的行动格放置里长 </text>
+                <text v-if="!gameStore.isPlacementComplete" class="placement-hint">
+                    点击空闲的行动格放置里长
+                </text>
             </view>
         </view>
 
         <!-- 玩家栏 -->
         <view class="players-bar">
-            <view
-                v-for="(player, index) in gameStore.players"
-                :key="player.id"
-                :class="[
-                    'player-item',
-                    {
-                        active: isCurrentPlacementPlayer(index),
-                        starting: player.isStartingPlayer
-                    }
-                ]"
-                :style="getPlayerItemStyle(index)"
-            >
+            <view v-for="(player, index) in gameStore.players" :key="player.id" :class="['player-item', {
+                active: isCurrentPlacementPlayer(index),
+                starting: player.isStartingPlayer
+            }]" :style="getPlayerItemStyle(index)">
                 <view class="player-badge" v-if="player.isStartingPlayer">起始</view>
                 <text class="player-name">{{ player.name }}</text>
                 <view class="player-stats">
@@ -56,19 +50,11 @@
                     <text class="section-desc">放置里长获取捕虾机会</text>
                 </view>
                 <view class="area-slots">
-                    <view
-                        v-for="i in 4"
-                        :key="i"
-                        :class="[
-                            'slot',
-                            {
-                                occupied: isSlotOccupied('shrimp_catching', i - 1),
-                                disabled: !canPlaceOnSlot('shrimp_catching', i - 1)
-                            }
-                        ]"
-                        :style="getSlotStyle('shrimp_catching', i - 1)"
-                        @click="handleSlotClick('shrimp_catching', i - 1)"
-                    >
+                    <view v-for="i in 4" :key="i" :class="['slot', {
+                        occupied: isSlotOccupied('shrimp_catching', i - 1),
+                        disabled: !canPlaceOnSlot('shrimp_catching', i - 1)
+                    }]" :style="getSlotStyle('shrimp_catching', i - 1)"
+                          @click="handleSlotClick('shrimp_catching', i - 1)">
                         <view v-if="getSlotOccupantLabel('shrimp_catching', i - 1)" class="slot-occupant-badge">
                             {{ getSlotOccupantLabel('shrimp_catching', i - 1) }}
                         </view>
@@ -85,19 +71,11 @@
                     <text class="section-desc">放置里长进行交易</text>
                 </view>
                 <view class="area-slots">
-                    <view
-                        v-for="i in 4"
-                        :key="i"
-                        :class="[
-                            'slot',
-                            {
-                                occupied: isSlotOccupied('seafood_market', i - 1),
-                                disabled: !canPlaceOnSlot('seafood_market', i - 1)
-                            }
-                        ]"
-                        :style="getSlotStyle('seafood_market', i - 1)"
-                        @click="handleSlotClick('seafood_market', i - 1)"
-                    >
+                    <view v-for="i in 4" :key="i" :class="['slot', {
+                        occupied: isSlotOccupied('seafood_market', i - 1),
+                        disabled: !canPlaceOnSlot('seafood_market', i - 1)
+                    }]" :style="getSlotStyle('seafood_market', i - 1)"
+                          @click="handleSlotClick('seafood_market', i - 1)">
                         <view v-if="getSlotOccupantLabel('seafood_market', i - 1)" class="slot-occupant-badge">
                             {{ getSlotOccupantLabel('seafood_market', i - 1) }}
                         </view>
@@ -114,19 +92,10 @@
                     <text class="section-desc">放置里长培养龙虾</text>
                 </view>
                 <view class="area-slots">
-                    <view
-                        v-for="i in 4"
-                        :key="i"
-                        :class="[
-                            'slot',
-                            {
-                                occupied: isSlotOccupied('breeding', i - 1),
-                                disabled: !canPlaceOnSlot('breeding', i - 1)
-                            }
-                        ]"
-                        :style="getSlotStyle('breeding', i - 1)"
-                        @click="handleSlotClick('breeding', i - 1)"
-                    >
+                    <view v-for="i in 4" :key="i" :class="['slot', {
+                        occupied: isSlotOccupied('breeding', i - 1),
+                        disabled: !canPlaceOnSlot('breeding', i - 1)
+                    }]" :style="getSlotStyle('breeding', i - 1)" @click="handleSlotClick('breeding', i - 1)">
                         <view v-if="getSlotOccupantLabel('breeding', i - 1)" class="slot-occupant-badge">
                             {{ getSlotOccupantLabel('breeding', i - 1) }}
                         </view>
@@ -143,20 +112,11 @@
                     <text class="section-desc">放置里长完成上供任务</text>
                 </view>
                 <view class="area-slots">
-                    <view
-                        v-for="i in 6"
-                        :key="i"
-                        :class="[
-                            'slot',
-                            {
-                                occupied: isSlotOccupied('tribute', i - 1),
-                                disabled: !canPlaceOnSlot('tribute', i - 1),
-                                'challenge-slot': i > 3
-                            }
-                        ]"
-                        :style="getSlotStyle('tribute', i - 1)"
-                        @click="handleSlotClick('tribute', i - 1)"
-                    >
+                    <view v-for="i in 6" :key="i" :class="['slot', {
+                        occupied: isSlotOccupied('tribute', i - 1),
+                        disabled: !canPlaceOnSlot('tribute', i - 1),
+                        'challenge-slot': i > 3
+                    }]" :style="getSlotStyle('tribute', i - 1)" @click="handleSlotClick('tribute', i - 1)">
                         <view v-if="getSlotOccupantLabel('tribute', i - 1)" class="slot-occupant-badge">
                             {{ getSlotOccupantLabel('tribute', i - 1) }}
                         </view>
@@ -173,19 +133,10 @@
                     <text class="section-desc">放置里长执行闹市行动</text>
                 </view>
                 <view class="area-slots">
-                    <view
-                        v-for="i in 3"
-                        :key="i"
-                        :class="[
-                            'slot',
-                            {
-                                occupied: isSlotOccupied('marketplace', i - 1),
-                                disabled: !canPlaceOnSlot('marketplace', i - 1) || !isMarketplaceAvailable(i)
-                            }
-                        ]"
-                        :style="getSlotStyle('marketplace', i - 1)"
-                        @click="handleSlotClick('marketplace', i - 1)"
-                    >
+                    <view v-for="i in 3" :key="i" :class="['slot', {
+                        occupied: isSlotOccupied('marketplace', i - 1),
+                        disabled: !canPlaceOnSlot('marketplace', i - 1)
+                    }]" :style="getSlotStyle('marketplace', i - 1)" @click="handleSlotClick('marketplace', i - 1)">
                         <view v-if="getSlotOccupantLabel('marketplace', i - 1)" class="slot-occupant-badge">
                             {{ getSlotOccupantLabel('marketplace', i - 1) }}
                         </view>
@@ -230,11 +181,8 @@
             </view>
             <view class="log-content" :class="{ expanded: showLog }">
                 <view class="log-scroll">
-                    <view
-                        v-for="(log, index) in gameStore.logs.slice().reverse()"
-                        :key="index"
-                        :class="['log-item', log.type || 'info']"
-                    >
+                    <view v-for="(log, index) in gameStore.logs.slice().reverse()" :key="index"
+                          :class="['log-item', log.type || 'info']">
                         <text class="log-text">{{ log.message }}</text>
                     </view>
                 </view>
@@ -251,8 +199,7 @@
                 <view class="modal-header">
                     <view class="modal-title-group">
                         <text class="modal-title">{{ currentPendingBreeding.player.name }} 的培养行动</text>
-                        <text class="modal-subtitle"
-                            >剩余次数:
+                        <text class="modal-subtitle">剩余次数:
                             <text class="highlight">{{ currentPendingBreeding.actionCount }}</text>
                         </text>
                     </view>
@@ -263,13 +210,9 @@
                     <view v-if="breedingState.lobsterIndex === -1" class="lobster-selection">
                         <text class="section-label">请选择要进行培养的龙虾：</text>
                         <view class="lobster-grid">
-                            <view
-                                v-for="(lobster, index) in currentPendingBreeding.player.lobsters"
-                                :key="lobster.id"
-                                class="lobster-card"
-                                :class="{ 'max-royal': lobster.grade === LOBSTER_GRADES.ROYAL }"
-                                @click="lobster.grade !== LOBSTER_GRADES.ROYAL && selectLobsterForBreeding(index)"
-                            >
+                            <view v-for="(lobster, index) in currentPendingBreeding.player.lobsters" :key="lobster.id"
+                                  class="lobster-card" :class="{'max-royal': lobster.grade === LOBSTER_GRADES.ROYAL}"
+                                  @click="lobster.grade !== LOBSTER_GRADES.ROYAL && selectLobsterForBreeding(index)">
                                 <text class="lobster-icon">🦞</text>
                                 <text class="lobster-grade">{{ getLobsterGradeName(lobster.grade) }}</text>
                                 <text class="lobster-title" v-if="lobster.title">{{ lobster.title.name }}</text>
@@ -296,18 +239,11 @@
                         </view>
 
                         <view class="options-group">
-                            <view
-                                class="checkbox-wrapper"
-                                @click="toggleSeaweed"
-                                :class="{
-                                    disabled:
-                                        (currentPendingBreeding.player.seaweed < 1 && !breedingState.useSeaweed) ||
-                                        !isSeaweedUseful
-                                }"
-                            >
-                                <view class="custom-checkbox" :class="{ checked: breedingState.useSeaweed }"></view>
-                                <text class="checkbox-text"
-                                    >消耗 1 海草 额外升一品 (拥有: {{ currentPendingBreeding.player.seaweed }})
+                            <view class="checkbox-wrapper" @click="toggleSeaweed"
+                                  :class="{disabled: (currentPendingBreeding.player.seaweed < 1 && !breedingState.useSeaweed) || !isSeaweedUseful}">
+                                <view class="custom-checkbox" :class="{checked: breedingState.useSeaweed}"></view>
+                                <text class="checkbox-text">消耗 1 海草 额外升一品 (拥有:
+                                    {{ currentPendingBreeding.player.seaweed }})
                                 </text>
                             </view>
                         </view>
@@ -316,20 +252,14 @@
                         <view v-if="isUpgradingToRoyal" class="royal-requirements animate-fade-in">
                             <text class="req-title">突破至皇家级需支付额外费用：</text>
                             <view class="cost-options">
-                                <button
-                                    class="cost-btn"
-                                    :class="{ active: breedingState.royalCostType === 'cage' }"
-                                    :disabled="currentPendingBreeding.player.cages < 1"
-                                    @click="breedingState.royalCostType = 'cage'"
-                                >
+                                <button class="cost-btn" :class="{active: breedingState.royalCostType === 'cage'}"
+                                        :disabled="currentPendingBreeding.player.cages < 1"
+                                        @click="breedingState.royalCostType = 'cage'">
                                     🦞 1 虾笼 (拥有: {{ currentPendingBreeding.player.cages }})
                                 </button>
-                                <button
-                                    class="cost-btn"
-                                    :class="{ active: breedingState.royalCostType === 'coin' }"
-                                    :disabled="currentPendingBreeding.player.coins < 3"
-                                    @click="breedingState.royalCostType = 'coin'"
-                                >
+                                <button class="cost-btn" :class="{active: breedingState.royalCostType === 'coin'}"
+                                        :disabled="currentPendingBreeding.player.coins < 3"
+                                        @click="breedingState.royalCostType = 'coin'">
                                     🪙 3 金币 (拥有: {{ currentPendingBreeding.player.coins }})
                                 </button>
                             </view>
@@ -338,13 +268,10 @@
                             <view v-if="gameStore.gameTitleCards.length > 0" class="title-selection">
                                 <text class="req-title">请挑选一个霸气称号：</text>
                                 <view class="title-cards">
-                                    <view
-                                        v-for="card in gameStore.gameTitleCards"
-                                        :key="card.id"
-                                        class="title-card"
-                                        :class="{ active: breedingState.selectedTitleId === card.id }"
-                                        @click="breedingState.selectedTitleId = card.id"
-                                    >
+                                    <view v-for="card in gameStore.gameTitleCards" :key="card.id"
+                                          class="title-card"
+                                          :class="{active: breedingState.selectedTitleId === card.id}"
+                                          @click="breedingState.selectedTitleId = card.id">
                                         {{ card.name }}
                                     </view>
                                 </view>
@@ -353,12 +280,8 @@
 
                         <view class="modal-actions">
                             <button class="btn btn-ghost" @click="cancelBreedingAction">返回重选</button>
-                            <button
-                                class="btn btn-primary"
-                                :disabled="!canConfirmBreeding"
-                                @click="confirmBreedingAction"
-                            >
-                                确认培养
+                            <button class="btn btn-primary" :disabled="!canConfirmBreeding"
+                                    @click="confirmBreedingAction">确认培养
                             </button>
                         </view>
                     </view>
@@ -370,7 +293,7 @@
             </view>
         </view>
 
-        <!-- 闹市区结算弹窗 (新增) -->
+        <!-- 闹市区结算弹窗 -->
         <view class="modal-overlay" v-if="gameStore.pendingMarketplace">
             <view class="modal-content marketplace-modal">
                 <view class="modal-header">
@@ -388,30 +311,25 @@
                               :class="{ 'used': card.usedThisRound, 'selected': marketplaceState.selectedCard?.id === card.id }"
                               @click="selectMarketplaceCard(card)">
                             <text class="mp-card-name">{{ card.name }}</text>
-                            <text class="mp-card-desc">{{ card.desc }}</text>
+                            <text class="mp-card-desc">{{ card.description }}</text>
                             <view v-if="card.usedThisRound" class="used-mask">本回合已被使用</view>
                         </view>
                     </view>
 
-                    <!-- 第二步：展示对应选项 (针对非自动执行的卡) -->
-                    <view v-if="marketplaceState.selectedCard && !marketplaceState.selectedCard.auto"
-                          class="mp-options-panel animate-fade-in">
+                    <!-- 第二步：展示对应选项 (针对非自动执行且为exchange类型的兑换卡，加入空数组安全兜底) -->
+                    <view
+                        v-if="marketplaceState.selectedCard && !marketplaceState.selectedCard.auto && marketplaceState.selectedCard.action?.type === 'exchange'"
+                        class="mp-options-panel animate-fade-in">
                         <text class="section-label">请选择执行方案：</text>
                         <view class="mp-options">
-                            <view v-for="(opt, idx) in marketplaceState.selectedCard.options" :key="idx"
+                            <view v-for="(opt, idx) in (marketplaceState.selectedCard.action?.options || [])" :key="idx"
                                   class="mp-option-btn"
                                   :class="{ 'active': marketplaceState.selectedOptionIndex === idx }"
                                   @click="marketplaceState.selectedOptionIndex = idx">
                                 <view class="custom-radio"
                                       :class="{ 'checked': marketplaceState.selectedOptionIndex === idx }"></view>
-                                <text class="option-text">
-                                    <template v-if="marketplaceState.selectedCard.type === 'county'">
-                                        消耗 {{ opt.cost.coins }} 金币 ➔ 获得 {{ opt.reward.de }} 德
-                                    </template>
-                                    <template v-if="marketplaceState.selectedCard.type === 'prefecture'">
-                                        消耗 {{ opt.cost.lobsters }} 龙虾 ➔ 获得 {{ opt.reward.wang }} 望
-                                    </template>
-                                </text>
+                                <!-- 运用通用格式化函数展示转换文本 -->
+                                <text class="option-text">{{ formatOptionText(opt) }}</text>
                             </view>
                         </view>
                         <text v-if="!canConfirmMarketplace" class="error-hint">资源不足，无法执行该方案</text>
@@ -445,6 +363,16 @@ const showLog = ref(false)
 // ============ 计算属性 ============
 const isPlacementPhase = computed(() => gameStore.currentPhase === GAME_PHASES.PLACEMENT)
 const currentPlacementPlayerName = computed(() => gameStore.currentPlacementPlayer?.name || '')
+
+// 闹市区 1/2/3 号分别在 2/3/4 回合可用，即 currentRound >= i + 1 即可
+const isMarketplaceAvailable = (i) => gameStore.currentRound >= i + 1
+
+const canPlaceOnSlot = (area, slotIndex) => {
+    if (!isPlacementPhase.value || gameStore.isPlacementComplete || isSlotOccupied(area, slotIndex)) return false
+    // 新增：判断闹市区是否解锁
+    if (area === 'marketplace' && !isMarketplaceAvailable(slotIndex + 1)) return false
+    return true
+}
 
 // ============ 视觉样式方法 ============
 
@@ -492,26 +420,6 @@ const getSlotOccupantLabel = (area, slotIndex) => {
     return null
 }
 
-/**
- * 检查是否可以在该行动格放置
- * 用于UI按钮的禁用状态判断
- */
-const canPlaceOnSlot = (area, slotIndex) => {
-    // 如果不是工放阶段，不能放置
-    if (!isPlacementPhase.value) return false
-
-    // 如果所有玩家都已放置完毕，不能放置
-    if (gameStore.isPlacementComplete) return false
-
-    // 如果行动格已被占用，不能放置
-    if (isSlotOccupied(area, slotIndex)) return false
-
-    return true
-}
-
-/**
- * 检查是否是当前轮到放置的玩家
- */
 const isCurrentPlacementPlayer = (playerId) => {
     if (!isPlacementPhase.value || gameStore.isPlacementComplete) return false
     return gameStore.placementOrder[gameStore.currentPlacementIndex] === playerId
@@ -533,13 +441,19 @@ const showToast = (message, icon = 'none') => uni.showToast({ title: message, ic
 const handleSlotClick = (area, slotIndex) => {
     // 如果不是工放阶段，显示提示
     if (!isPlacementPhase.value) {
-        showToast('当前不是工放阶段，无法放置里长')
+        showToast('当前不是工放阶段，无法放置里长');
         return
     }
 
     // 如果所有玩家都已放置完毕
     if (gameStore.isPlacementComplete) {
-        showToast('工放阶段已结束')
+        showToast('工放阶段已结束');
+        return
+    }
+
+    // 新增：拦截未开放的闹市区行动格强行点击
+    if (area === 'marketplace' && !isMarketplaceAvailable(slotIndex + 1)) {
+        showToast(`该行动格在第${slotIndex + 2}回合才开放`)
         return
     }
 
@@ -593,11 +507,7 @@ const projectedGrade = computed(() => {
 })
 
 const isUpgradingToRoyal = computed(() => {
-    return (
-        targetLobster.value &&
-        targetLobster.value.grade !== LOBSTER_GRADES.ROYAL &&
-        projectedGrade.value === LOBSTER_GRADES.ROYAL
-    )
+    return targetLobster.value && targetLobster.value.grade !== LOBSTER_GRADES.ROYAL && projectedGrade.value === LOBSTER_GRADES.ROYAL
 })
 
 const canAffordRoyal = computed(() => {
@@ -661,7 +571,7 @@ const confirmBreedingAction = () => {
             logMsg += `消耗3金币支付皇家费用，`
         }
         if (breedingState.selectedTitleId) {
-            const titleIndex = gameStore.gameTitleCards.findIndex((c) => c.id === breedingState.selectedTitleId)
+            const titleIndex = gameStore.gameTitleCards.findIndex(c => c.id === breedingState.selectedTitleId)
             if (titleIndex > -1) {
                 // UI层直接切走被选中的称号卡，后续玩家只能在剩下的卡里选
                 const titleCard = gameStore.gameTitleCards.splice(titleIndex, 1)[0]
@@ -690,7 +600,7 @@ const finishBreeding = () => {
 }
 
 // ==========================================
-// 闹市区交互逻辑 (Marketplace Actions) - 新增
+// 闹市区交互逻辑 (Marketplace Actions)
 // ==========================================
 const currentPendingMarketplace = computed(() => gameStore.pendingMarketplace)
 const marketplaceState = reactive({
@@ -704,19 +614,38 @@ const selectMarketplaceCard = (card) => {
     marketplaceState.selectedOptionIndex = 0
 }
 
-// 根据选中的选项计算是否足以支付对应费用
+// 通用的选项文本格式化方法
+const getResourceName = (key) => {
+    const map = {coins: '金币', seaweed: '海草', cages: '虾笼', lobsters: '只龙虾', de: '德', wang: '望'}
+    return map[key] || key
+}
+const formatOptionText = (opt) => {
+    if (!opt || !opt.cost || !opt.reward) return ''
+    const costStrs = Object.entries(opt.cost).map(([k, v]) => `${v} ${getResourceName(k)}`)
+    const rewardStrs = Object.entries(opt.reward).map(([k, v]) => `${v} ${getResourceName(k)}`)
+    return `消耗 ${costStrs.join(' 和 ')} ➔ 获得 ${rewardStrs.join(' 和 ')}`
+}
+
+// 根据选中的选项计算是否足以支付对应费用（加入可选链安全防爆）
 const canConfirmMarketplace = computed(() => {
     if (!marketplaceState.selectedCard) return false
     const card = marketplaceState.selectedCard
-    const player = currentPendingMarketplace.value.player
+    const player = currentPendingMarketplace.value?.player // 添加可选链防爆
 
-    if (card.type === 'county') {
-        const cost = card.options[marketplaceState.selectedOptionIndex].cost.coins
-        if (player.coins < cost) return false
-    }
-    if (card.type === 'prefecture') {
-        const cost = card.options[marketplaceState.selectedOptionIndex].cost.lobsters
-        if (player.lobsters.length < cost) return false
+    if (!player) return false
+
+    if (!card.auto && card.action?.type === 'exchange') {
+        const options = card.action?.options || [] // 兜底处理
+        const opt = options[marketplaceState.selectedOptionIndex]
+        if (!opt || !opt.cost) return false
+
+        for (const [resType, resAmount] of Object.entries(opt.cost)) {
+            if (resType === 'lobsters') {
+                if (player.lobsters.length < resAmount) return false
+            } else {
+                if (player[resType] < resAmount) return false
+            }
+        }
     }
     return true
 })
@@ -742,12 +671,8 @@ const getPhaseText = () => `${gameStore.getPhaseText()}阶段`
 const getShrimpCatchingSlotDesc = (i) => ['1虾笼,夺起始,1次捕虾', '1虾笼,2次捕虾', '1金币,3次捕虾', '4次捕虾'][i - 1]
 const getSeafoodMarketSlotDesc = (i) => ['1金币,2次交易', '3次交易', '1金币,3次交易', '2金币,3次交易'][i - 1]
 const getBreedingSlotDesc = (i) => ['1草,1次培养', '2次培养', '1金币,2次培养', '3次培养'][i - 1]
-const getTributeSlotDesc = (i) => (i <= 3 ? (i === 3 ? '第4回合可用,1次上供' : '1次上供') : `挑战${i - 3}号位,1次上供`)
-const getMarketplaceSlotDesc = (i) =>
-    ['第2回合可用,1次闹市', '1金币,第3回合可用,1次闹市', '2金币,第4回合可用,1次闹市'][i - 1]
-
-// 修复：闹市区 1/2/3 号分别在 2/3/4 回合可用，即 currentRound >= i + 1 即可
-const isMarketplaceAvailable = (i) => gameStore.currentRound >= i + 1
+const getTributeSlotDesc = (i) => i <= 3 ? (i === 3 ? '第4回合可用,1次上供' : '1次上供') : `挑战${i - 3}号位,1次上供`
+const getMarketplaceSlotDesc = (i) => ['第2回合可用,1次闹市', '1金币,第3回合可用,1次闹市', '2金币,第4回合可用,1次闹市'][i - 1]
 
 const handleNextPhase = async () => {
     if (gameStore.currentRound >= gameStore.maxRounds && gameStore.currentPhase === GAME_PHASES.CLEANUP) {

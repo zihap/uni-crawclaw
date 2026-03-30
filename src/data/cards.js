@@ -81,7 +81,7 @@ export const titleCards = [
         description: '',
         skill: {
             description: '掷出1、2、3点视为6点',
-            modifyDice: (value) => (value <= 3 ? 6 : value),
+            modifyDice: (value) => value <= 3 ? 6 : value,
             getDiceSides: () => 12
         }
     }
@@ -173,23 +173,9 @@ export const tributeCards = [
 // 闹市卡（闹市区）- 每次游戏随机抽取3张（已更新为您指定的6张专属卡片）
 export const marketplaceCards = [
     {
-        id: 'm1',
-        name: '县衙',
-        type: 'county',
-        action: {
-            type: 'exchange',
-            options: [
-                {cost: {coins: 2}, reward: {de: 1}},
-                {cost: {coins: 5}, reward: {de: 2}}
-            ]
-        },
-        description: '花2金币换1德，或者花5金币换2德',
-        auto: false
-    },
-    {
-        id: 'm2',
+        id: 'marketplace_1',
         name: '府衙',
-        type: 'prefecture',
+        auto: false,
         action: {
             type: 'exchange',
             options: [
@@ -197,44 +183,95 @@ export const marketplaceCards = [
                 {cost: {lobsters: 3}, reward: {wang: 2}}
             ]
         },
-        description: '用1只龙虾换1望，或者用3只龙虾换2望',
-        auto: false
+        description: '玩家支付1只龙虾换1望，或者3只龙虾换2望'
     },
     {
-        id: 'm3',
+        id: 'marketplace_2',
+        name: '书院',
+        auto: false,
+        action: {
+            type: 'exchange',
+            options: [
+                {cost: {seaweed: 2}, reward: {de: 1}},
+                {cost: {coins: 5}, reward: {de: 2}}
+            ]
+        },
+        description: '支付2根海草换1德，或5金币换2德'
+    },
+    {
+        id: 'marketplace_3',
+        name: '码头',
+        auto: false,
+        action: {
+            type: 'exchange',
+            options: [
+                {cost: {coins: 3}, reward: {lobsters: 2}},
+                {cost: {cages: 1}, reward: {seaweed: 3}}
+            ]
+        },
+        description: '3金币换2只龙虾，或1个虾笼换3根海草'
+    },
+    {
+        id: 'marketplace_4',
+        name: '钱庄',
+        auto: false,
+        action: {
+            type: 'exchange',
+            options: [
+                {cost: {lobsters: 1}, reward: {coins: 2}},
+                {cost: {de: 1}, reward: {coins: 5}}
+            ]
+        },
+        description: '1只龙虾换2金币，或1德换5金币'
+    },
+    {
+        id: 'marketplace_5',
+        name: '县衙',
+        auto: false,
+        action: {
+            type: 'exchange',
+            options: [
+                {cost: {coins: 2}, reward: {de: 1}},
+                {cost: {coins: 5}, reward: {de: 2}}
+            ]
+        },
+        description: '花2金币换1德，或者花5金币换2德'
+    },
+    {
+        id: 'marketplace_6',
         name: '学堂',
-        type: 'academy',
-        description: '你的德望轨最低的一个提升一格，如果一样低则提升望的轨道一格',
-        auto: true // 标志：不需要玩家做出二级选择，直接执行
+        auto: true,
+        action: {type: 'academy'},
+        description: '你的德望轨最低的一个提升一格，如果一样低则提升望的轨道一格'
     },
     {
-                id: 'm4',
+        id: 'marketplace_7',
         name: '善堂',
-        type: 'charity',
-        description: '所有玩家中德轨最低者损失2只龙虾，望轨最低者损失2个金币',
-        auto: true
+        auto: true,
+        action: {type: 'charity'},
+        description: '所有玩家中德轨最低者损失2只龙虾，望轨最低者损失2个金币'
     },
     {
-        id: 'm5',
+        id: 'marketplace_8',
         name: '善学',
-        type: 'breeding',
-        description: '进行3次培养龙虾升级的行动',
-        auto: true
+        auto: true,
+        action: {type: 'breeding'},
+        description: '进行3次培养龙虾升级的行动'
     },
     {
-        id: 'm6',
+        id: 'marketplace_9',
         name: '不劳而获',
-        type: 'freebie',
-        description: '可以直接获取一只普通龙虾',
-        auto: true
+        auto: true,
+        action: {type: 'freebie'},
+        description: '可以直接获取一只普通龙虾'
     }
 ]
 
 export function getSkill(lobsterId) {
-    const card = titleCards.find((c) => c.id === lobsterId)
-    if (lobsterId === 'grade3') return { getDiceSides: () => 6 }
-    else if (lobsterId === 'grade2') return { getDiceSides: () => 8 }
-    else if (lobsterId === 'grade1') return { getDiceSides: () => 10 }
-    else if (lobsterId === 'royal') return { getDiceSides: () => 12 }
+    const card = titleCards.find(c => c.id === lobsterId)
+    if (lobsterId === 'grade3') return {getDiceSides: () => 6}
+    else if (lobsterId === 'grade2') return {getDiceSides: () => 8}
+    else if (lobsterId === 'grade1') return {getDiceSides: () => 10}
+    else if (lobsterId === 'royal') return {getDiceSides: () => 12}
     else return card?.skill || null
 }
