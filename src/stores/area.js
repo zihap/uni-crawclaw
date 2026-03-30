@@ -40,7 +40,7 @@ export const useAreaStore = defineStore('area', () => {
      * @returns {Object|null} 区域对象
      */
     const getAreaById = (areaId) => {
-        return areas.value.find(area => area.id === areaId) || null
+        return areas.value.find((area) => area.id === areaId) || null
     }
 
     /**
