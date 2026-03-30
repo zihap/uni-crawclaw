@@ -480,18 +480,15 @@ const handleNextPhase = () => {
 
 const showArenaModal = ref(false)
 const currentArenaBattle = ref(null)
-const arenaBattleQueue = ref([])
+const arenaBattleQueue = computed(() => onlineGameStore.arenaBattleQueue)
 
 /**
  * 监听竞技场战斗队列变化
  */
 watch(
-    () => arenaBattleQueue,
+    () => arenaBattleQueue.value,
     (queue) => {
-        console.log('[DEBUG onlineGame] arenaBattleQueue 变化:', queue.value)
-        console.log('[DEBUG onlineGame] currentPhase:', onlineGameStore.currentPhase)
-        if (queue.value.length > 0 && onlineGameStore.currentPhase === 'settlement') {
-            console.log('[DEBUG onlineGame] 显示竞技场弹窗')
+        if (queue.length > 0 && onlineGameStore.currentPhase === 'settlement') {
             showArenaModal.value = true
         }
     },
@@ -503,7 +500,6 @@ watch(
  */
 const handleArenaConfirm = ({}) => {
     // 单方确认时不做跳转，等待双方都选择
-    console.log('[竞技场] 单方已选择龙虾')
 }
 
 /**
@@ -530,105 +526,18 @@ const handleBothReady = ({ challenger, defender, challengerLobster, defenderLobs
         color: PLAYER_COLORS[defender.id]?.bg || '#4ECDC4'
     }
 
+    // 移除当前这场战斗（开始后就从队列中删除）
+    if (onlineGameStore.arenaBattleQueue.length > 0) {
+        onlineGameStore.arenaBattleQueue.shift()
+    }
+
     // 跳转到竞技场页面
-    // 注意：不要在这里调用 shift()，让队列保持完整
-    // 在跳转前保存队列到本地存储，防止页面卸载导致队列丢失
     const storageKey = `arenaBattleQueue_${onlineGameStore.roomId}`
-    uni.setStorageSync(storageKey, arenaBattleQueue.value)
-    console.log('[DEBUG handleBothReady] 保存队列到本地存储:', storageKey, arenaBattleQueue.value)
+    uni.setStorageSync(storageKey, onlineGameStore.arenaBattleQueue)
 
     uni.navigateTo({
         url: `/pages/arena/arena?player1=${encodeURIComponent(JSON.stringify(player1Data))}&player2=${encodeURIComponent(JSON.stringify(player2Data))}&roomId=${onlineGameStore.roomId}&playerId=${onlineGameStore.playerId}&challengeSlot=${currentArenaBattle.value?.slotIndex}`
     })
-}
-
-// ============ 竞技场调试（联机特有） ============
-
-import { titleCards } from '@data/cards.js'
-
-/**
- * 构建调试用的完整龙虾列表
- * 包含：titleCards全部龙虾 + 普通 + 三品 + 二品 + 一品 + 皇家
- */
-const buildDebugLobsters = () => {
-    const lobsters = []
-
-    // 添加 titleCards 中的所有龙虾
-    titleCards.forEach((card) => {
-        lobsters.push({
-            id: card.id,
-            grade: 'title',
-            name: card.name,
-            description: card.description,
-            skill: card.skill
-        })
-    })
-
-    // 添加基础等级龙虾
-    const baseGrades = [
-        { id: 'normal', grade: 'normal', name: '普通龙虾' },
-        { id: 'grade3', grade: 'grade3', name: '三品龙虾' },
-        { id: 'grade2', grade: 'grade2', name: '二品龙虾' },
-        { id: 'grade1', grade: 'grade1', name: '一品龙虾' },
-        { id: 'royal', grade: 'royal', name: '皇家龙虾' }
-    ]
-
-    baseGrades.forEach((g) => {
-        lobsters.push(g)
-    })
-
-    return lobsters
-}
-
-/**
- * 调试：直接进入竞技场战斗（触发2场）
- * 第一场：玩家1是challenger，玩家2是defender（slot 4 vs slot 1）
- * 第二场：玩家2是challenger，玩家1是defender（slot 5 vs slot 2）
- */
-const debugArenaBattle = () => {
-    const players = onlineGameStore.players
-
-    if (players.length < 2) {
-        console.log('[Debug] 玩家数量不足，无法触发竞技场战斗')
-        return
-    }
-
-    const player1 = players[0]
-    const player2 = players[1]
-    const allLobsters = buildDebugLobsters()
-
-    console.log('[Debug] 触发竞技场战斗（2场）')
-    console.log('[Debug] 玩家1:', player1.name)
-    console.log('[Debug] 玩家2:', player2.name)
-    console.log('[Debug] 龙虾数量:', allLobsters.length)
-
-    // 第1场战斗：玩家1是challenger(4号位)，玩家2是defender(1号位)
-    arenaBattleQueue.value.push({
-        challengerId: player1.id,
-        defenderId: player2.id,
-        slotIndex: 4 // challenge slot 4 = defender slot 1
-    })
-    player1.lobsters = allLobsters
-    player2.lobsters = allLobsters
-    // 第2场战斗：玩家2是challenger(5号位)，玩家1是defender(2号位)
-    arenaBattleQueue.value.push({
-        challengerId: player2.id,
-        defenderId: player1.id,
-        slotIndex: 5 // challenge slot 5 = defender slot 2
-    })
-
-    console.log('[Debug] 竞技场队列:', arenaBattleQueue.value)
-
-    if (arenaBattleQueue.value.length > 0) {
-        // 设置 currentArenaBattle 为队列第一个元素，确保 LobsterSelect 能正确获取 challenger/defender
-        currentArenaBattle.value = {
-            challenger: player1,
-            defender: player2,
-            slotIndex: arenaBattleQueue.value[0].slotIndex
-        }
-        console.log('[Debug] currentArenaBattle 设置:', currentArenaBattle.value)
-        showArenaModal.value = true
-    }
 }
 
 // ============ 生命周期（联机特有） ============
@@ -645,11 +554,8 @@ onMounted(() => {
     const storageKey = `arenaBattleQueue_${rId}`
     const savedQueue = uni.getStorageSync(storageKey)
     if (savedQueue && savedQueue.length > 0) {
-        console.log('[DEBUG onlineGame onMounted] 从本地存储恢复队列:', storageKey, savedQueue)
-        arenaBattleQueue.value = savedQueue
+        onlineGameStore.arenaBattleQueue = savedQueue
         uni.removeStorageSync(storageKey)
-    } else {
-        console.log('[DEBUG onlineGame onMounted] arenaBattleQueue:', arenaBattleQueue.value)
     }
 
     if (!rId || pId === null) {
@@ -664,13 +570,6 @@ onMounted(() => {
         socketService.setRoomContext(rId, pId)
         socketService.connect(rId, pId)
     }
-
-    // 调试模式：等待连接后直接触发竞技场战斗
-    setTimeout(() => {
-        if (onlineGameStore.players.length >= 2) {
-            debugArenaBattle()
-        }
-    }, 1000)
 })
 
 onUnmounted(() => {

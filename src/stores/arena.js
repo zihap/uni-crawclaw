@@ -123,7 +123,7 @@ export const useBattleStore = defineStore('battle', () => {
             { timestamp: Date.now(), message: '🦞 斗龙虾争锋开始！' },
             {
                 timestamp: Date.now(),
-                message: `${p1Data.name || '玩家1'} 的 ${p1Data.lobsterName}[${p1Skill.description}] vs ${p2Data.name || '玩家2'} 的 ${p2Data.lobsterName}[${p2Skill.description}]`
+                message: `${p1Data.name || '玩家1'} 的 ${p1Data.lobsterName}${p1Skill?.description ? '[' + p1Skill.description + ']' : ''} vs ${p2Data.name || '玩家2'} 的 ${p2Data.lobsterName}${p2Skill?.description ? '[' + p2Skill.description + ']' : ''}`
             },
             { timestamp: Date.now(), message: '🎲 投掷先手骰子决定行动顺序...' }
         ]
@@ -202,6 +202,7 @@ export const useBattleStore = defineStore('battle', () => {
         }
 
         battleData.value.currentPlayer = firstPlayer
+        battleData.value.initiative.firstPlayer = firstPlayer
         battleData.value.phase = 'rolling'
         battleData.value.lastAction = 'initiativeApplied'
         battleData.value.diceValue = null
@@ -211,7 +212,7 @@ export const useBattleStore = defineStore('battle', () => {
         addLog(`轮到 ${battleData.value.players[firstPlayer].name} 掷骰子`)
 
         const nextSkill = getSkill(battleData.value.players[firstPlayer].lobsterId)
-        if (nextSkill?.canReroll) {
+        if (nextSkill?.canReroll && nextSkill?.description) {
             addLog(`[${nextSkill.description}] 可重新投掷一次`)
         }
 
@@ -273,11 +274,12 @@ export const useBattleStore = defineStore('battle', () => {
             return
         }
         const diceValue = battleData.value.diceValue
+        const roller = battleData.value.diceRoller
+
         if (diceValue === null || diceValue === undefined) {
             return
         }
 
-        const roller = battleData.value.diceRoller
         const player = battleData.value.players[roller]
 
         const diceSides = getDiceSides(roller)
@@ -286,7 +288,9 @@ export const useBattleStore = defineStore('battle', () => {
         const skill = getSkill(player.lobsterId)
         const diceSidesDesc = diceSides !== 6 ? `(${diceSides}面骰)` : ''
         let skillDesc =
-            finalDiceValue !== diceValue ? ` [${skill.description}触发，${diceValue}→${finalDiceValue}]` : ''
+            finalDiceValue !== diceValue && skill?.description
+                ? ` [${skill.description}触发，${diceValue}→${finalDiceValue}]`
+                : ''
 
         const seaweedBonus = battleData.value.seaweedBonus || 0
         const seaweedDesc = seaweedBonus > 0 ? `(+${seaweedBonus}海草)` : ''
@@ -316,7 +320,9 @@ export const useBattleStore = defineStore('battle', () => {
                 skill.apply(context)
                 const bonusSteps = context.bonusSteps || 0
                 if (bonusSteps > 0) {
-                    skillDesc = ` [${skill.description}触发，额外+${bonusSteps}步]`
+                    if (skill?.description) {
+                        skillDesc = ` [${skill.description}触发，额外+${bonusSteps}步]`
+                    }
                     steps += bonusSteps
                 }
             }
@@ -326,26 +332,25 @@ export const useBattleStore = defineStore('battle', () => {
 
             if (steps > 0) {
                 player.position = roller === 0 ? player.position + steps : player.position - steps
-
-                // 检查是否首次穿过中线
-                if (roller === 0) {
-                    if (!battleData.value.p1CrossedMidline && player.position >= BATTLE_CELLS / 2) {
-                        player.wang = (player.wang || 0) + 1
-                        battleData.value.p1CrossedMidline = true
-                        addLog(`🎯 ${player.name} 越过中线，获得1望！`)
-                    }
-                } else {
-                    if (!battleData.value.p2CrossedMidline && player.position < BATTLE_CELLS / 2) {
-                        player.wang = (player.wang || 0) + 1
-                        battleData.value.p2CrossedMidline = true
-                        addLog(`🎯 ${player.name} 越过中线，获得1望！`)
-                    }
-                }
             }
         }
 
         battleData.value = { ...battleData.value }
         addLog(logMessage)
+        // 检查是否首次穿过中线
+        if (roller === 0) {
+            if (!battleData.value.p1CrossedMidline && player.position >= BATTLE_CELLS / 2) {
+                player.wang = (player.wang || 0) + 1
+                battleData.value.p1CrossedMidline = true
+                addLog(`🎯 ${player.name} 越过中线，获得1望！`)
+            }
+        } else {
+            if (!battleData.value.p2CrossedMidline && player.position < BATTLE_CELLS / 2) {
+                player.wang = (player.wang || 0) + 1
+                battleData.value.p2CrossedMidline = true
+                addLog(`🎯 ${player.name} 越过中线，获得1望！`)
+            }
+        }
         battleData.value.seaweedBonus = 0
 
         if (checkWinCondition(roller)) {
@@ -355,15 +360,11 @@ export const useBattleStore = defineStore('battle', () => {
         // 切换到下一个玩家
         const nextPlayer = roller === 0 ? 1 : 0
         const nextPlayerObj = battleData.value.players[nextPlayer]
-        const nextSkill = getSkill(nextPlayerObj.lobsterId)
 
         addLog(`轮到 ${nextPlayerObj.name} 掷骰子`)
-        if (nextSkill?.canReroll) {
-            addLog(`[${nextSkill.description}] 可重新投掷一次`)
-        }
 
         battleData.value.currentPlayer = nextPlayer
-        if (nextPlayer === 0) {
+        if (nextPlayer === battleData.value.initiative?.firstPlayer) {
             battleData.value.currentRound++
             addLog(`--- 第 ${battleData.value.currentRound} 回合 ---`)
         }
@@ -399,10 +400,8 @@ export const useBattleStore = defineStore('battle', () => {
 
         if (isCovered) {
             if (opponentSkill?.onCovered) {
-                return endBattle(
-                    opponentPlayer,
-                    `🛡️ ${opponentPlayer.name} 的 [${opponentSkill.description}] 触发！被覆盖反而获胜！`
-                )
+                const desc = opponentSkill?.description ? ` 的 [${opponentSkill.description}]` : ''
+                return endBattle(opponentPlayer, `🛡️ ${opponentPlayer.name}${desc} 触发！被覆盖反而获胜！`)
             }
             return endBattle(rollerPlayer, `🏆 ${rollerPlayer.name} 的 [${rollerPlayer.lobsterName}] 获胜！`)
         }
@@ -418,15 +417,17 @@ export const useBattleStore = defineStore('battle', () => {
 
         if (isAdjacent) {
             if (rollerSkill?.nearWinOnAdjacent) {
+                const desc = rollerSkill?.description ? ` [${rollerSkill.description}]` : ''
                 return endBattle(
                     rollerPlayer,
-                    `⚔️ ${rollerPlayer.name} 的 [${rollerPlayer.lobsterName}] 触发 [${rollerSkill.description}] ！紧贴对方龙虾，判定获胜！`
+                    `⚔️ ${rollerPlayer.name} 的 [${rollerPlayer.lobsterName}] 触发${desc}！紧贴对方龙虾，判定获胜！`
                 )
             }
             if (opponentSkill?.nearWinOnAdjacent) {
+                const desc = opponentSkill?.description ? ` [${opponentSkill.description}]` : ''
                 return endBattle(
                     opponentPlayer,
-                    `⚔️ ${opponentPlayer.name} 的 [${opponentPlayer.lobsterName}] [${opponentSkill.description}] 触发！紧贴对方龙虾，判定获胜！`
+                    `⚔️ ${opponentPlayer.name} 的 [${opponentPlayer.lobsterName}]${desc} 触发！紧贴对方龙虾，判定获胜！`
                 )
             }
         }
