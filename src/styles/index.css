@@ -31,3 +31,6 @@
 @import './pages/index.css';
 @import './pages/game.css';
 @import './pages/result.css';
+@import './pages/room.css';
+@import './pages/arena.css';
+@import './pages/lobsterSelect.css';

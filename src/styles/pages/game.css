@@ -971,3 +971,47 @@
         border-color: var(--color-border-default);
     }
 }
+
+/* ==================== 联机模式特有样式 ==================== */
+
+/* 回合指示器 */
+.turn-info {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.5rem;
+    margin-left: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.turn-info.my-turn {
+    background: linear-gradient(135deg, var(--color-success) 0%, #38ef7d 100%);
+    animation: pulse 1.5s infinite;
+}
+
+.turn-text {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+/* 玩家徽章 - 标识自己 */
+.player-badge.me-badge {
+    background: var(--color-primary);
+    left: 0.5rem;
+    right: auto;
+}
+
+/* 玩家项 - 标识自己 */
+.player-item.is-me {
+    background: rgba(102, 126, 234, 0.1);
+    border-color: var(--color-primary-light);
+}
+
+/* 联机模式下的回合提示横幅增强 */
+.placement-banner.online-mode {
+    background: linear-gradient(90deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
+}
+
+.placement-banner.my-turn-banner {
+    background: linear-gradient(90deg, var(--color-success-light) 0%, var(--color-success) 100%);
+}

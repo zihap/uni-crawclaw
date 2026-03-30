@@ -17,6 +17,31 @@
             "style": {
                 "navigationBarTitleText": "游戏结算"
             }
+        },
+        {
+            "path": "pages/lobby/lobby",
+            "style": {
+                "navigationBarTitleText": "联机大厅"
+            }
+        },
+        {
+            "path": "pages/room/room",
+            "style": {
+                "navigationBarTitleText": "房间"
+            }
+        },
+        {
+            "path": "pages/arena/arena",
+            "style": {
+                "navigationBarTitleText": "斗龙虾争锋",
+                "navigationStyle": "custom"
+            }
+        },
+        {
+            "path": "pages/online-game/onlineGame",
+            "style": {
+                "navigationBarTitleText": "联机游戏中"
+            }
         }
     ],
     "globalStyle": {
