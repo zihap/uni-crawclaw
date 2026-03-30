@@ -28,9 +28,9 @@ export const titleCards = [
         name: '勇者龙虾',
         description: '非常骁勇善战',
         skill: {
-            description: '可抛两次骰子，选择较优结果',
+            description: '可抛两次骰子，选择较优结果，使用10面骰',
             canReroll: true,
-            getDiceSides: () => 12
+            getDiceSides: () => 10
         }
     },
     {
@@ -38,9 +38,9 @@ export const titleCards = [
         name: '急先锋龙虾',
         description: '',
         skill: {
-            description: '出场即可移动，使用10面骰',
+            description: '出场即可移动',
             startStarted: true,
-            getDiceSides: () => 10
+            getDiceSides: () => 12
         }
     },
     {

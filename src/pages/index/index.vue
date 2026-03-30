@@ -31,6 +31,7 @@
             </view>
 
             <button class="start-btn" @click="startGame">开始游戏</button>
+            <button class="online-btn" @click="goToLobby">联机对战</button>
         </view>
     </view>
 </template>
@@ -57,6 +58,11 @@ export default {
             this.gameStore.initGame(this.selectedPlayerCount)
             uni.navigateTo({
                 url: '/pages/game/game'
+            })
+        },
+        goToLobby() {
+            uni.navigateTo({
+                url: '/pages/lobby/lobby'
             })
         }
     }
