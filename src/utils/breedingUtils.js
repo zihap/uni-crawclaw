@@ -7,7 +7,7 @@
 export const BREEDING_SLOTS = [
     {
         id: 0,
-        reward: {seaweed: 1},
+        reward: { seaweed: 1 },
         actions: 1,
         description: '奖励1根海草；执行1次培养行动'
     },
@@ -19,7 +19,7 @@ export const BREEDING_SLOTS = [
     },
     {
         id: 2,
-        reward: {coins: 1},
+        reward: { coins: 1 },
         actions: 2,
         description: '奖励1枚金币；执行2次培养行动'
     },

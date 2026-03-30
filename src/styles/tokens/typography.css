@@ -10,7 +10,7 @@ page {
     --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     --font-family-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
     --font-family-display: 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    
+
     /* 主字体 */
     --font-family-base: var(--font-family-sans);
     --font-family-heading: var(--font-family-display);
@@ -21,19 +21,19 @@ page {
     ======================================== */
     /* 基础字号 */
     --font-size-base: 16px;
-    
+
     /* 字号比例尺 */
-    --font-size-2xs: 0.625rem;   /* 10px */
-    --font-size-xs: 0.75rem;     /* 12px */
-    --font-size-sm: 0.875rem;    /* 14px */
-    --font-size-md: 1rem;        /* 16px - 基础 */
-    --font-size-lg: 1.125rem;    /* 18px */
-    --font-size-xl: 1.25rem;     /* 20px */
-    --font-size-2xl: 1.5rem;     /* 24px */
-    --font-size-3xl: 1.875rem;   /* 30px */
-    --font-size-4xl: 2.25rem;    /* 36px */
-    --font-size-5xl: 3rem;       /* 48px */
-    --font-size-6xl: 3.75rem;    /* 60px */
+    --font-size-2xs: 0.625rem; /* 10px */
+    --font-size-xs: 0.75rem; /* 12px */
+    --font-size-sm: 0.875rem; /* 14px */
+    --font-size-md: 1rem; /* 16px - 基础 */
+    --font-size-lg: 1.125rem; /* 18px */
+    --font-size-xl: 1.25rem; /* 20px */
+    --font-size-2xl: 1.5rem; /* 24px */
+    --font-size-3xl: 1.875rem; /* 30px */
+    --font-size-4xl: 2.25rem; /* 36px */
+    --font-size-5xl: 3rem; /* 48px */
+    --font-size-6xl: 3.75rem; /* 60px */
 
     /* ========================================
        字重 (Font Weights)
@@ -72,7 +72,7 @@ page {
        排版组合 (Typography Compositions)
        预定义的文本样式组合
     ======================================== */
-    
+
     /* 标题样式 */
     --text-h1: var(--font-weight-bold) var(--font-size-5xl)/var(--line-height-tight) var(--font-family-heading);
     --text-h2: var(--font-weight-bold) var(--font-size-4xl)/var(--line-height-tight) var(--font-family-heading);

@@ -150,14 +150,30 @@ page {
    间距工具类 (Spacing Utilities)
 ======================================== */
 /* 内边距 */
-.p-0 { padding: 0; }
-.p-1 { padding: var(--space-1); }
-.p-2 { padding: var(--space-2); }
-.p-3 { padding: var(--space-3); }
-.p-4 { padding: var(--space-4); }
-.p-5 { padding: var(--space-5); }
-.p-6 { padding: var(--space-6); }
-.p-8 { padding: var(--space-8); }
+.p-0 {
+    padding: 0;
+}
+.p-1 {
+    padding: var(--space-1);
+}
+.p-2 {
+    padding: var(--space-2);
+}
+.p-3 {
+    padding: var(--space-3);
+}
+.p-4 {
+    padding: var(--space-4);
+}
+.p-5 {
+    padding: var(--space-5);
+}
+.p-6 {
+    padding: var(--space-6);
+}
+.p-8 {
+    padding: var(--space-8);
+}
 
 .px-4 {
     padding-left: var(--space-4);
@@ -170,11 +186,21 @@ page {
 }
 
 /* 外边距 */
-.m-0 { margin: 0; }
-.m-1 { margin: var(--space-1); }
-.m-2 { margin: var(--space-2); }
-.m-4 { margin: var(--space-4); }
-.m-auto { margin: auto; }
+.m-0 {
+    margin: 0;
+}
+.m-1 {
+    margin: var(--space-1);
+}
+.m-2 {
+    margin: var(--space-2);
+}
+.m-4 {
+    margin: var(--space-4);
+}
+.m-auto {
+    margin: auto;
+}
 
 .mx-auto {
     margin-left: auto;
@@ -182,124 +208,258 @@ page {
 }
 
 /* 间隙 */
-.gap-2 { gap: var(--space-2); }
-.gap-4 { gap: var(--space-4); }
-.gap-6 { gap: var(--space-6); }
-.gap-8 { gap: var(--space-8); }
+.gap-2 {
+    gap: var(--space-2);
+}
+.gap-4 {
+    gap: var(--space-4);
+}
+.gap-6 {
+    gap: var(--space-6);
+}
+.gap-8 {
+    gap: var(--space-8);
+}
 
 /* ========================================
    尺寸工具类 (Sizing Utilities)
 ======================================== */
-.w-full { width: 100%; }
-.w-auto { width: auto; }
-.w-screen { width: 100vw; }
+.w-full {
+    width: 100%;
+}
+.w-auto {
+    width: auto;
+}
+.w-screen {
+    width: 100vw;
+}
 
-.h-full { height: 100%; }
-.h-auto { height: auto; }
-.h-screen { height: 100vh; }
+.h-full {
+    height: 100%;
+}
+.h-auto {
+    height: auto;
+}
+.h-screen {
+    height: 100vh;
+}
 
-.min-h-screen { min-height: 100vh; }
+.min-h-screen {
+    min-height: 100vh;
+}
 
 /* ========================================
    显示工具类 (Display Utilities)
 ======================================== */
-.block { display: block; }
-.inline { display: inline; }
-.inline-block { display: inline-block; }
-.hidden { display: none; }
+.block {
+    display: block;
+}
+.inline {
+    display: inline;
+}
+.inline-block {
+    display: inline-block;
+}
+.hidden {
+    display: none;
+}
 
 /* ========================================
    位置工具类 (Position Utilities)
 ======================================== */
-.relative { position: relative; }
-.absolute { position: absolute; }
-.fixed { position: fixed; }
-.sticky { position: sticky; }
+.relative {
+    position: relative;
+}
+.absolute {
+    position: absolute;
+}
+.fixed {
+    position: fixed;
+}
+.sticky {
+    position: sticky;
+}
 
 /* ========================================
    文本工具类 (Text Utilities)
 ======================================== */
-.text-left { text-align: left; }
-.text-center { text-align: center; }
-.text-right { text-align: right; }
+.text-left {
+    text-align: left;
+}
+.text-center {
+    text-align: center;
+}
+.text-right {
+    text-align: right;
+}
 
-.text-xs { font-size: var(--font-size-xs); }
-.text-sm { font-size: var(--font-size-sm); }
-.text-base { font-size: var(--font-size-md); }
-.text-lg { font-size: var(--font-size-lg); }
-.text-xl { font-size: var(--font-size-xl); }
-.text-2xl { font-size: var(--font-size-2xl); }
+.text-xs {
+    font-size: var(--font-size-xs);
+}
+.text-sm {
+    font-size: var(--font-size-sm);
+}
+.text-base {
+    font-size: var(--font-size-md);
+}
+.text-lg {
+    font-size: var(--font-size-lg);
+}
+.text-xl {
+    font-size: var(--font-size-xl);
+}
+.text-2xl {
+    font-size: var(--font-size-2xl);
+}
 
-.font-normal { font-weight: var(--font-weight-normal); }
-.font-medium { font-weight: var(--font-weight-medium); }
-.font-semibold { font-weight: var(--font-weight-semibold); }
-.font-bold { font-weight: var(--font-weight-bold); }
+.font-normal {
+    font-weight: var(--font-weight-normal);
+}
+.font-medium {
+    font-weight: var(--font-weight-medium);
+}
+.font-semibold {
+    font-weight: var(--font-weight-semibold);
+}
+.font-bold {
+    font-weight: var(--font-weight-bold);
+}
 
 /* ========================================
    颜色工具类 (Color Utilities)
 ======================================== */
-.text-primary { color: var(--color-text-primary); }
-.text-secondary { color: var(--color-text-secondary); }
-.text-tertiary { color: var(--color-text-tertiary); }
-.text-inverse { color: var(--color-text-inverse); }
+.text-primary {
+    color: var(--color-text-primary);
+}
+.text-secondary {
+    color: var(--color-text-secondary);
+}
+.text-tertiary {
+    color: var(--color-text-tertiary);
+}
+.text-inverse {
+    color: var(--color-text-inverse);
+}
 
-.bg-primary { background-color: var(--color-bg-primary); }
-.bg-secondary { background-color: var(--color-bg-secondary); }
-.bg-tertiary { background-color: var(--color-bg-tertiary); }
+.bg-primary {
+    background-color: var(--color-bg-primary);
+}
+.bg-secondary {
+    background-color: var(--color-bg-secondary);
+}
+.bg-tertiary {
+    background-color: var(--color-bg-tertiary);
+}
 
 /* ========================================
    圆角工具类 (Border Radius Utilities)
 ======================================== */
-.rounded-none { border-radius: 0; }
-.rounded-sm { border-radius: 0.125rem; }
-.rounded { border-radius: 0.25rem; }
-.rounded-md { border-radius: 0.375rem; }
-.rounded-lg { border-radius: 0.5rem; }
-.rounded-xl { border-radius: 0.75rem; }
-.rounded-2xl { border-radius: 1rem; }
-.rounded-full { border-radius: 9999px; }
+.rounded-none {
+    border-radius: 0;
+}
+.rounded-sm {
+    border-radius: 0.125rem;
+}
+.rounded {
+    border-radius: 0.25rem;
+}
+.rounded-md {
+    border-radius: 0.375rem;
+}
+.rounded-lg {
+    border-radius: 0.5rem;
+}
+.rounded-xl {
+    border-radius: 0.75rem;
+}
+.rounded-2xl {
+    border-radius: 1rem;
+}
+.rounded-full {
+    border-radius: 9999px;
+}
 
 /* ========================================
    阴影工具类 (Shadow Utilities)
 ======================================== */
-.shadow-none { box-shadow: var(--shadow-none); }
-.shadow-sm { box-shadow: var(--shadow-sm); }
-.shadow { box-shadow: var(--shadow); }
-.shadow-md { box-shadow: var(--shadow-md); }
-.shadow-lg { box-shadow: var(--shadow-lg); }
-.shadow-xl { box-shadow: var(--shadow-xl); }
+.shadow-none {
+    box-shadow: var(--shadow-none);
+}
+.shadow-sm {
+    box-shadow: var(--shadow-sm);
+}
+.shadow {
+    box-shadow: var(--shadow);
+}
+.shadow-md {
+    box-shadow: var(--shadow-md);
+}
+.shadow-lg {
+    box-shadow: var(--shadow-lg);
+}
+.shadow-xl {
+    box-shadow: var(--shadow-xl);
+}
 
 /* ========================================
    溢出工具类 (Overflow Utilities)
 ======================================== */
-.overflow-auto { overflow: auto; }
-.overflow-hidden { overflow: hidden; }
-.overflow-visible { overflow: visible; }
-.overflow-scroll { overflow: scroll; }
+.overflow-auto {
+    overflow: auto;
+}
+.overflow-hidden {
+    overflow: hidden;
+}
+.overflow-visible {
+    overflow: visible;
+}
+.overflow-scroll {
+    overflow: scroll;
+}
 
-.overflow-x-auto { overflow-x: auto; }
-.overflow-y-auto { overflow-y: auto; }
+.overflow-x-auto {
+    overflow-x: auto;
+}
+.overflow-y-auto {
+    overflow-y: auto;
+}
 
 /* ========================================
    可见性工具类 (Visibility Utilities)
 ======================================== */
-.visible { visibility: visible; }
-.invisible { visibility: hidden; }
+.visible {
+    visibility: visible;
+}
+.invisible {
+    visibility: hidden;
+}
 
 /* ========================================
    透明度工具类 (Opacity Utilities)
 ======================================== */
-.opacity-0 { opacity: 0; }
-.opacity-25 { opacity: 0.25; }
-.opacity-50 { opacity: 0.5; }
-.opacity-75 { opacity: 0.75; }
-.opacity-100 { opacity: 1; }
+.opacity-0 {
+    opacity: 0;
+}
+.opacity-25 {
+    opacity: 0.25;
+}
+.opacity-50 {
+    opacity: 0.5;
+}
+.opacity-75 {
+    opacity: 0.75;
+}
+.opacity-100 {
+    opacity: 1;
+}
 
 /* ========================================
    过渡工具类 (Transition Utilities)
 ======================================== */
 .transition {
-    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+    transition-property:
+        color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform,
+        filter, backdrop-filter;
     transition-timing-function: var(--ease-out);
     transition-duration: var(--duration-normal);
 }
@@ -316,31 +476,61 @@ page {
    变换工具类 (Transform Utilities)
 ======================================== */
 .transform {
-    transform: translateX(var(--tw-translate-x, 0)) translateY(var(--tw-translate-y, 0)) rotate(var(--tw-rotate, 0)) skewX(var(--tw-skew-x, 0)) skewY(var(--tw-skew-y, 0)) scaleX(var(--tw-scale-x, 1)) scaleY(var(--tw-scale-y, 1));
+    transform: translateX(var(--tw-translate-x, 0)) translateY(var(--tw-translate-y, 0)) rotate(var(--tw-rotate, 0))
+        skewX(var(--tw-skew-x, 0)) skewY(var(--tw-skew-y, 0)) scaleX(var(--tw-scale-x, 1)) scaleY(var(--tw-scale-y, 1));
 }
 
-.scale-95 { --tw-scale-x: 0.95; --tw-scale-y: 0.95; }
-.scale-100 { --tw-scale-x: 1; --tw-scale-y: 1; }
-.scale-105 { --tw-scale-x: 1.05; --tw-scale-y: 1.05; }
+.scale-95 {
+    --tw-scale-x: 0.95;
+    --tw-scale-y: 0.95;
+}
+.scale-100 {
+    --tw-scale-x: 1;
+    --tw-scale-y: 1;
+}
+.scale-105 {
+    --tw-scale-x: 1.05;
+    --tw-scale-y: 1.05;
+}
 
 /* ========================================
    光标工具类 (Cursor Utilities)
 ======================================== */
-.cursor-auto { cursor: auto; }
-.cursor-default { cursor: default; }
-.cursor-pointer { cursor: pointer; }
-.cursor-not-allowed { cursor: not-allowed; }
+.cursor-auto {
+    cursor: auto;
+}
+.cursor-default {
+    cursor: default;
+}
+.cursor-pointer {
+    cursor: pointer;
+}
+.cursor-not-allowed {
+    cursor: not-allowed;
+}
 
 /* ========================================
    用户选择工具类 (User Select Utilities)
 ======================================== */
-.select-none { user-select: none; }
-.select-text { user-select: text; }
-.select-all { user-select: all; }
-.select-auto { user-select: auto; }
+.select-none {
+    user-select: none;
+}
+.select-text {
+    user-select: text;
+}
+.select-all {
+    user-select: all;
+}
+.select-auto {
+    user-select: auto;
+}
 
 /* ========================================
    指针事件工具类 (Pointer Events Utilities)
 ======================================== */
-.pointer-events-none { pointer-events: none; }
-.pointer-events-auto { pointer-events: auto; }
+.pointer-events-none {
+    pointer-events: none;
+}
+.pointer-events-auto {
+    pointer-events: auto;
+}

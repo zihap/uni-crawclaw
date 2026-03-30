@@ -1,0 +1,20 @@
+# 忽略构建产物
+dist/
+node_modules/
+.unpackage/
+
+# 忽略二进制文件
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
+*.svg
+
+# 忽略配置文件
+.gitignore
+.huskyrc
+.lintstagedrc
+
+# 忽略日志
+*.log

@@ -81,7 +81,7 @@ export const titleCards = [
         description: '',
         skill: {
             description: '掷出1、2、3点视为6点',
-            modifyDice: (value) => value <= 3 ? 6 : value,
+            modifyDice: (value) => (value <= 3 ? 6 : value),
             getDiceSides: () => 12
         }
     }
@@ -208,7 +208,7 @@ export const marketplaceCards = [
         auto: true // 标志：不需要玩家做出二级选择，直接执行
     },
     {
-        id: 'm4',
+                id: 'm4',
         name: '善堂',
         type: 'charity',
         description: '所有玩家中德轨最低者损失2只龙虾，望轨最低者损失2个金币',
@@ -231,10 +231,10 @@ export const marketplaceCards = [
 ]
 
 export function getSkill(lobsterId) {
-    const card = titleCards.find(c => c.id === lobsterId)
-    if (lobsterId === 'grade3') return {getDiceSides: () => 6}
-    else if (lobsterId === 'grade2') return {getDiceSides: () => 8}
-    else if (lobsterId === 'grade1') return {getDiceSides: () => 10}
-    else if (lobsterId === 'royal') return {getDiceSides: () => 12}
+    const card = titleCards.find((c) => c.id === lobsterId)
+    if (lobsterId === 'grade3') return { getDiceSides: () => 6 }
+    else if (lobsterId === 'grade2') return { getDiceSides: () => 8 }
+    else if (lobsterId === 'grade1') return { getDiceSides: () => 10 }
+    else if (lobsterId === 'royal') return { getDiceSides: () => 12 }
     else return card?.skill || null
 }

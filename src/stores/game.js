@@ -15,7 +15,7 @@ import {
     calculateShrimpCatchingReward,
     exchangeBubbles
 } from '@utils/shrimpCatchingUtils'
-import {BREEDING_SLOTS, calculateBreedingReward} from '@utils/breedingUtils'
+import { BREEDING_SLOTS, calculateBreedingReward } from '@utils/breedingUtils'
 import {MARKETPLACE_SLOTS, calculateMarketplaceReward} from '@utils/marketplaceUtils'
 import { usePlayerStore } from '@stores/player'
 
@@ -229,7 +229,7 @@ export const useGameStore = defineStore('game', () => {
      */
     const initPlacementOrder = () => {
         const playerCount = playerStore.players.length
-        const maxLiZhangCt = Math.max(...playerStore.players.map(p => p.liZhang))
+        const maxLiZhangCt = Math.max(...playerStore.players.map((p) => p.liZhang))
         const order = []
 
         for (let i = 0; i < maxLiZhangCt; i++) {
@@ -243,7 +243,7 @@ export const useGameStore = defineStore('game', () => {
         placementOrder.value = order
         currentPlacementIndex.value = 0
 
-        addLog(`放置顺序: ${order.map(id => `玩家${id + 1}`).join(' → ')}`, 'info')
+        addLog(`放置顺序: ${order.map((id) => `玩家${id + 1}`).join(' → ')}`, 'info')
     }
 
     // ============ 放置机制核心方法 ============
@@ -336,7 +336,6 @@ export const useGameStore = defineStore('game', () => {
                 area: areaName,
                 slotIndex
             }
-
         } catch (err) {
             const error = `放置失败: ${err.message}`
             addLog(error, 'error')
@@ -415,7 +414,12 @@ export const useGameStore = defineStore('game', () => {
             }
 
             // 计算行动格奖励
-            const rewardResult = calculateShrimpCatchingReward(player, slotIndex, playerStore.players, playerStore.startingPlayerIndex)
+            const rewardResult = calculateShrimpCatchingReward(
+                player,
+                slotIndex,
+                playerStore.players,
+                playerStore.startingPlayerIndex
+            )
             if (rewardResult.success && rewardResult.message) {
                 addLog(`${player.name}${rewardResult.message}`, 'info')
             }
@@ -424,11 +428,16 @@ export const useGameStore = defineStore('game', () => {
             const slotConfig = SHRIMP_CATCHING_SLOTS[slotIndex]
             if (slotConfig) {
                 const actionCount = slotConfig.actions
-                const result = await executeShrimpCatching(player, actionCount, wildLobsterPool.value, (indicatorType, indicatorResult) => {
-                    if (indicatorResult.success) {
-                        addLog(`${player.name}${indicatorResult.message}`, 'info')
+                const result = await executeShrimpCatching(
+                    player,
+                    actionCount,
+                    wildLobsterPool.value,
+                    (indicatorType, indicatorResult) => {
+                        if (indicatorResult.success) {
+                            addLog(`${player.name}${indicatorResult.message}`, 'info')
+                        }
                     }
-                })
+                )
 
                 if (result.success) {
                     addLog(`${player.name}执行了${actionCount}次捕虾行动`, 'success')
@@ -460,7 +469,7 @@ export const useGameStore = defineStore('game', () => {
             const actionCount = slot.actions
             if (player.lobsters.length === 0) {
                 addLog(`${player.name}没有龙虾可以培养，跳过行动`, 'warning')
-                continue;
+                continue
             }
 
             addLog(`${player.name}开始执行${actionCount}次培养行动`, 'info')
@@ -620,7 +629,7 @@ export const useGameStore = defineStore('game', () => {
         gameTitleCards.value = titleCardDeck.value.splice(0, 2)
         addLog('养蛊区：刷新2张待获取的称号卡', 'info')
 
-        taverns.value.forEach(tavern => {
+        taverns.value.forEach((tavern) => {
             if (tavern.cards.length < 2 && gameTributeCards.value.length > 0) {
                 tavern.cards.push(gameTributeCards.value.shift())
             }

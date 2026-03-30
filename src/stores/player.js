@@ -64,7 +64,7 @@ export const usePlayerStore = defineStore('player', () => {
      * @returns {Object|null} 玩家对象或null
      */
     const getPlayerById = (playerId) => {
-        return players.value.find(player => player.id === playerId) || null
+        return players.value.find((player) => player.id === playerId) || null
     }
 
     /**
@@ -112,7 +112,7 @@ export const usePlayerStore = defineStore('player', () => {
             if (startingPlayer.value) {
                 startingPlayer.value.isStartingPlayer = false
             }
-            
+
             // 设置新的起始玩家
             startingPlayerIndex.value = playerIndex
             const newStartingPlayer = players.value[playerIndex]
@@ -130,12 +130,12 @@ export const usePlayerStore = defineStore('player', () => {
     const calculateTotalScore = (player) => {
         let score = player.de * player.wang
         score += player.coins
-        player.tributeCards.forEach(card => {
+        player.tributeCards.forEach((card) => {
             if (card.bonusScore) {
                 score += card.bonusScore
             }
         })
-        Object.values(player.tavernCompletions).forEach(completion => {
+        Object.values(player.tavernCompletions).forEach((completion) => {
             if (completion === 1) score += 3
             if (completion === 2) score += 2
             if (completion === 3) score += 1
@@ -161,8 +161,8 @@ export const usePlayerStore = defineStore('player', () => {
      * @param {number} baseLiZhang - 基础里长数量
      */
     const resetPlayerLiZhang = (baseLiZhang = 3) => {
-        players.value.forEach(player => {
-            player.liZhang = baseLiZhang + player.tributeCards.filter(c => c.aura?.type === 'extraLiZhang').length
+        players.value.forEach((player) => {
+            player.liZhang = baseLiZhang + player.tributeCards.filter((c) => c.aura?.type === 'extraLiZhang').length
         })
     }
 
@@ -171,7 +171,7 @@ export const usePlayerStore = defineStore('player', () => {
      * @param {number} baseCoins - 基础金币数量
      */
     const addCoinsToAllPlayers = (baseCoins = 1) => {
-        players.value.forEach(player => {
+        players.value.forEach((player) => {
             player.coins += baseCoins + player.bonusGold
         })
     }

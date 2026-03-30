@@ -4,24 +4,79 @@
  */
 
 /* Box-sizing规则、移除默认边距和填充、移除触摸高亮 */
-page, view, scroll-view, swiper, swiper-item, cover-view, cover-image, icon, text, rich-text, progress, button, checkbox, form, input, label, picker, picker-view, picker-view-column, radio, slider, switch, textarea, navigator, audio, camera, image, video, map, canvas, web-view, div, span, p, a, h1, h2, h3, h4, h5, h6, ul, ol, li, dl, dt, dd, form, img {
+page,
+view,
+scroll-view,
+swiper,
+swiper-item,
+cover-view,
+cover-image,
+icon,
+text,
+rich-text,
+progress,
+button,
+checkbox,
+form,
+input,
+label,
+picker,
+picker-view,
+picker-view-column,
+radio,
+slider,
+switch,
+textarea,
+navigator,
+audio,
+camera,
+image,
+video,
+map,
+canvas,
+web-view,
+div,
+span,
+p,
+a,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+ul,
+ol,
+li,
+dl,
+dt,
+dd,
+form,
+img {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
     -webkit-tap-highlight-color: transparent;
 }
 
-page::before, page::after,
-view::before, view::after,
-text::before, text::after,
-button::before, button::after,
-div::before, div::after,
-span::before, span::after {
+page::before,
+page::after,
+view::before,
+view::after,
+text::before,
+text::after,
+button::before,
+button::after,
+div::before,
+div::after,
+span::before,
+span::after {
     box-sizing: border-box;
 }
 
 /* 设置核心根默认值 */
-page, html {
+page,
+html {
     -webkit-text-size-adjust: 100%;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -29,7 +84,8 @@ page, html {
 }
 
 /* 设置body默认值 */
-page, body {
+page,
+body {
     min-height: 100vh;
     line-height: 1.5;
     font-family: var(--font-family-base, system-ui, -apple-system, sans-serif);
@@ -38,7 +94,8 @@ page, body {
 }
 
 /* 设置媒体元素默认值 */
-image, img,
+image,
+img,
 picture,
 video,
 canvas,
@@ -81,14 +138,21 @@ ol {
 }
 
 /* 设置链接样式 */
-a, navigator {
+a,
+navigator {
     text-decoration: none;
     color: inherit;
 }
 
 /* 设置标题文本包裹 */
-p, text,
-h1, h2, h3, h4, h5, h6 {
+p,
+text,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
     overflow-wrap: break-word;
 }
 

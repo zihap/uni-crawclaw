@@ -22,7 +22,7 @@ export default defineConfig({
     // 👇👇 核心：禁用 CSS 最小化！彻底不生成 *
     build: {
         minify: false, // 关闭压缩
-        cssMinify: false, // 关闭 CSS 压缩
+        cssMinify: false // 关闭 CSS 压缩
     },
 
     server: {

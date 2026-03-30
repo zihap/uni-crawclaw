@@ -38,6 +38,7 @@ src/styles/
 ### 第一步：引入新样式系统
 
 在 `App.vue` 中已引入：
+
 ```css
 @import './styles/index.css';
 @import './styles/core/responsive.css';
@@ -46,12 +47,14 @@ src/styles/
 ### 第二步：替换颜色变量
 
 **旧写法：**
+
 ```css
 background: var(--primary-color);
 color: var(--text-primary);
 ```
 
 **新写法：**
+
 ```css
 background: var(--color-primary);
 color: var(--color-text-primary);
@@ -60,6 +63,7 @@ color: var(--color-text-primary);
 ### 第三步：使用组件类
 
 **按钮组件：**
+
 ```html
 <!-- 旧写法 -->
 <button class="start-btn">开始</button>
@@ -69,48 +73,50 @@ color: var(--color-text-primary);
 ```
 
 **卡片组件：**
+
 ```html
 <!-- 旧写法 -->
 <view class="content">
-  <!-- 内容 -->
+    <!-- 内容 -->
 </view>
 
 <!-- 新写法 -->
 <view class="card card-interactive">
-  <view class="card-body">
-    <!-- 内容 -->
-  </view>
+    <view class="card-body">
+        <!-- 内容 -->
+    </view>
 </view>
 ```
 
 ### 第四步：使用工具类
 
 **布局：**
+
 ```html
 <view class="flex items-center justify-between gap-4">
-  <!-- 内容 -->
+    <!-- 内容 -->
 </view>
 ```
 
 **间距：**
+
 ```html
 <view class="p-4 px-6 py-8">
-  <!-- 内容 -->
+    <!-- 内容 -->
 </view>
 ```
 
 **文本：**
+
 ```html
-<text class="text-lg font-semibold text-primary">
-  标题文本
-</text>
+<text class="text-lg font-semibold text-primary"> 标题文本 </text>
 ```
 
 ### 第五步：添加动画效果
 
 ```html
 <view class="animate-slide-up delay-200">
-  <!-- 内容 -->
+    <!-- 内容 -->
 </view>
 ```
 
@@ -119,6 +125,7 @@ color: var(--color-text-primary);
 ### 1. CSS变量降级
 
 所有CSS变量都有降级值：
+
 ```css
 color: var(--color-text-primary, #171717);
 ```
@@ -189,42 +196,46 @@ color: var(--color-text-primary, #171717);
 ### 首页迁移示例
 
 **迁移前：**
+
 ```vue
 <template>
-  <view class="container">
-    <view class="header">
-      <text class="title">龙争虾斗</text>
+    <view class="container">
+        <view class="header">
+            <text class="title">龙争虾斗</text>
+        </view>
     </view>
-  </view>
 </template>
 
 <style scoped>
 .container {
-  min-height: 100vh;
-  padding: 1rem;
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+    min-height: 100vh;
+    padding: 1rem;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
 }
 .header {
-  text-align: center;
-  padding: 2rem 0;
+    text-align: center;
+    padding: 2rem 0;
 }
 .title {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #fff;
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #fff;
 }
 </style>
 ```
 
 **迁移后：**
+
 ```vue
 <template>
-  <view class="min-h-screen p-4 flex flex-col items-center justify-center"
-        style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)">
-    <view class="text-center py-8 animate-fade-in">
-      <text class="text-5xl font-bold text-inverse">龙争虾斗</text>
+    <view
+        class="min-h-screen p-4 flex flex-col items-center justify-center"
+        style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)"
+    >
+        <view class="text-center py-8 animate-fade-in">
+            <text class="text-5xl font-bold text-inverse">龙争虾斗</text>
+        </view>
     </view>
-  </view>
 </template>
 ```
 
