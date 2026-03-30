@@ -73,7 +73,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
     const placementOrder = ref([])
     const currentPlacementIndex = ref(0)
 
-    // ============ 竞技场状态（从game.js迁移） ============
+    // ============ 竞技场状态 ============
     const arenaBattleQueue = ref([])
     const currentArenaBattle = ref(null)
 

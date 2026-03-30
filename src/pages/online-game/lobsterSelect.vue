@@ -120,13 +120,11 @@ const defenderSelectedLobster = ref(null)
 
 // 判断当前玩家身份
 const isChallenger = computed(() => {
-    console.log('[DEBUG LobsterSelect] props.playerId:', props.playerId, 'props.challenger:', props.challenger?.id)
     if (props.playerId === null || !props.challenger) return false
     return String(props.challenger.id) === String(props.playerId)
 })
 
 const isDefender = computed(() => {
-    console.log('[DEBUG LobsterSelect] props.playerId:', props.playerId, 'props.defender:', props.defender?.id)
     if (props.playerId === null || !props.defender) return false
     return String(props.defender.id) === String(props.playerId)
 })

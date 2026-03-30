@@ -837,19 +837,20 @@ function cancelExit() {
 }
 
 function navigateBackToGame() {
+    // 使用 store 中的队列数据
+    const battleQueue = onlineGameStore.arenaBattleQueue
+
     // 检查 arenaBattleQueue 中是否还有战斗
-    if (arenaBattleQueue.value && arenaBattleQueue.value.length > 0) {
+    if (battleQueue && battleQueue.length > 0) {
         // 保存队列到本地存储，使用 roomId 作为 key 区分不同房间
         const storageKey = `arenaBattleQueue_${savedRoomId.value}`
-        uni.setStorageSync(storageKey, arenaBattleQueue.value)
-        console.log('[DEBUG navigateBackToGame] 保存队列到本地存储:', storageKey, arenaBattleQueue.value)
+        uni.setStorageSync(storageKey, battleQueue)
 
         // 还有战斗，返回 online-game 页面，触发下一场战斗
         battleStore.resetBattle()
         resultShown.value = false
         showVictory.value = false
         showDefeat.value = false
-        console.log('[DEBUG navigateBackToGame] 有剩余战斗，返回online-game')
 
         // 返回 online-game 页面，watch 会自动检测到队列变化并显示下一场
         if (savedRoomId.value && savedPlayerId.value !== null) {
@@ -889,6 +890,8 @@ watch(
         }
     }
 )
+
+let lastHandledIdentifier = null
 
 watch(
     () => battleData.value?.lastAction,
@@ -1003,10 +1006,8 @@ onMounted(() => {
     }
 
     const myPlayerId = parseInt(options.playerId)
-    console.log('[DEBUG arena onMounted] playerId from URL:', options.playerId, 'myPlayerId:', myPlayerId)
     savedRoomId.value = options.roomId
     savedPlayerId.value = myPlayerId
-    console.log('[DEBUG arena onMounted] savedPlayerId set to:', savedPlayerId.value)
 
     const autoMyIndex = parseInt(player1Data.id) === myPlayerId ? 0 : parseInt(player2Data.id) === myPlayerId ? 1 : -1
 
@@ -1025,14 +1026,16 @@ onMounted(() => {
 
     socketService.on('battleAction', (data) => {
         if (data.battleData) {
-            battleStore.updateFromSync(data.battleData)
+            // 跳过自己发送的消息回显，避免覆盖本地已处理的状态（如 diceConfirmed → turnChange）
+            if (data.senderId !== savedPlayerId.value) {
+                battleStore.updateFromSync(data.battleData)
+            }
 
             // 监听奖励选择完成，只有胜者才触发返回逻辑
             if (data.battleData.lastAction === 'rewardSelected') {
                 const winnerId = data.battleData.winner?.id
                 // 只有获胜的玩家才会触发返回，避免重复调用
                 if (winnerId === savedPlayerId.value) {
-                    console.log('[DEBUG battleAction] 当前玩家是胜者，触发返回')
                     showVictory.value = false
                     showDefeat.value = false
                     navigateBackToGame()
