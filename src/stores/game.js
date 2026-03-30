@@ -16,6 +16,7 @@ import {
     exchangeBubbles
 } from '@utils/shrimpCatchingUtils'
 import {BREEDING_SLOTS, calculateBreedingReward} from '@utils/breedingUtils'
+import {MARKETPLACE_SLOTS, calculateMarketplaceReward} from '@utils/marketplaceUtils'
 import { usePlayerStore } from '@stores/player'
 
 export const LOBSTER_GRADES = {
@@ -58,7 +59,7 @@ export const useGameStore = defineStore('game', () => {
     // ============ 游戏资源状态 ============
     const wildLobsterPool = ref([])
     const seafoodMarketLobsters = ref(0)
-    const titleCardDeck = ref([]) // 新增：全局称号卡牌堆，防止重复抽取
+    const titleCardDeck = ref([]) // 全局称号卡牌堆，防止重复抽取
     const gameTitleCards = ref([])
     const gameTributeCards = ref([])
     const gameMarketplaceCards = ref([])
@@ -66,8 +67,9 @@ export const useGameStore = defineStore('game', () => {
     const royalLobsterCount = ref(0)
     const logs = ref([])
 
-    // 挂起状态：用于通知前端UI弹出养蛊面板并等待操作完成
+    // 挂起状态：用于通知前端UI弹出对应面板并等待操作完成
     const pendingBreeding = ref(null)
+    const pendingMarketplace = ref(null) // 新增：闹市区交互挂起状态
 
     // ============ 放置机制核心状态 ============
     /*
@@ -178,14 +180,15 @@ export const useGameStore = defineStore('game', () => {
         // 重置资源状态
         wildLobsterPool.value = []
         seafoodMarketLobsters.value = 0
-        titleCardDeck.value = [] // 重置全局称号牌堆
-        gameTitleCards.value = [] // 清空桌面称号卡
+        titleCardDeck.value = []
+        gameTitleCards.value = []
         gameTributeCards.value = []
         gameMarketplaceCards.value = []
         taverns.value = Array.from({ length: 6 }, () => ({ cards: [], completions: 0 }))
         royalLobsterCount.value = 0
         logs.value = []
         pendingBreeding.value = null
+        pendingMarketplace.value = null
 
         // 重置放置机制状态
         slotOccupancy.value = {}
@@ -196,13 +199,9 @@ export const useGameStore = defineStore('game', () => {
         // 初始化玩家
         playerStore.initPlayers(playerCount)
 
-        // 初始化放置顺序（从起始玩家开始，按顺时针顺序）
-        // initPlacementOrder()
-
         // 初始化卡牌
         gameTributeCards.value = shuffleArray([...tributeCards])
-        gameMarketplaceCards.value = shuffleArray([...marketplaceCards])
-        titleCardDeck.value = shuffleArray([...titleCards]) // 新增：初始化洗混称号卡池
+        titleCardDeck.value = shuffleArray([...titleCards])
 
         addLog(`游戏初始化完成，${playerCount}名玩家`, 'success')
     }
@@ -440,7 +439,7 @@ export const useGameStore = defineStore('game', () => {
     }
 
     /**
-     * 执行养蛊区结算 (新增功能)
+     * 执行养蛊区结算
      */
     const executeBreedingSettlement = async () => {
         addLog('执行养蛊区结算', 'info')
@@ -481,13 +480,143 @@ export const useGameStore = defineStore('game', () => {
         addLog('养蛊区结算完成', 'success')
     }
 
+    /**
+     * 执行闹市区结算 (新增功能)
+     */
+    const executeMarketplaceSettlement = async () => {
+        addLog('执行闹市区结算', 'info')
+        for (const slot of MARKETPLACE_SLOTS) {
+            const slotIndex = slot.id
+            // 校验行动格是否在当前回合可用
+            if (currentRound.value < slot.availableFrom) continue
+
+            const playerId = getSlotStatus('marketplace', slotIndex).playerId
+            if (playerId === null) continue
+
+            const player = playerStore.getPlayerById(playerId)
+            if (!player) continue
+
+            // 发放基础奖励
+            const rewardResult = calculateMarketplaceReward(player, slotIndex)
+            if (rewardResult.success && rewardResult.message) {
+                addLog(`${player.name}${rewardResult.message}`, 'info')
+            }
+
+            // 校验是否还有未使用的闹市卡
+            const availableCards = gameMarketplaceCards.value.filter(c => !c.usedThisRound)
+            if (availableCards.length === 0) {
+                addLog(`${player.name}准备执行闹市行动，但本回合所有闹市卡均已被使用`, 'warning')
+                continue
+            }
+
+            addLog(`${player.name}开始执行闹市行动`, 'info')
+
+            // 挂起引擎，等待 UI 玩家交互返回 Promise
+            await new Promise((resolve) => {
+                pendingMarketplace.value = {
+                    player,
+                    resolve: async (result) => {
+                        pendingMarketplace.value = null
+                        if (result && result.card) {
+                            // 执行对应卡牌逻辑
+                            await processMarketplaceAction(player, result.card, result.optionIndex)
+                        } else {
+                            addLog(`${player.name}放弃了闹市行动`, 'info')
+                        }
+                        resolve()
+                    }
+                }
+            })
+        }
+        addLog('闹市区结算完成', 'success')
+    }
+
+    /**
+     * 处理卡牌对应逻辑
+     */
+    const processMarketplaceAction = async (player, card, optionIndex) => {
+        card.usedThisRound = true; // 标记本回合已使用
+        let logMsg = `${player.name}执行了【${card.name}】闹市卡：`;
+
+        if (card.type === 'county') {
+            const opt = card.options[optionIndex];
+            player.coins -= opt.cost.coins;
+            player.de += opt.reward.de;
+            logMsg += `消耗${opt.cost.coins}金币，获得${opt.reward.de}德`;
+        } else if (card.type === 'prefecture') {
+            const opt = card.options[optionIndex];
+            const removeCount = opt.cost.lobsters;
+            // 优先消耗最低品级的龙虾
+            player.lobsters.sort((a, b) => Object.values(LOBSTER_GRADES).indexOf(a.grade) - Object.values(LOBSTER_GRADES).indexOf(b.grade));
+            player.lobsters.splice(0, removeCount);
+            player.wang += opt.reward.wang;
+            logMsg += `消耗${removeCount}只龙虾，获得${opt.reward.wang}望`;
+        } else if (card.type === 'academy') {
+            if (player.de < player.wang) {
+                player.de++;
+                logMsg += `德轨最低，提升1德`;
+            } else {
+                player.wang++;
+                logMsg += `望轨提升1望`;
+            }
+        } else if (card.type === 'charity') {
+            logMsg += `触发善堂群体效果！`;
+            addLog(logMsg, 'warning');
+
+            const minDe = Math.min(...players.value.map(p => p.de));
+            const minWang = Math.min(...players.value.map(p => p.wang));
+
+            players.value.forEach(p => {
+                if (p.de === minDe) {
+                    const lostLobsters = Math.min(2, p.lobsters.length);
+                    p.lobsters.sort((a, b) => Object.values(LOBSTER_GRADES).indexOf(a.grade) - Object.values(LOBSTER_GRADES).indexOf(b.grade));
+                    p.lobsters.splice(0, lostLobsters);
+                    if (lostLobsters > 0) addLog(`${p.name}因德轨最低，损失了${lostLobsters}只龙虾`, 'error');
+                }
+                if (p.wang === minWang) {
+                    const lostCoins = Math.min(2, p.coins);
+                    p.coins -= lostCoins;
+                    if (lostCoins > 0) addLog(`${p.name}因望轨最低，损失了${lostCoins}金币`, 'error');
+                }
+            });
+            return; // 提前结束，防止重复输出 log
+        } else if (card.type === 'breeding') {
+            logMsg += `获得3次培养机会`;
+            addLog(logMsg, 'success');
+            // 直接触发养蛊区弹窗逻辑挂起引擎
+            if (player.lobsters.length === 0) {
+                addLog(`${player.name}没有龙虾可以培养，浪费了善学卡的效果`, 'warning')
+                return;
+            }
+            await new Promise((resolve) => {
+                pendingBreeding.value = {
+                    player,
+                    actionCount: 3,
+                    resolve: () => {
+                        pendingBreeding.value = null;
+                        resolve();
+                    }
+                }
+            });
+            return;
+        } else if (card.type === 'freebie') {
+            const newLobster = createLobster();
+            newLobster.grade = LOBSTER_GRADES.NORMAL; // 规定直接获取的是普通龙虾
+            player.lobsters.push(newLobster);
+            logMsg += `直接获取1只普通龙虾`;
+        }
+
+        addLog(logMsg, 'success');
+    }
+
+
     const executePreparationPhase = () => {
         addLog('执行准备阶段', 'info')
 
         wildLobsterPool.value = Array.from({ length: 8 }, () => createLobster())
         addLog('捕虾区：添加8只野生龙虾', 'info')
 
-        // 修复：每回合弃置场上剩余称号卡，直接从牌堆抽取2张全新的
+        // 弃置场上剩余称号卡，直接从牌堆抽取2张全新的
         gameTitleCards.value = titleCardDeck.value.splice(0, 2)
         addLog('养蛊区：刷新2张待获取的称号卡', 'info')
 
@@ -499,8 +628,16 @@ export const useGameStore = defineStore('game', () => {
         addLog('上供区：补充酒楼的上供卡', 'info')
 
         if (currentRound.value === 1) {
-            gameMarketplaceCards.value = shuffleArray([...marketplaceCards]).slice(0, 3)
-            addLog('闹市区：抽取3张闹市卡', 'info')
+            // 第一回合初始化抽出并绑定使用状态
+            gameMarketplaceCards.value = shuffleArray([...marketplaceCards]).slice(0, 3).map(c => ({
+                ...c,
+                usedThisRound: false
+            }))
+            addLog('闹市区：抽取3张本局游戏固定的闹市卡', 'info')
+        } else {
+            // 每回合重置闹市卡使用状态
+            gameMarketplaceCards.value.forEach(c => c.usedThisRound = false)
+            addLog('闹市区：已重置闹市卡使用状态', 'info')
         }
 
         // 重置放置顺序
@@ -521,10 +658,12 @@ export const useGameStore = defineStore('game', () => {
         // 3. 养蛊区结算
         await executeBreedingSettlement()
 
+        // 5. 闹市区结算
+        await executeMarketplaceSettlement()
+
         // 后续可以添加其他区域的结算逻辑
         // 2. 海鲜市场结算
         // 4. 上供区结算
-        // 5. 闹市区结算
 
         addLog('结算阶段完成', 'success')
     }
@@ -613,14 +752,15 @@ export const useGameStore = defineStore('game', () => {
         // 资源状态
         wildLobsterPool,
         seafoodMarketLobsters,
-        titleCardDeck, // 导出新增的全局牌堆
+        titleCardDeck,
         gameTitleCards,
         gameTributeCards,
         gameMarketplaceCards,
         taverns,
         royalLobsterCount,
         logs,
-        pendingBreeding, // 挂起状态
+        pendingBreeding,
+        pendingMarketplace, // 导出挂起状态
 
         // 放置机制状态
         slotOccupancy,

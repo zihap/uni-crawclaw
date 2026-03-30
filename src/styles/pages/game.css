@@ -513,7 +513,7 @@
 
 /* ================================
    模态框 (Modal Overlay & Forms)
-   (新增部分)
+   (包含养蛊区及闹市区)
 ================================ */
 .modal-overlay {
   position: fixed;
@@ -582,6 +582,7 @@
   color: var(--color-text-primary);
 }
 
+/* 养蛊区独有样式 */
 .lobster-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -803,6 +804,109 @@
   border-color: var(--color-primary);
 }
 
+/* ============================
+   闹市区独有样式 (新增)
+============================ */
+.marketplace-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.mp-card {
+  position: relative;
+  border: 2px solid var(--color-border-default);
+  padding: 1rem;
+  border-radius: 0.75rem;
+  background: var(--color-bg-tertiary);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.mp-card:hover:not(.used) {
+  border-color: var(--color-primary);
+  background: rgba(102, 126, 234, 0.05);
+  transform: translateY(-2px);
+}
+
+.mp-card.selected {
+  border-color: var(--color-primary);
+  background: rgba(102, 126, 234, 0.1);
+}
+
+.mp-card.used {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mp-card-name {
+  display: block;
+  font-size: 1.125rem;
+  font-weight: bold;
+  color: var(--color-primary);
+  margin-bottom: 0.25rem;
+}
+
+.mp-card-desc {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.used-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  border-radius: 0.6rem;
+  font-size: 1.25rem;
+  backdrop-filter: blur(2px);
+}
+
+.mp-options-panel {
+  margin-top: 1.5rem;
+  background: var(--color-bg-tertiary);
+  padding: 1rem;
+  border-radius: 0.75rem;
+}
+
+.mp-option-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border-default);
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--color-bg-primary);
+}
+
+.mp-option-btn.active {
+  border-color: var(--color-primary);
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.option-text {
+  font-size: 0.9375rem;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.error-hint {
+  color: var(--color-error);
+  font-size: 0.875rem;
+  display: block;
+  margin-top: 0.5rem;
+  text-align: center;
+  font-weight: bold;
+}
+
+/* 按钮与通用底部 */
 .modal-actions {
   display: flex;
   gap: 1rem;
