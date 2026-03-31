@@ -241,6 +241,50 @@ export const useOnlineGameStore = defineStore('online-game', () => {
                     url: `/pages/arena/arena?player1=${player1Str}&player2=${player2Str}&roomId=${roomId.value}&playerId=${playerId.value}&battleData=${battleDataStr}`
                 })
             }
+        } else if (data.battleQueue) {
+            filterAndSetBattleQueue(data.battleQueue)
+        }
+    }
+
+    function filterAndSetBattleQueue(rawQueue) {
+        addLog('执行竞技场结算', 'info')
+        arenaBattleQueue.value = []
+
+        for (const battle of rawQueue) {
+            const challenger = players.value.find((p) => p.id === battle.challengerId)
+            const defender = players.value.find((p) => p.id === battle.defenderId)
+
+            const validChallengerLobsters = challenger?.lobsters?.filter((l) => l && l.id && l.id !== 'normal') || []
+            const validDefenderLobsters = defender?.lobsters?.filter((l) => l && l.id && l.id !== 'normal') || []
+            if (
+                !challenger ||
+                (validChallengerLobsters.length === 0 && (!challenger.titleCards || challenger.titleCards.length === 0))
+            ) {
+                addLog(`${challenger?.name || '挑战者'}没有可参战的龙虾（普通龙虾除外），无法进行战斗`, 'warning')
+                continue
+            }
+            if (
+                !defender ||
+                (validDefenderLobsters.length === 0 && (!defender.titleCards || defender.titleCards.length === 0))
+            ) {
+                addLog(`${defender?.name || '被挑战者'}没有可参战的龙虾（普通龙虾除外），无法进行战斗`, 'warning')
+                continue
+            }
+
+            arenaBattleQueue.value.push({
+                challengerId: battle.challengerId,
+                defenderId: battle.defenderId,
+                slotIndex: battle.challengeSlot
+            })
+
+            addLog(`${challenger.name} 挑战 ${defender.name}！`, 'success')
+        }
+
+        if (arenaBattleQueue.value.length > 0) {
+            addLog(`竞技场有${arenaBattleQueue.value.length}场战斗需要进行`, 'info')
+            setCurrentArenaBattle(0)
+        } else {
+            addLog('竞技场没有需要进行的战斗', 'info')
         }
     }
 
@@ -444,16 +488,16 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         const area = areas.value[areaKey]
         if (!area || !area.slots) return false
         const slot = area.slots[slotIndex]
-        if (!slot) return false
+        if (slot === undefined || slot === null) return false
         if (typeof slot === 'object') return slot.occupiedBy !== null && slot.occupiedBy !== undefined
-        return slot !== null && slot !== undefined
+        return true
     }
 
     function getSlotOccupant(areaKey, slotIndex) {
         const area = areas.value[areaKey]
         if (!area || !area.slots) return null
         const slot = area.slots[slotIndex]
-        if (!slot) return null
+        if (slot === undefined || slot === null) return null
         if (typeof slot === 'object') return slot.occupiedBy
         return slot
     }
@@ -474,65 +518,6 @@ export const useOnlineGameStore = defineStore('online-game', () => {
     }
 
     // ============ 竞技场方法 ============
-    const executeArenaSettlement = () => {
-        addLog('执行竞技场结算', 'info')
-
-        arenaBattleQueue.value = []
-
-        for (const areaKey of Object.keys(areas.value)) {
-            const area = areas.value[areaKey]
-            if (!area || !area.slots) continue
-
-            for (let challengeSlot = 3; challengeSlot <= 5; challengeSlot++) {
-                const challengerStatus = getSlotStatus(areaKey, challengeSlot)
-                if (challengerStatus.playerId === null) continue
-
-                const targetSlot = challengeSlot - 3
-                const defenderStatus = getSlotStatus(areaKey, targetSlot)
-                if (defenderStatus.playerId === null) continue
-
-                const challenger = players.value.find((p) => p.id === challengerStatus.playerId)
-                const defender = players.value.find((p) => p.id === defenderStatus.playerId)
-
-                // 过滤普通龙虾，统计有效的参战龙虾数量
-                const validChallengerLobsters =
-                    challenger?.lobsters?.filter((l) => l && l.id && l.id !== 'normal') || []
-                const validDefenderLobsters = defender?.lobsters?.filter((l) => l && l.id && l.id !== 'normal') || []
-
-                if (
-                    !challenger ||
-                    (validChallengerLobsters.length === 0 &&
-                        (!challenger.titleCards || challenger.titleCards.length === 0))
-                ) {
-                    addLog(`${challenger?.name || '挑战者'}没有可参战的龙虾（普通龙虾除外），无法进行战斗`, 'warning')
-                    continue
-                }
-                if (
-                    !defender ||
-                    (validDefenderLobsters.length === 0 && (!defender.titleCards || defender.titleCards.length === 0))
-                ) {
-                    addLog(`${defender?.name || '被挑战者'}没有可参战的龙虾（普通龙虾除外），无法进行战斗`, 'warning')
-                    continue
-                }
-
-                arenaBattleQueue.value.push({
-                    challengerId: challengerStatus.playerId,
-                    defenderId: defenderStatus.playerId,
-                    slotIndex: challengeSlot
-                })
-
-                addLog(`${challenger.name} 挑战 ${defender.name}！`, 'success')
-            }
-        }
-
-        if (arenaBattleQueue.value.length > 0) {
-            addLog(`竞技场有${arenaBattleQueue.value.length}场战斗需要进行`, 'info')
-            setCurrentArenaBattle(0)
-        } else {
-            addLog('竞技场没有需要进行的战斗', 'info')
-        }
-    }
-
     const setCurrentArenaBattle = (index) => {
         if (index < 0 || index >= arenaBattleQueue.value.length) {
             currentArenaBattle.value = null
@@ -631,7 +616,6 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         addLog,
 
         // 竞技场方法
-        executeArenaSettlement,
         setCurrentArenaBattle,
         getAvailableLobsters,
         setArenaPhase

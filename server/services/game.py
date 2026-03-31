@@ -10,13 +10,12 @@ from utils.game_state import draw_tribute_tasks, draw_downtown_cards
 
 def update_market_prices(game_state: dict):
     """根据市场龙虾数量更新动态价格"""
-    market_area = game_state['areas']['market']
+    market_area = game_state['areas']['seafood_market']
     count = market_area['marketLobsterCount']
-    base_prices = market_area['basePrices']
 
     if count > 5:
         market_area['dynamicPrices'] = {
-            **base_prices,
+            **MARKET_PRICES,
             'buyLobster': 1,
             'sellLobster': 1,
             'buyCage': 4,
@@ -24,7 +23,7 @@ def update_market_prices(game_state: dict):
         }
     elif count > 3:
         market_area['dynamicPrices'] = {
-            **base_prices,
+            **MARKET_PRICES,
             'buyLobster': 2,
             'sellLobster': 2,
             'buyCage': 3,
@@ -32,7 +31,7 @@ def update_market_prices(game_state: dict):
         }
     else:
         market_area['dynamicPrices'] = {
-            **base_prices,
+            **MARKET_PRICES,
             'buyLobster': 3,
             'sellLobster': 3,
             'buyCage': 2,
@@ -42,14 +41,14 @@ def update_market_prices(game_state: dict):
 
 def prepare_phase(game_state: dict):
     """准备阶段处理"""
-    game_state['areas']['fishing']['wildLobsterPool'] = 8
+    game_state['areas']['shrimp_catching']['wildLobsterPool'] = 8
     update_market_prices(game_state)
 
 
 def cleanup_phase(game_state: dict):
     """清理阶段处理"""
-    fishing_area = game_state['areas']['fishing']
-    market_area = game_state['areas']['market']
+    fishing_area = game_state['areas']['shrimp_catching']
+    market_area = game_state['areas']['seafood_market']
 
     # 将野生龙虾池的龙虾转移到市场
     market_area['marketLobsterCount'] += fishing_area['wildLobsterPool']
@@ -182,14 +181,8 @@ async def start_game(room_id: str, rooms: dict, manager, broadcast_func):
 
     for area_name in AREAS:
         if area_name in game_state['areas']:
-            slots = game_state['areas'][area_name]['slots']
-            if isinstance(slots, list) and len(slots) > 0:
-                if isinstance(slots[0], dict):
-                    game_state['areas'][area_name]['slots'] = [
-                        {**slot, 'occupiedBy': None} for slot in slots
-                    ]
-                else:
-                    game_state['areas'][area_name]['slots'] = [None] * len(slots)
+            slot_count = len(game_state['areas'][area_name]['slots'])
+            game_state['areas'][area_name]['slots'] = [None] * slot_count
 
     draw_tribute_tasks(game_state)
     draw_downtown_cards(game_state)
@@ -206,7 +199,7 @@ async def start_game(room_id: str, rooms: dict, manager, broadcast_func):
     print(f"Game started in room {room_id}")
 
 
-async def handle_next_round(room_id: str, rooms: dict, manager, broadcast_func):
+async def next_round(room_id: str, rooms: dict, manager, broadcast_func):
     """处理下一回合"""
     from services.area import resolve_area
 
@@ -237,14 +230,8 @@ async def handle_next_round(room_id: str, rooms: dict, manager, broadcast_func):
 
     for area_name in AREAS:
         if area_name in game_state['areas']:
-            slots = game_state['areas'][area_name]['slots']
-            if isinstance(slots, list) and len(slots) > 0:
-                if isinstance(slots[0], dict):
-                    game_state['areas'][area_name]['slots'] = [
-                        {**slot, 'occupiedBy': None} for slot in slots
-                    ]
-                else:
-                    game_state['areas'][area_name]['slots'] = [None] * len(slots)
+            slot_count = len(game_state['areas'][area_name]['slots'])
+            game_state['areas'][area_name]['slots'] = [None] * slot_count
 
     draw_tribute_tasks(game_state)
     draw_downtown_cards(game_state)

@@ -6,7 +6,7 @@
 import os
 import json
 
-AREAS = ['fishing', 'market', 'cultivation', 'tribute', 'downtown']
+AREAS = ['shrimp_catching', 'seafood_market', 'breeding', 'tribute', 'marketplace']
 
 # 龙虾升级: 新grade → 旧grade (用于 battleEnd 时反推消耗)
 GRADE_UPGRADE = {'grade2': 'grade3', 'grade1': 'grade2', 'royal': 'grade1'}
@@ -19,6 +19,35 @@ MARKET_PRICES = {
     'buyCage': 4,
     'sellCage': 3,
     'hireHeadman': 6
+}
+
+# 静态行动格模板: 定义每个区域每个格的 actionCount 和 reward
+# 这些数据从不改变，不需要存储在可变游戏状态中
+SLOT_TEMPLATES = {
+    'shrimp_catching': [
+        {'actionCount': 1, 'reward': {'cages': 1, 'stealStart': True}},
+        {'actionCount': 2, 'reward': {'cages': 1}},
+        {'actionCount': 3, 'reward': {'coins': 1}},
+        {'actionCount': 4, 'reward': {}}
+    ],
+    'seafood_market': [
+        {'actionCount': 2, 'reward': {'coins': 1}},
+        {'actionCount': 3, 'reward': {}},
+        {'actionCount': 3, 'reward': {'coins': 1}},
+        {'actionCount': 3, 'reward': {'coins': 2}}
+    ],
+    'breeding': [None, None, None, None],
+    'tribute': [None] * 8,
+    'marketplace': [None, None, None]
+}
+
+# 每个区域的行动格数量
+AREA_SLOT_COUNTS = {
+    'shrimp_catching': 4,
+    'seafood_market': 4,
+    'breeding': 4,
+    'tribute': 8,
+    'marketplace': 3
 }
 
 CARD_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'card_config.json')

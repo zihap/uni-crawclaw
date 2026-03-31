@@ -146,14 +146,14 @@
                 </view>
                 <view class="area-slots">
                     <view
-                        v-for="i in 6"
+                        v-for="i in 8"
                         :key="i"
                         :class="[
                             'slot',
                             {
                                 occupied: isSlotOccupied('tribute', i - 1),
                                 disabled: !canPlaceOnSlot('tribute', i - 1),
-                                'challenge-slot': i > 3
+                                'challenge-slot': i > 3 && i <= 6
                             }
                         ]"
                         :style="getSlotStyle('tribute', i - 1)"
@@ -223,9 +223,7 @@
                 </view>
                 <view class="resource-item">
                     <text class="resource-label">龙虾</text>
-                    <text class="resource-value">{{
-                        onlineGameStore.myPlayer.lobsters?.length || getLobsterCount(onlineGameStore.myPlayer)
-                    }}</text>
+                    <text class="resource-value">{{onlineGameStore.myPlayer.lobsters?.length }}</text>
                 </view>
             </view>
         </view>
@@ -442,8 +440,10 @@ const getBreedingSlotDesc = (i) => {
 const getTributeSlotDesc = (i) => {
     if (i <= 3) {
         return i === 3 ? '第4回合可用,1次上供' : '1次上供'
-    } else {
+    } else if (i <= 6) {
         return `挑战${i - 3}号位,1次上供`
+    } else {
+        return '1次上供'
     }
 }
 
@@ -459,12 +459,6 @@ const getMarketplaceSlotDesc = (i) => {
 const isMarketplaceAvailable = (slotIndex) => {
     // 1号格第2回合可用，2号格第3回合可用，3号格第4回合可用
     return onlineGameStore.currentRound >= slotIndex + 2
-}
-
-const getLobsterCount = (player) => {
-    if (!player || !player.shrimpPond) return 0
-    const pond = player.shrimpPond
-    return (pond.normal || 0) + (pond.grade3 || 0) + (pond.grade2 || 0) + (pond.grade1 || 0) + (pond.royal || 0)
 }
 
 const handleNextPhase = () => {
@@ -504,6 +498,16 @@ watch(
         }
     },
     { deep: true }
+)
+
+watch(
+    () => onlineGameStore.currentPhase,
+    (phase) => {
+        if (phase === 'settlement' && arenaBattleQueue.value.length > 0 && onlineGameStore.arenaPhase === 'idle') {
+            onlineGameStore.setCurrentArenaBattle(0)
+            showArenaModal.value = true
+        }
+    }
 )
 
 /**
@@ -566,6 +570,17 @@ onMounted(() => {
     if (!rId || pId === null) {
         uni.redirectTo({ url: '/pages/lobby/lobby' })
         return
+    }
+
+    // 使用 URL 传递的 gameState 初始化状态，避免 room.vue 销毁到 onlineGame.vue 挂载期间
+    // socket 监听器空窗期导致错过 roomStateUpdate 事件的竞态问题
+    if (options.gameState) {
+        try {
+            const gs = JSON.parse(decodeURIComponent(options.gameState))
+            onlineGameStore.updateGameState(gs)
+        } catch (e) {
+            console.error('Failed to parse gameState from URL:', e)
+        }
     }
 
     onlineGameStore.initOnlineMode(rId, pId)

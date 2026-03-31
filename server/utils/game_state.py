@@ -6,8 +6,14 @@
 import time
 import random
 import string
+import json
+import os
 from typing import Dict
-from .constants import AREAS, MARKET_PRICES, TRIBUTE_TASKS, DOWNTOWN_CARDS
+from .constants import AREAS, MARKET_PRICES, TRIBUTE_TASKS, DOWNTOWN_CARDS, SLOT_TEMPLATES, AREA_SLOT_COUNTS
+
+_CARD_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'card_config.json')
+with open(_CARD_CONFIG_PATH, 'r', encoding='utf-8') as _f:
+    _ALL_TITLE_CARDS = json.load(_f).get('titleCards', [])
 
 
 def generate_user_id() -> str:
@@ -27,51 +33,24 @@ def create_game_state() -> dict:
         'startingPlayerIndex': 0,
 
         'areas': {
-            'fishing': {
-                'slots': [
-                    {'occupiedBy': None, 'actionCount': 1, 'reward': {'cages': 1, 'stealStart': True}},
-                    {'occupiedBy': None, 'actionCount': 2, 'reward': {'cages': 1}},
-                    {'occupiedBy': None, 'actionCount': 3, 'reward': {'coins': 1}},
-                    {'occupiedBy': None, 'actionCount': 4, 'reward': {}}
-                ],
+            'shrimp_catching': {
+                'slots': [None] * AREA_SLOT_COUNTS['shrimp_catching'],
                 'wildLobsterPool': 0
             },
-
-            'market': {
-                'slots': [
-                    {'occupiedBy': None, 'actionCount': 2, 'reward': {'coins': 1}},
-                    {'occupiedBy': None, 'actionCount': 3, 'reward': {}},
-                    {'occupiedBy': None, 'actionCount': 3, 'reward': {'coins': 1}},
-                    {'occupiedBy': None, 'actionCount': 3, 'reward': {'coins': 2}}
-                ],
+            'seafood_market': {
+                'slots': [None] * AREA_SLOT_COUNTS['seafood_market'],
                 'marketLobsterCount': 0,
-
-                'hiredPositions': [
-                    {'id': 1, 'unlockedRound': 2, 'reward': {'seaweed': 1}, 'hired': False},
-                    {'id': 2, 'unlockedRound': 2, 'reward': {'seaweed': 1}, 'hired': False},
-                    {'id': 3, 'unlockedRound': 3, 'reward': {'lobster': 1}, 'hired': False},
-                    {'id': 4, 'unlockedRound': 3, 'reward': {'lobster': 1}, 'hired': False},
-                    {'id': 5, 'unlockedRound': 3, 'reward': {'grade3': 1}, 'hired': False},
-                    {'id': 6, 'unlockedRound': 4, 'reward': {'grade3': 1}, 'hired': False},
-                    {'id': 7, 'unlockedRound': 4, 'reward': {'grade2': 1}, 'hired': False},
-                    {'id': 8, 'unlockedRound': 4, 'reward': {'grade2': 1}, 'hired': False}
-                ],
-
-                'basePrices': MARKET_PRICES.copy(),
                 'dynamicPrices': MARKET_PRICES.copy()
             },
-
-            'cultivation': {
-                'slots': [None, None, None, None]
+            'breeding': {
+                'slots': [None] * AREA_SLOT_COUNTS['breeding']
             },
-
             'tribute': {
-                'slots': [None, None, None],
-                'challengeSlots': [None, None, None]
+                'slots': [None] * AREA_SLOT_COUNTS['tribute'],
+                'challengeSlots': [None] * 3
             },
-
-            'downtown': {
-                'slots': [None, None, None]
+            'marketplace': {
+                'slots': [None] * AREA_SLOT_COUNTS['marketplace']
             }
         },
 
@@ -84,13 +63,21 @@ def create_game_state() -> dict:
 def create_player(player_id: int, name: str, is_host: bool = False, user_id: str = None, position: int = 0) -> dict:
     """创建玩家对象"""
     position_resources = {
-        0: {'liZhang': 3, 'normal': 2, 'coins': 5, 'seaweed': 1, 'cages': 1},
-        1: {'liZhang': 3, 'normal': 2, 'coins': 6, 'seaweed': 1, 'cages': 1},
-        2: {'liZhang': 3, 'normal': 2, 'coins': 5, 'seaweed': 2, 'cages': 1},
-        3: {'liZhang': 3, 'normal': 2, 'coins': 6, 'seaweed': 2, 'cages': 1}
+        0: {'liZhang': 3, 'lobsters': 2, 'coins': 5, 'seaweed': 1, 'cages': 1},
+        1: {'liZhang': 3, 'lobsters': 2, 'coins': 6, 'seaweed': 1, 'cages': 1},
+        2: {'liZhang': 3, 'lobsters': 2, 'coins': 5, 'seaweed': 2, 'cages': 1},
+        3: {'liZhang': 3, 'lobsters': 2, 'coins': 6, 'seaweed': 2, 'cages': 1}
     }
 
     resources = position_resources.get(position, position_resources[0])
+
+    lobsters = []
+    for _ in range(resources['lobsters']):
+        lobsters.append({
+            'id': ''.join(random.choices(string.ascii_lowercase + string.digits, k=9)),
+            'grade': 'normal',
+            'title': None
+        })
 
     return {
         'id': player_id,
@@ -107,15 +94,7 @@ def create_player(player_id: int, name: str, is_host: bool = False, user_id: str
         'bonusPoints': 0,
         'liZhang': resources['liZhang'],
         'bubbles': 0,
-
-        'shrimpPond': {
-            'normal': resources['normal'],
-            'grade3': 0,
-            'grade2': 0,
-            'grade1': 0,
-            'royal': 0,
-            'titled': []
-        },
+        'lobsters': lobsters,
 
         'completedTasks': [],
         'completedTaverns': [],
@@ -123,6 +102,8 @@ def create_player(player_id: int, name: str, is_host: bool = False, user_id: str
         'bonusGold': 0,
 
         'permaBuffs': [],
+
+        'titleCards': _ALL_TITLE_CARDS.copy(),
 
         'ready': False,
         'isHost': is_host,
