@@ -68,7 +68,7 @@
             <view class="board-section">
                 <view class="section-header">
                     <text class="section-title">海鲜市场</text>
-                    <text class="section-desc">放置里长进行交易</text>
+                    <text class="section-desc">放置里长进行买卖与雇佣</text>
                 </view>
                 <view class="area-slots">
                     <view v-for="i in 4" :key="i" :class="['slot', {
@@ -348,6 +348,142 @@
             </view>
         </view>
 
+        <!-- 海鲜市场结算弹窗 (新增) -->
+        <view class="modal-overlay" v-if="gameStore.pendingSeafoodMarket">
+            <view class="modal-content seafood-market-modal">
+                <view class="modal-header">
+                    <view class="modal-title-group">
+                        <text class="modal-title">{{ currentPendingSeafoodMarket.player.name }} 的市场交易</text>
+                        <text class="modal-subtitle">剩余行动次数:
+                            <text class="highlight">{{ currentPendingSeafoodMarket.actionCount }}</text>
+                        </text>
+                    </view>
+                </view>
+
+                <!-- 市场摊位与动态物价展示 -->
+                <view class="market-display-board">
+                    <view class="market-stalls">
+                        <!-- 摊位1 (左侧：3格，买方最先空) -->
+                        <view class="stall stall-1">
+                            <view class="stall-label">一号摊</view>
+                            <view class="stall-spaces">
+                                <view v-for="i in 3" :key="'s1'+i" class="stall-space"
+                                      :class="{filled: isSpaceFilled(i - 1)}"></view>
+                            </view>
+                        </view>
+                        <!-- 摊位2 (中间：2格) -->
+                        <view class="stall stall-2">
+                            <view class="stall-label">二号摊</view>
+                            <view class="stall-spaces">
+                                <view v-for="i in 2" :key="'s2'+i" class="stall-space"
+                                      :class="{filled: isSpaceFilled(3 + i - 1)}"></view>
+                            </view>
+                        </view>
+                        <!-- 摊位3 (右侧：3格，进货方最先满) -->
+                        <view class="stall stall-3">
+                            <view class="stall-label">三号摊</view>
+                            <view class="stall-spaces">
+                                <view v-for="i in 3" :key="'s3'+i" class="stall-space"
+                                      :class="{filled: isSpaceFilled(5 + i - 1)}"></view>
+                            </view>
+                        </view>
+                    </view>
+                    <view class="market-prices">
+                        <text class="price-title">当前流通物价</text>
+                        <view class="price-tags">
+                            <text>龙虾: {{ currentMarketPrices.lobster }}金</text>
+                            <text>虾笼: {{ currentMarketPrices.cage }}金</text>
+                            <text>海草x1: {{ currentMarketPrices.seaweed1 }}金</text>
+                            <text>海草x3: {{ currentMarketPrices.seaweed3 }}金</text>
+                        </view>
+                    </view>
+                </view>
+
+                <!-- 切换面板：交易 vs 雇佣 -->
+                <view class="modal-tabs">
+                    <view class="tab-item" :class="{active: smTab === 'trade'}" @click="smTab = 'trade'">资源买卖</view>
+                    <view class="tab-item" :class="{active: smTab === 'hire'}" @click="smTab = 'hire'">雇佣里长</view>
+                </view>
+
+                <view class="modal-body" style="padding-top: 0;">
+                    <!-- 交易面板 -->
+                    <view v-if="smTab === 'trade'" class="trade-grid animate-fade-in">
+                        <view class="trade-row">
+                            <button class="btn btn-outline" @click="doSeafoodTrade('buy_lobster')"
+                                    :disabled="gameStore.seafoodMarketLobsters === 0 || currentPendingSeafoodMarket.player.coins < currentMarketPrices.lobster">
+                                买入龙虾 (-{{ currentMarketPrices.lobster }}金)
+                            </button>
+                            <button class="btn btn-outline" @click="doSeafoodTrade('sell_lobster')"
+                                    :disabled="gameStore.seafoodMarketLobsters === 8 || currentPendingSeafoodMarket.player.lobsters.length === 0">
+                                卖出龙虾 (+{{ currentMarketPrices.lobster }}金)
+                            </button>
+                        </view>
+                        <view class="trade-row">
+                            <button class="btn btn-outline" @click="doSeafoodTrade('buy_cage')"
+                                    :disabled="currentPendingSeafoodMarket.player.coins < currentMarketPrices.cage">买入虾笼
+                                (-{{ currentMarketPrices.cage }}金)
+                            </button>
+                            <button class="btn btn-outline" @click="doSeafoodTrade('sell_cage')"
+                                    :disabled="currentPendingSeafoodMarket.player.cages === 0">卖出虾笼
+                                (+{{ currentMarketPrices.cage }}金)
+                            </button>
+                        </view>
+                        <view class="trade-row">
+                            <button class="btn btn-outline" @click="doSeafoodTrade('buy_seaweed1')"
+                                    :disabled="currentPendingSeafoodMarket.player.coins < currentMarketPrices.seaweed1">
+                                买1草 (-{{ currentMarketPrices.seaweed1 }}金)
+                            </button>
+                            <button class="btn btn-outline" @click="doSeafoodTrade('sell_seaweed1')"
+                                    :disabled="currentPendingSeafoodMarket.player.seaweed < 1">卖1草
+                                (+{{ currentMarketPrices.seaweed1 }}金)
+                            </button>
+                        </view>
+                        <view class="trade-row">
+                            <button class="btn btn-outline" @click="doSeafoodTrade('buy_seaweed3')"
+                                    :disabled="currentPendingSeafoodMarket.player.coins < currentMarketPrices.seaweed3">
+                                买3草 (-{{ currentMarketPrices.seaweed3 }}金)
+                            </button>
+                            <button class="btn btn-outline" @click="doSeafoodTrade('sell_seaweed3')"
+                                    :disabled="currentPendingSeafoodMarket.player.seaweed < 3">卖3草
+                                (+{{ currentMarketPrices.seaweed3 }}金)
+                            </button>
+                        </view>
+                    </view>
+
+                    <!-- 雇佣里长面板 -->
+                    <view v-if="smTab === 'hire'" class="hire-grid animate-fade-in">
+                        <view class="hire-info">雇佣价格：固定 6 金币/名 (每人最多雇佣2名)</view>
+                        <view class="slots-container">
+                            <view v-for="(slot, idx) in HIRE_LIZHANG_SLOTS" :key="idx"
+                                  class="hire-slot"
+                                  :class="{ 'locked': gameStore.currentRound < slot.availableFrom, 'hired': gameStore.hiredLiZhangSlots[idx] !== null }"
+                                  @click="doSeafoodHire(idx)">
+                                <view class="slot-header">{{ idx + 1 }}号位</view>
+                                <text class="slot-req" v-if="gameStore.currentRound < slot.availableFrom">
+                                    第{{ slot.availableFrom }}回合开
+                                </text>
+                                <text class="slot-rew" v-else>送: {{ formatHireReward(slot.reward) }}</text>
+
+                                <view class="status-mask" v-if="gameStore.hiredLiZhangSlots[idx] !== null">
+                                    <text
+                                        v-if="gameStore.hiredLiZhangSlots[idx] === currentPendingSeafoodMarket.player.id">
+                                        已归你
+                                    </text>
+                                    <text v-else>已被占</text>
+                                </view>
+                            </view>
+                        </view>
+                        <text v-if="!canHireAny" class="error-hint">无法雇佣 (金币不足 / 达到上限 / 暂未解锁)</text>
+                    </view>
+                </view>
+
+                <view class="modal-footer">
+                    <button class="btn btn-secondary w-full" @click="skipSeafoodMarketAction">放弃剩余次数并结束
+                    </button>
+                </view>
+            </view>
+        </view>
+
     </view>
 </template>
 
@@ -356,6 +492,7 @@ import { ref, computed, reactive } from 'vue'
 import { useGameStore, GAME_PHASES, LOBSTER_GRADES } from '@stores/game.js'
 import { DEFAULT_SLOT_STYLE, getOccupiedSlotStyle, PLAYER_COLORS } from '@utils/slotConstants.js'
 import { getLobsterGradeName, getNextLobsterGrade } from '@utils/gameUtils.js'
+import {HIRE_LIZHANG_SLOTS, getMarketPrices} from '@utils/seafoodMarketUtils.js'
 
 const gameStore = useGameStore()
 const showLog = ref(false)
@@ -369,7 +506,7 @@ const isMarketplaceAvailable = (i) => gameStore.currentRound >= i + 1
 
 const canPlaceOnSlot = (area, slotIndex) => {
     if (!isPlacementPhase.value || gameStore.isPlacementComplete || isSlotOccupied(area, slotIndex)) return false
-    // 新增：判断闹市区是否解锁
+    // 判断闹市区是否解锁
     if (area === 'marketplace' && !isMarketplaceAvailable(slotIndex + 1)) return false
     return true
 }
@@ -451,7 +588,7 @@ const handleSlotClick = (area, slotIndex) => {
         return
     }
 
-    // 新增：拦截未开放的闹市区行动格强行点击
+    // 拦截未开放的闹市区行动格强行点击
     if (area === 'marketplace' && !isMarketplaceAvailable(slotIndex + 1)) {
         showToast(`该行动格在第${slotIndex + 2}回合才开放`)
         return
@@ -664,6 +801,67 @@ const skipMarketplaceAction = () => {
     currentPendingMarketplace.value.resolve(null)
     marketplaceState.selectedCard = null
     marketplaceState.selectedOptionIndex = 0
+}
+
+// ==========================================
+// 海鲜市场交互逻辑 (Seafood Market)
+// ==========================================
+const currentPendingSeafoodMarket = computed(() => gameStore.pendingSeafoodMarket)
+const smTab = ref('trade') // 'trade' | 'hire' 切换控制
+
+// 动态计算当前物价
+const currentMarketPrices = computed(() => {
+    return getMarketPrices(gameStore.seafoodMarketLobsters)
+})
+
+// 计算摊位填充逻辑 (从右到左填满，0-7分别对应1~3号摊位左至右的格子。如果有 N 只虾，那么填满最后 N 个格子)
+const isSpaceFilled = (overallIndex) => {
+    return overallIndex >= (8 - gameStore.seafoodMarketLobsters)
+}
+
+const doSeafoodTrade = (actionType) => {
+    if (!currentPendingSeafoodMarket.value) return
+    gameStore.processSeafoodMarketAction(currentPendingSeafoodMarket.value.player, actionType)
+}
+
+// 雇佣相关方法
+const formatHireReward = (reward) => {
+    if (reward.seaweed) return `${reward.seaweed}海草`
+    if (reward.lobster) return `1只${getLobsterGradeName(LOBSTER_GRADES[reward.lobster.toUpperCase()] || LOBSTER_GRADES.NORMAL)}`
+    return '无'
+}
+
+const canHireAny = computed(() => {
+    if (!currentPendingSeafoodMarket.value) return false
+    const player = currentPendingSeafoodMarket.value.player
+    // 基础条件：得有6块钱，且玩家在全局没有占满2个位置
+    if (player.coins < 6) return false
+    const myHiredCount = gameStore.hiredLiZhangSlots.filter(id => id === player.id).length
+    if (myHiredCount >= 2) return false
+    return true
+})
+
+const canHireSlot = (idx) => {
+    if (!canHireAny.value) return false
+    const slot = HIRE_LIZHANG_SLOTS[idx]
+    if (gameStore.currentRound < slot.availableFrom) return false // 未开放
+    if (gameStore.hiredLiZhangSlots[idx] !== null) return false // 已被占
+    return true
+}
+
+const doSeafoodHire = (idx) => {
+    if (!canHireSlot(idx)) {
+        showToast('无法雇佣该位置')
+        return
+    }
+    gameStore.processSeafoodMarketAction(currentPendingSeafoodMarket.value.player, 'hire', idx)
+}
+
+const skipSeafoodMarketAction = () => {
+    if (currentPendingSeafoodMarket.value) {
+        currentPendingSeafoodMarket.value.actionCount = 0
+        currentPendingSeafoodMarket.value.resolve()
+    }
 }
 
 // ============ 工具方法 ============

@@ -17,6 +17,12 @@ import {
 } from '@utils/shrimpCatchingUtils'
 import { BREEDING_SLOTS, calculateBreedingReward } from '@utils/breedingUtils'
 import {MARKETPLACE_SLOTS, calculateMarketplaceReward} from '@utils/marketplaceUtils'
+import {
+    SEAFOOD_MARKET_SLOTS,
+    HIRE_LIZHANG_SLOTS,
+    getMarketPrices,
+    calculateSeafoodMarketReward
+} from '@utils/seafoodMarketUtils'
 import { usePlayerStore } from '@stores/player'
 
 export const LOBSTER_GRADES = {
@@ -67,9 +73,12 @@ export const useGameStore = defineStore('game', () => {
     const royalLobsterCount = ref(0)
     const logs = ref([])
 
+    const hiredLiZhangSlots = ref(Array(8).fill(null)) // 记录8个海鲜市场雇佣名额被哪个玩家占有(存playerId)
+
     // 挂起状态：用于通知前端UI弹出对应面板并等待操作完成
     const pendingBreeding = ref(null)
-    const pendingMarketplace = ref(null) // 闹市区交互挂起状态
+    const pendingMarketplace = ref(null)
+    const pendingSeafoodMarket = ref(null) // 海鲜市场交互挂起状态
 
     // ============ 放置机制核心状态 ============
     /*
@@ -186,9 +195,11 @@ export const useGameStore = defineStore('game', () => {
         gameMarketplaceCards.value = []
         taverns.value = Array.from({ length: 6 }, () => ({ cards: [], completions: 0 }))
         royalLobsterCount.value = 0
+        hiredLiZhangSlots.value = Array(8).fill(null)
         logs.value = []
         pendingBreeding.value = null
         pendingMarketplace.value = null
+        pendingSeafoodMarket.value = null
 
         // 重置放置机制状态
         slotOccupancy.value = {}
@@ -201,7 +212,7 @@ export const useGameStore = defineStore('game', () => {
 
         // 初始化卡牌
         gameTributeCards.value = shuffleArray([...tributeCards])
-        titleCardDeck.value = shuffleArray([...titleCards])
+        titleCardDeck.value = shuffleArray([...titleCards]) // 称号卡防重复逻辑
 
         addLog(`游戏初始化完成，${playerCount}名玩家`, 'success')
     }
@@ -435,7 +446,123 @@ export const useGameStore = defineStore('game', () => {
                 }
             }
         }
+
+        // 新增逻辑：捕虾区结算后，剩余野生龙虾流入海鲜市场，最高累计不超过8只
+        const remainingLobsters = wildLobsterPool.value.length;
+        if (remainingLobsters > 0) {
+            seafoodMarketLobsters.value += remainingLobsters;
+            if (seafoodMarketLobsters.value > 8) seafoodMarketLobsters.value = 8;
+            addLog(`捕虾区剩余 ${remainingLobsters} 只幼虾流入海鲜市场，当前市场流通虾数：${seafoodMarketLobsters.value}`, 'info');
+        }
+        wildLobsterPool.value = []; // 清空野生水池
+
         addLog('捕虾区结算完成', 'success')
+    }
+
+    /**
+     * 执行海鲜市场结算 (集市区)
+     */
+    const executeSeafoodMarketSettlement = async () => {
+        addLog('执行海鲜市场结算', 'info')
+        for (const slot of SEAFOOD_MARKET_SLOTS) {
+            const slotIndex = slot.id;
+            const playerId = getSlotStatus('seafood_market', slotIndex).playerId;
+            if (playerId === null) continue;
+
+            const player = playerStore.getPlayerById(playerId);
+            if (!player) continue;
+
+            const rewardResult = calculateSeafoodMarketReward(player, slotIndex);
+            if (rewardResult.success && rewardResult.message) {
+                addLog(`${player.name}${rewardResult.message}`, 'info');
+            }
+
+            addLog(`${player.name}开始执行${slot.actions}次交易行动`, 'info');
+
+            // 挂起引擎等待 UI 界面买卖或雇佣的反馈
+            await new Promise((resolve) => {
+                pendingSeafoodMarket.value = {
+                    player,
+                    actionCount: slot.actions,
+                    resolve: () => {
+                        pendingSeafoodMarket.value = null;
+                        resolve();
+                    }
+                }
+            })
+        }
+        addLog('海鲜市场结算完成', 'success')
+    }
+
+    /**
+     * 处理具体的单次海鲜市场交易或雇佣
+     */
+    const processSeafoodMarketAction = (player, actionType, slotIndex = -1) => {
+        if (!pendingSeafoodMarket.value || pendingSeafoodMarket.value.actionCount <= 0) return;
+
+        const prices = getMarketPrices(seafoodMarketLobsters.value);
+        let logMsg = `${player.name} 在海鲜市场：`;
+
+        if (actionType === 'buy_lobster') {
+            player.coins -= prices.lobster;
+            seafoodMarketLobsters.value--;
+            const newLobster = createLobster();
+            newLobster.grade = LOBSTER_GRADES.NORMAL;
+            player.lobsters.push(newLobster);
+            logMsg += `花费 ${prices.lobster} 金币买入了 1 只普通龙虾`;
+        } else if (actionType === 'sell_lobster') {
+            player.lobsters.sort((a, b) => Object.values(LOBSTER_GRADES).indexOf(a.grade) - Object.values(LOBSTER_GRADES).indexOf(b.grade));
+            player.lobsters.splice(0, 1);
+            player.coins += prices.lobster;
+            seafoodMarketLobsters.value++;
+            logMsg += `卖出了 1 只龙虾，获得 ${prices.lobster} 金币`;
+        } else if (actionType === 'buy_cage') {
+            player.coins -= prices.cage;
+            player.cages++;
+            logMsg += `花费 ${prices.cage} 金币买入了 1 个虾笼`;
+        } else if (actionType === 'sell_cage') {
+            player.cages--;
+            player.coins += prices.cage;
+            logMsg += `卖出了 1 个虾笼，获得 ${prices.cage} 金币`;
+        } else if (actionType === 'buy_seaweed1') {
+            player.coins -= prices.seaweed1;
+            player.seaweed += 1;
+            logMsg += `花费 ${prices.seaweed1} 金币买入了 1 根海草`;
+        } else if (actionType === 'sell_seaweed1') {
+            player.seaweed -= 1;
+            player.coins += prices.seaweed1;
+            logMsg += `卖出了 1 根海草，获得 ${prices.seaweed1} 金币`;
+        } else if (actionType === 'buy_seaweed3') {
+            player.coins -= prices.seaweed3;
+            player.seaweed += 3;
+            logMsg += `花费 ${prices.seaweed3} 金币买入了 3 根海草`;
+        } else if (actionType === 'sell_seaweed3') {
+            player.seaweed -= 3;
+            player.coins += prices.seaweed3;
+            logMsg += `卖出了 3 根海草，获得 ${prices.seaweed3} 金币`;
+        } else if (actionType === 'hire') {
+            const slot = HIRE_LIZHANG_SLOTS[slotIndex];
+            player.coins -= 6;
+            hiredLiZhangSlots.value[slotIndex] = player.id; // 永久占据坑位
+
+            logMsg += `花费 6 金币雇佣了 ${slotIndex + 1} 号位的额外里长`;
+            if (slot.reward.seaweed) {
+                player.seaweed += slot.reward.seaweed;
+                logMsg += `，并立刻获得 ${slot.reward.seaweed} 根海草`;
+            } else if (slot.reward.lobster) {
+                const newLobster = createLobster();
+                newLobster.grade = LOBSTER_GRADES[slot.reward.lobster.toUpperCase()] || LOBSTER_GRADES.NORMAL;
+                player.lobsters.push(newLobster);
+                logMsg += `，并立刻获得 1 只当前等级龙虾`;
+            }
+        }
+
+        addLog(logMsg, 'success');
+        pendingSeafoodMarket.value.actionCount--;
+
+        if (pendingSeafoodMarket.value.actionCount <= 0) {
+            pendingSeafoodMarket.value.resolve();
+        }
     }
 
     /**
@@ -691,19 +818,19 @@ export const useGameStore = defineStore('game', () => {
     const executeSettlementPhase = async () => {
         addLog('执行结算阶段', 'info')
 
-        // 按顺序结算各个区域
-        // 1. 捕虾区结算
+        // 1. 捕虾区结算 (剩余虾将流入市场)
         await executeShrimpCatchingSettlement()
+
+        // 2. 海鲜市场结算 (新增模块)
+        await executeSeafoodMarketSettlement()
 
         // 3. 养蛊区结算
         await executeBreedingSettlement()
 
+        // 4. 上供区结算 (稍后开发...)
+
         // 5. 闹市区结算
         await executeMarketplaceSettlement()
-
-        // 后续可以添加其他区域的结算逻辑
-        // 2. 海鲜市场结算
-        // 4. 上供区结算
 
         addLog('结算阶段完成', 'success')
     }
@@ -711,15 +838,23 @@ export const useGameStore = defineStore('game', () => {
     const executeCleanupPhase = () => {
         addLog('执行清理阶段', 'info')
 
-        seafoodMarketLobsters.value += wildLobsterPool.value.length
-        addLog(`海鲜市场：添加${wildLobsterPool.value.length}只龙虾`, 'info')
-        wildLobsterPool.value = []
+        // 核心清理逻辑：清零海鲜市场中流通的龙虾
+        if (seafoodMarketLobsters.value > 0) {
+            addLog(`海鲜市场清理：清零未被消化的 ${seafoodMarketLobsters.value} 只龙虾`, 'info')
+            seafoodMarketLobsters.value = 0
+        }
 
-        // 重置玩家里长数量
+        // 重置玩家里长数量 (根据玩家的初始工位进行恢复，但需要加上雇佣到的额外工位)
         playerStore.resetPlayerLiZhang()
 
-        // 给所有玩家添加金币
+        // 给所有玩家添加金币，并为雇佣了额外里长的玩家增加额外放置名额
         playerStore.addCoinsToAllPlayers()
+        players.value.forEach(p => {
+            const hiredCount = hiredLiZhangSlots.value.filter(id => id === p.id).length;
+            if (hiredCount > 0) {
+                p.liZhang += hiredCount; // 将永久雇佣工位加到下一回合的可用工位中
+            }
+        });
 
         // 清理放置状态
         // placedLiZhang.value = []
@@ -798,9 +933,11 @@ export const useGameStore = defineStore('game', () => {
         gameMarketplaceCards,
         taverns,
         royalLobsterCount,
+        hiredLiZhangSlots, // 导出里长坑位状态供前端展示
         logs,
         pendingBreeding,
-        pendingMarketplace, // 导出挂起状态
+        pendingMarketplace,
+        pendingSeafoodMarket, // 导出市场挂起状态
 
         // 放置机制状态
         slotOccupancy,
@@ -819,6 +956,7 @@ export const useGameStore = defineStore('game', () => {
         calculateTotalScore,
         getSortedPlayers,
         getPhaseText,
+        processSeafoodMarketAction, // 暴露给视图进行交互触发
 
         // 放置机制工具方法
         getSlotStatus,

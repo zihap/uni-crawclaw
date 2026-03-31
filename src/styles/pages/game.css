@@ -805,105 +805,336 @@
 }
 
 /* ============================
-   闹市区独有样式 (新增)
+   闹市区独有样式
 ============================ */
 .marketplace-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
 
 .mp-card {
-  position: relative;
-  border: 2px solid var(--color-border-default);
-  padding: 1rem;
-  border-radius: 0.75rem;
-  background: var(--color-bg-tertiary);
-  cursor: pointer;
-  transition: all 0.3s ease;
+    position: relative;
+    border: 2px solid var(--color-border-default);
+    padding: 1rem;
+    border-radius: 0.75rem;
+    background: var(--color-bg-tertiary);
+    cursor: pointer;
+    transition: all 0.3s ease;
 }
 
 .mp-card:hover:not(.used) {
-  border-color: var(--color-primary);
-  background: rgba(102, 126, 234, 0.05);
-  transform: translateY(-2px);
+    border-color: var(--color-primary);
+    background: rgba(102, 126, 234, 0.05);
+    transform: translateY(-2px);
 }
 
 .mp-card.selected {
-  border-color: var(--color-primary);
-  background: rgba(102, 126, 234, 0.1);
+    border-color: var(--color-primary);
+    background: rgba(102, 126, 234, 0.1);
 }
 
 .mp-card.used {
-  opacity: 0.6;
-  cursor: not-allowed;
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .mp-card-name {
-  display: block;
-  font-size: 1.125rem;
-  font-weight: bold;
-  color: var(--color-primary);
-  margin-bottom: 0.25rem;
+    display: block;
+    font-size: 1.125rem;
+    font-weight: bold;
+    color: var(--color-primary);
+    margin-bottom: 0.25rem;
 }
 
 .mp-card-desc {
-  font-size: 0.875rem;
-  color: var(--color-text-secondary);
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
 }
 
 .used-mask {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  border-radius: 0.6rem;
-  font-size: 1.25rem;
-  backdrop-filter: blur(2px);
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    border-radius: 0.6rem;
+    font-size: 1.25rem;
+    backdrop-filter: blur(2px);
 }
 
 .mp-options-panel {
-  margin-top: 1.5rem;
-  background: var(--color-bg-tertiary);
-  padding: 1rem;
-  border-radius: 0.75rem;
+    margin-top: 1.5rem;
+    background: var(--color-bg-tertiary);
+    padding: 1rem;
+    border-radius: 0.75rem;
 }
 
 .mp-option-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  border: 1px solid var(--color-border-default);
-  border-radius: 0.5rem;
-  margin-bottom: 0.5rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  background: var(--color-bg-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--color-border-default);
+    border-radius: 0.5rem;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--color-bg-primary);
 }
 
 .mp-option-btn.active {
-  border-color: var(--color-primary);
-  background: rgba(102, 126, 234, 0.05);
+    border-color: var(--color-primary);
+    background: rgba(102, 126, 234, 0.05);
 }
 
 .option-text {
-  font-size: 0.9375rem;
-  color: var(--color-text-primary);
-  font-weight: 500;
+    font-size: 0.9375rem;
+    color: var(--color-text-primary);
+    font-weight: 500;
 }
 
 .error-hint {
-  color: var(--color-error);
-  font-size: 0.875rem;
-  display: block;
-  margin-top: 0.5rem;
-  text-align: center;
-  font-weight: bold;
+    color: var(--color-error);
+    font-size: 0.875rem;
+    display: block;
+    margin-top: 0.5rem;
+    text-align: center;
+    font-weight: bold;
+}
+
+/* ============================
+   海鲜市场独有样式 (新增)
+============================ */
+.market-display-board {
+    background: var(--color-bg-tertiary);
+    padding: 1rem;
+    border-bottom: 1px solid var(--color-border-default);
+}
+
+.market-stalls {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.stall {
+    background: var(--color-bg-primary);
+    border: 2px solid var(--color-border-default);
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.stall-label {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    font-weight: 600;
+}
+
+.stall-spaces {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.stall-space {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border-light);
+    position: relative;
+    transition: all 0.3s;
+}
+
+.stall-space.filled {
+    background: var(--color-primary-light);
+    border-color: var(--color-primary);
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.1);
+}
+
+.stall-space.filled::after {
+    content: '🦞';
+    font-size: 1rem;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.market-prices {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.price-title {
+    font-size: 0.875rem;
+    font-weight: bold;
+    color: var(--color-primary);
+}
+
+.price-tags {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.price-tags text {
+    background: var(--color-bg-primary);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--color-text-primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.modal-tabs {
+    display: flex;
+    background: var(--color-bg-tertiary);
+    border-bottom: 1px solid var(--color-border-default);
+}
+
+.tab-item {
+    flex: 1;
+    text-align: center;
+    padding: 0.75rem;
+    font-weight: bold;
+    font-size: 1rem;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tab-item.active {
+    color: var(--color-primary);
+    border-bottom: 3px solid var(--color-primary);
+    background: var(--color-bg-primary);
+}
+
+.trade-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.trade-row {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.trade-row .btn {
+    flex: 1;
+    padding: 0.6rem;
+    font-size: 0.875rem;
+}
+
+.btn-outline {
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+    background: transparent;
+    border-radius: 0.5rem;
+}
+
+.btn-outline:hover:not(:disabled) {
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.btn-outline:disabled {
+    border-color: var(--color-border-default);
+    color: var(--color-text-tertiary);
+    background: var(--color-bg-tertiary);
+    cursor: not-allowed;
+}
+
+.hire-grid {
+    margin-top: 1rem;
+}
+
+.hire-info {
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    margin-bottom: 0.75rem;
+}
+
+.slots-container {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+}
+
+.hire-slot {
+    position: relative;
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border-default);
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-height: 4rem;
+}
+
+.hire-slot:hover:not(.locked):not(.hired) {
+    border-color: var(--color-primary);
+    background: rgba(102, 126, 234, 0.05);
+}
+
+.slot-header {
+    font-size: 0.75rem;
+    font-weight: bold;
+    color: var(--color-text-primary);
+}
+
+.slot-req {
+    font-size: 0.6rem;
+    color: var(--color-warning);
+    margin-top: 0.25rem;
+}
+
+.slot-rew {
+    font-size: 0.6rem;
+    color: var(--color-primary);
+    margin-top: 0.25rem;
+}
+
+.hire-slot.locked {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: var(--color-border-light);
+}
+
+.hire-slot.hired {
+    border-color: var(--color-success);
+    cursor: not-allowed;
+}
+
+.status-mask {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: bold;
+    color: var(--color-success);
+    border-radius: 0.5rem;
 }
 
 /* 按钮与通用底部 */
@@ -1001,6 +1232,10 @@
 
     .lobster-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+
+    .slots-container {
+        grid-template-columns: repeat(4, 1fr);
     }
 }
 
