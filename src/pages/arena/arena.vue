@@ -284,6 +284,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useBattleStore } from '@stores/arena.js'
 import { useOnlineGameStore } from '@stores/online-game.js'
+import { usePlayerStore } from '@stores/player.js'
 import { getSkill } from '@data/cards.js'
 import socketModule from '@utils/socket.js'
 
@@ -291,7 +292,7 @@ const socketService = socketModule.socketService || socketModule
 
 const battleStore = useBattleStore()
 const onlineGameStore = useOnlineGameStore()
-const arenaBattleQueue = computed(() => onlineGameStore.arenaBattleQueue)
+const playerStore = usePlayerStore()
 
 const isRolling = ref(false)
 const rollCompleted = ref(false)
@@ -317,8 +318,7 @@ let pendingApplyTimer = null
 
 // 海草相关状态
 const seaweedCount = computed(() => {
-    const currentPlayer = battleData.value?.currentPlayer
-    const player = battleData.value?.players[currentPlayer]
+    const player = playerStore.getPlayerById(savedPlayerId.value)
     return player?.seaweed || 0
 })
 const isSeaweedChecked = ref(false) // 是否勾选使用海草
@@ -656,7 +656,7 @@ async function onDiceClick() {
 
     const bonus = seaweedBonus.value
     if (bonus > 0) {
-        seaweedCount.value-- // 海草数量-1
+        socketService.sendUseSeaweed()
         seaweedLocked.value = true // 锁定海草状态
     }
 
@@ -864,16 +864,18 @@ function navigateBackToGame() {
         return
     }
 
-    // 没有剩余战斗，正常返回 game 页面
+    // 没有剩余战斗，返回 onlineGame 页面
     battleStore.resetBattle()
     resultShown.value = false
     showVictory.value = false
     showDefeat.value = false
 
     if (savedRoomId.value && savedPlayerId.value !== null) {
-        uni.reLaunch({ url: `/pages/game/game?roomId=${savedRoomId.value}&playerId=${savedPlayerId.value}` })
+        uni.reLaunch({
+            url: `/pages/online-game/onlineGame?roomId=${savedRoomId.value}&playerId=${savedPlayerId.value}`
+        })
     } else {
-        uni.reLaunch({ url: '/pages/game/game' })
+        uni.reLaunch({ url: '/pages/online-game/onlineGame' })
     }
 }
 
@@ -890,8 +892,6 @@ watch(
         }
     }
 )
-
-let lastHandledIdentifier = null
 
 watch(
     () => battleData.value?.lastAction,
@@ -1024,30 +1024,16 @@ onMounted(() => {
 
     initBoard()
 
-    socketService.on('battleAction', (data) => {
-        if (data.battleData) {
-            // 跳过自己发送的消息回显，避免覆盖本地已处理的状态（如 diceConfirmed → turnChange）
-            if (data.senderId !== savedPlayerId.value) {
-                battleStore.updateFromSync(data.battleData)
-            }
-
-            // 监听奖励选择完成，只有胜者才触发返回逻辑
-            if (data.battleData.lastAction === 'rewardSelected') {
-                const winnerId = data.battleData.winner?.id
-                // 只有获胜的玩家才会触发返回，避免重复调用
-                if (winnerId === savedPlayerId.value) {
-                    showVictory.value = false
-                    showDefeat.value = false
-                    navigateBackToGame()
-                }
-            }
-        }
+    battleStore.setupBattleActionListener(() => {
+        showVictory.value = false
+        showDefeat.value = false
+        navigateBackToGame()
     })
 })
 
 onUnmounted(() => {
     battleStore.resetBattle()
     resultShown.value = false
-    socketService.off('battleAction')
+    battleStore.cleanupBattleActionListener()
 })
 </script>

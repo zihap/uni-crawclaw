@@ -31,7 +31,7 @@ def create_game_state() -> dict:
                 'slots': [
                     {'occupiedBy': None, 'actionCount': 1, 'reward': {'cages': 1, 'stealStart': True}},
                     {'occupiedBy': None, 'actionCount': 2, 'reward': {'cages': 1}},
-                    {'occupiedBy': None, 'actionCount': 3, 'reward': {'gold': 1}},
+                    {'occupiedBy': None, 'actionCount': 3, 'reward': {'coins': 1}},
                     {'occupiedBy': None, 'actionCount': 4, 'reward': {}}
                 ],
                 'wildLobsterPool': 0
@@ -39,10 +39,10 @@ def create_game_state() -> dict:
 
             'market': {
                 'slots': [
-                    {'occupiedBy': None, 'actionCount': 2, 'reward': {'gold': 1}},
+                    {'occupiedBy': None, 'actionCount': 2, 'reward': {'coins': 1}},
                     {'occupiedBy': None, 'actionCount': 3, 'reward': {}},
-                    {'occupiedBy': None, 'actionCount': 3, 'reward': {'gold': 1}},
-                    {'occupiedBy': None, 'actionCount': 3, 'reward': {'gold': 2}}
+                    {'occupiedBy': None, 'actionCount': 3, 'reward': {'coins': 1}},
+                    {'occupiedBy': None, 'actionCount': 3, 'reward': {'coins': 2}}
                 ],
                 'marketLobsterCount': 0,
 
@@ -84,10 +84,10 @@ def create_game_state() -> dict:
 def create_player(player_id: int, name: str, is_host: bool = False, user_id: str = None, position: int = 0) -> dict:
     """创建玩家对象"""
     position_resources = {
-        0: {'headmen': 3, 'normal': 2, 'gold': 5, 'seaweed': 1, 'cages': 1},
-        1: {'headmen': 3, 'normal': 2, 'gold': 6, 'seaweed': 1, 'cages': 1},
-        2: {'headmen': 3, 'normal': 2, 'gold': 5, 'seaweed': 2, 'cages': 1},
-        3: {'headmen': 3, 'normal': 2, 'gold': 6, 'seaweed': 2, 'cages': 1}
+        0: {'liZhang': 3, 'normal': 2, 'coins': 5, 'seaweed': 1, 'cages': 1},
+        1: {'liZhang': 3, 'normal': 2, 'coins': 6, 'seaweed': 1, 'cages': 1},
+        2: {'liZhang': 3, 'normal': 2, 'coins': 5, 'seaweed': 2, 'cages': 1},
+        3: {'liZhang': 3, 'normal': 2, 'coins': 6, 'seaweed': 2, 'cages': 1}
     }
 
     resources = position_resources.get(position, position_resources[0])
@@ -99,14 +99,14 @@ def create_player(player_id: int, name: str, is_host: bool = False, user_id: str
         'isOnline': True,
         'lastSeen': int(time.time()),
 
-        'gold': resources['gold'],
+        'coins': resources['coins'],
         'seaweed': resources['seaweed'],
         'cages': resources['cages'],
-        'virtue': 0,
-        'reputation': 0,
+        'de': 0,
+        'wang': 0,
         'bonusPoints': 0,
-        'headmen': resources['headmen'],
-        'signals': 0,
+        'liZhang': resources['liZhang'],
+        'bubbles': 0,
 
         'shrimpPond': {
             'normal': resources['normal'],
@@ -120,7 +120,7 @@ def create_player(player_id: int, name: str, is_host: bool = False, user_id: str
         'completedTasks': [],
         'completedTaverns': [],
         'royalCountThisRound': 0,
-        'incomePerRound': 0,
+        'bonusGold': 0,
 
         'permaBuffs': [],
 
@@ -145,3 +145,7 @@ def draw_downtown_cards(game_state: dict):
     shuffled = DOWNTOWN_CARDS.copy()
     random.shuffle(shuffled)
     game_state['downtownCards'] = shuffled[:3]
+
+
+# 竞技场投注状态: { "roomId_battleId": { challengerId, defenderId, challengerLobster, defenderLobster, spectators, bets, started, completed } }
+arena_betting_state = {}

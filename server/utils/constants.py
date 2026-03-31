@@ -8,6 +8,9 @@ import json
 
 AREAS = ['fishing', 'market', 'cultivation', 'tribute', 'downtown']
 
+# 龙虾升级: 新grade → 旧grade (用于 battleEnd 时反推消耗)
+GRADE_UPGRADE = {'grade2': 'grade3', 'grade1': 'grade2', 'royal': 'grade1'}
+
 MARKET_PRICES = {
     'buyLobster': 3,
     'sellLobster': 2,
@@ -18,185 +21,114 @@ MARKET_PRICES = {
     'hireHeadman': 6
 }
 
-CARD_CONFIG_PATH = './card_config.json'
+CARD_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'card_config.json')
 
-if os.path.exists(CARD_CONFIG_PATH):
-    with open(CARD_CONFIG_PATH, 'r', encoding='utf-8') as f:
-        card_config = json.load(f)
-
-        TRIBUTE_TASKS = card_config.get('offerings', [
-            {'id': 1, 'requirement': {'grade2': 1}, 'reward': {'virtue': 2, 'reputation': 1}},
-            {'id': 2, 'requirement': {'grade1': 1}, 'reward': {'virtue': 1, 'reputation': 3}},
-            {'id': 3, 'requirement': {'royal': 1}, 'reward': {'virtue': 4, 'reputation': 4}},
-            {'id': 4, 'requirement': {'seaweed': 3, 'gold': 5}, 'reward': {'virtue': 1, 'reputation': 2}},
-            {'id': 5, 'requirement': {'cage': 2}, 'reward': {'virtue': 3, 'reputation': 1}},
-            {'id': 6, 'requirement': {'titled': 1}, 'reward': {'virtue': 5, 'reputation': 5}}
-        ])
-
-        DOWNTOWN_CARDS = card_config.get('markets', [
-            {'id': 1, 'type': 'gold', 'effect': 5, 'description': '获得5金币'},
-            {'id': 2, 'type': 'seaweed', 'effect': 3, 'description': '获得3海草'},
-            {'id': 3, 'type': 'virtue', 'effect': 2, 'description': '获得2德'},
-            {'id': 4, 'type': 'reputation', 'effect': 2, 'description': '获得2望'},
-            {'id': 5, 'type': 'cage', 'effect': 1, 'description': '获得1虾笼'},
-            {'id': 6, 'type': 'signal', 'effect': 3, 'description': '获得3气泡'}
-        ])
-else:
-    TRIBUTE_TASKS = [
+_CARD_CONFIG_DEFAULT = {
+    'tributeCards': [
         {
-            'id': 'offering_001',
-            'tavernId': 1,
-            'requirement': {'grade1': 1, 'seaweed': 2},
-            'reward': {'virtue': 3, 'reputation': 0, 'incomeBonus': 1},
-            'aura': {'type': 'permanent', 'effect': 'lobsterFightRewardDouble'}
+            'id': 'tribute_1',
+            'name': '王爷',
+            'requirements': {'lobsters': {'grade1': 1}, 'seaweed': 2},
+            'reward': {'de': 3},
+            'aura': {'type': 'doubleWinReward', 'description': '龙虾斗场获胜奖励翻倍'},
+            'bonusScore': 0
         },
         {
-            'id': 'offering_002',
-            'tavernId': 1,
-            'requirement': {'grade2': 1, 'gold': 3},
-            'reward': {'virtue': 2, 'reputation': 1, 'incomeBonus': 1},
-            'aura': {'type': 'final', 'finalScore': 2}
+            'id': 'tribute_2',
+            'name': '知府',
+            'requirements': {'lobsters': {'grade3': 2}, 'coins': 5},
+            'reward': {'wang': 2},
+            'aura': {'type': 'bonusGold', 'value': 1, 'description': '每回合额外获得1金币'},
+            'bonusScore': 2
         },
         {
-            'id': 'offering_003',
-            'tavernId': 2,
-            'requirement': {'grade3': 1, 'seaweed': 1},
-            'reward': {'virtue': 1, 'reputation': 2, 'incomeBonus': 1},
-            'aura': None
+            'id': 'tribute_3',
+            'name': '县令',
+            'requirements': {'lobsters': {'grade3': 1}, 'seaweed': 3},
+            'reward': {'de': 2},
+            'aura': None,
+            'bonusScore': 3
         },
         {
-            'id': 'offering_004',
-            'tavernId': 2,
-            'requirement': {'royal': 1},
-            'reward': {'virtue': 4, 'reputation': 3, 'incomeBonus': 2},
-            'aura': {'type': 'permanent', 'effect': 'tributeRewardPlusOne'}
+            'id': 'tribute_4',
+            'name': '乡绅',
+            'requirements': {'coins': 10},
+            'reward': {'wang': 3},
+            'aura': None,
+            'bonusScore': 1
         },
         {
-            'id': 'offering_005',
-            'tavernId': 3,
-            'requirement': {'grade1': 1, 'grade2': 1, 'gold': 5},
-            'reward': {'virtue': 3, 'reputation': 3, 'incomeBonus': 2},
-            'aura': {'type': 'final', 'finalScore': 5}
-        },
-        {
-            'id': 'offering_006',
-            'tavernId': 3,
-            'requirement': {'royal': 1, 'gold': 10},
-            'reward': {'virtue': 5, 'reputation': 5, 'incomeBonus': 3},
-            'aura': {'type': 'permanent', 'effect': 'allRewardsDouble'}
-        },
-        {
-            'id': 'offering_007',
-            'tavernId': 4,
-            'requirement': {'royal': 1, 'seaweed': 3},
-            'reward': {'virtue': 4, 'reputation': 4, 'incomeBonus': 2},
-            'aura': {'type': 'permanent', 'effect': 'startWithExtraHeadman'}
-        },
-        {
-            'id': 'offering_008',
-            'tavernId': 4,
-            'requirement': {'grade1': 1, 'cage': 1},
-            'reward': {'virtue': 3, 'reputation': 2, 'incomeBonus': 1},
-            'aura': None
-        },
-        {
-            'id': 'offering_009',
-            'tavernId': 5,
-            'requirement': {'grade2': 1, 'gold': 8},
-            'reward': {'virtue': 2, 'reputation': 3, 'incomeBonus': 1},
-            'aura': {'type': 'final', 'finalScore': 3}
-        },
-        {
-            'id': 'offering_010',
-            'tavernId': 5,
-            'requirement': {'grade3': 1, 'grade2': 1, 'gold': 6, 'seaweed': 2},
-            'reward': {'virtue': 4, 'reputation': 1, 'incomeBonus': 2},
-            'aura': {'type': 'permanent', 'effect': 'extraMarketAction'}
-        },
-        {
-            'id': 'offering_011',
-            'tavernId': 6,
-            'requirement': {'royal': 1, 'gold': 12},
-            'reward': {'virtue': 5, 'reputation': 2, 'incomeBonus': 2},
-            'aura': {'type': 'permanent', 'effect': 'startWithExtraResource'}
-        },
-        {
-            'id': 'offering_012',
-            'tavernId': 6,
-            'requirement': {'royal': 1, 'grade1': 1, 'gold': 15, 'seaweed': 5},
-            'reward': {'virtue': 6, 'reputation': 4, 'incomeBonus': 3},
-            'aura': {'type': 'final', 'finalScore': 10}
+            'id': 'tribute_5',
+            'name': '举人',
+            'requirements': {'lobsters': {'grade3': 3}},
+            'reward': {'de': 1},
+            'aura': {'type': 'extraCage', 'value': 1, 'description': '游戏开始时额外获得1个虾笼'},
+            'bonusScore': 2
         }
-    ]
-
-    DOWNTOWN_CARDS = [
+    ],
+    'marketplaceCards': [
         {
-            'id': 'market_001',
-            'type': 'market',
+            'id': 'marketplace_1',
             'name': '府衙',
-            'description': '可捐龙虾换取声望',
             'action': {
-                'cost': {'shrimp': {'common': 1}},
-                'reward': {'reputation': 1}
+                'type': 'exchange',
+                'options': [
+                    {'cost': {'lobsters': 1}, 'reward': {'wang': 1}},
+                    {'cost': {'lobsters': 3}, 'reward': {'wang': 2}}
+                ]
             },
-            'detail': '支付1只龙虾换1望'
+            'description': '玩家支付1只龙虾换1望，或者3只龙虾换2望'
         },
         {
-            'id': 'market_002',
-            'type': 'market',
+            'id': 'marketplace_2',
+            'name': '书院',
+            'action': {
+                'type': 'exchange',
+                'options': [
+                    {'cost': {'seaweed': 2}, 'reward': {'de': 1}},
+                    {'cost': {'coins': 5}, 'reward': {'de': 2}}
+                ]
+            },
+            'description': '支付2根海草换1德，或5金币换2德'
+        },
+        {
+            'id': 'marketplace_3',
+            'name': '码头',
+            'action': {
+                'type': 'exchange',
+                'options': [
+                    {'cost': {'coins': 3}, 'reward': {'lobsters': 2}},
+                    {'cost': {'cages': 1}, 'reward': {'seaweed': 3}}
+                ]
+            },
+            'description': '3金币换2只龙虾，或1个虾笼换3根海草'
+        },
+        {
+            'id': 'marketplace_4',
             'name': '钱庄',
-            'description': '可存钱生息',
             'action': {
-                'cost': {'gold': 5},
-                'reward': {'gold': 6}
+                'type': 'exchange',
+                'options': [
+                    {'cost': {'lobsters': 1}, 'reward': {'coins': 2}},
+                    {'cost': {'de': 1}, 'reward': {'coins': 5}}
+                ]
             },
-            'detail': '存5金币，得6金币'
-        },
-        {
-            'id': 'market_003',
-            'type': 'market',
-            'name': '渔具店',
-            'description': '购买渔具',
-            'action': {
-                'cost': {'gold': 8},
-                'reward': {'cage': 1}
-            },
-            'detail': '花费8金币购买1个虾笼'
-        },
-        {
-            'id': 'market_004',
-            'type': 'market',
-            'name': '药材铺',
-            'description': '购买增益道具',
-            'action': {
-                'cost': {'gold': 6},
-                'reward': {'seaweed': 2}
-            },
-            'detail': '花费6金币购买2根海草'
-        },
-        {
-            'id': 'market_005',
-            'type': 'market',
-            'name': '茶馆',
-            'description': '打听消息',
-            'action': {
-                'cost': {'gold': 3},
-                'reward': {'virtue': 1}
-            },
-            'detail': '花费3金币获得1德'
-        },
-        {
-            'id': 'market_006',
-            'type': 'market',
-            'name': '赌坊',
-            'description': '小赌怡情',
-            'action': {
-                'cost': {'gold': 4},
-                'reward': {'gold': 0}
-            },
-            'detail': '花费4金币，有机会获得更多金币'
+            'description': '1只龙虾换2金币，或1德换5金币'
         }
     ]
+}
+
+try:
+    if os.path.exists(CARD_CONFIG_PATH):
+        with open(CARD_CONFIG_PATH, 'r', encoding='utf-8') as f:
+            card_config = json.load(f)
+    else:
+        card_config = {}
+except json.JSONDecodeError:
+    card_config = {}
+
+TRIBUTE_TASKS = card_config.get('tributeCards', _CARD_CONFIG_DEFAULT['tributeCards'])
+DOWNTOWN_CARDS = card_config.get('marketplaceCards', _CARD_CONFIG_DEFAULT['marketplaceCards'])
 
 FISHING_BAG_ITEMS = [
     {'type': 'bubble', 'weight': 30},

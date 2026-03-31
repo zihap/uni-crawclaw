@@ -82,8 +82,8 @@ def resolve_market_area(game_state: dict):
         reward_given = False
 
         if not reward_given:
-            if reward.get('gold'):
-                player['gold'] += reward['gold']
+            if reward.get('coins'):
+                player['coins'] += reward['coins']
             reward_given = True
 
 

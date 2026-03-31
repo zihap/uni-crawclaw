@@ -59,11 +59,11 @@ def cleanup_phase(game_state: dict):
     for player in game_state['players']:
         base_headmen = 3
         hired_count = len(player.get('hiredLaborersBonus', []))
-        player['headmen'] = base_headmen + hired_count
+        player['liZhang'] = base_headmen + hired_count
 
     # 发放回合收入
     for player in game_state['players']:
-        player['gold'] += player.get('incomePerRound', 0)
+        player['coins'] += player.get('bonusGold', 0)
 
     # 更新市场价格
     update_market_prices(game_state)
@@ -177,7 +177,7 @@ async def start_game(room_id: str, rooms: dict, manager, broadcast_func):
     game_state['currentPlayerIndex'] = starting_player_idx
 
     for p in game_state['players']:
-        p['signals'] = 0
+        p['bubbles'] = 0
         p['ready'] = False
 
     for area_name in AREAS:
@@ -219,7 +219,7 @@ async def handle_next_round(room_id: str, rooms: dict, manager, broadcast_func):
 
         winner = sorted(
             game_state['players'],
-            key=lambda x: (x['virtue'] * x['reputation'] + x['bonusPoints'], x['gold']),
+            key=lambda x: (x['de'] * x['wang'] + x['bonusPoints'], x['coins']),
             reverse=True
         )[0]
 
@@ -233,7 +233,7 @@ async def handle_next_round(room_id: str, rooms: dict, manager, broadcast_func):
 
     for p in game_state['players']:
         p['royalCountThisRound'] = 0
-        p['gold'] += 2 + p['incomePerRound']
+        p['coins'] += 2 + p['bonusGold']
 
     for area_name in AREAS:
         if area_name in game_state['areas']:

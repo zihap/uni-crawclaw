@@ -536,23 +536,6 @@ class WebSocketService {
     // ===========================================================================
 
     /**
-     * 开始斗龙虾战斗
-     *
-     * @param {object} battleData - 战斗数据
-     *
-     * 发送事件: battleStart
-     */
-    sendBattleStart(battleData) {
-        if (this.currentRoomId && this.currentPlayerId !== null) {
-            this._send('battleStart', {
-                roomId: this.currentRoomId,
-                playerId: this.currentPlayerId,
-                battleData: battleData
-            })
-        }
-    }
-
-    /**
      * 发送战斗行动
      *
      * @param {string} actionType - 行动类型
@@ -571,6 +554,14 @@ class WebSocketService {
                 battleData: battleData
             })
         }
+    }
+
+    /**
+     * 发送海草消耗事件（竞技场掷骰子时使用）
+     * 服务端扣除海草后广播 playerResourceUpdate 给所有玩家
+     */
+    sendUseSeaweed() {
+        this._send('useSeaweed', {})
     }
 }
 

@@ -3,7 +3,7 @@
         <view class="modal-container" @click.stop>
             <view class="modal-header">
                 <text class="modal-title">竞技场对决</text>
-                <text class="modal-subtitle">{{ getSubtitle() }}</text>
+                <text class="modal-subtitle">{{ subtitle }}</text>
             </view>
 
             <view class="battle-info">
@@ -20,9 +20,9 @@
                 </view>
             </view>
 
-            <view class="selection-area">
-                <!-- 当前玩家是挑战者，显示挑战者的龙虾选择 -->
-                <view v-if="isChallenger" class="lobster-selection">
+            <!-- Phase 1: Selecting - 战斗双方选龙虾 -->
+            <view v-if="localPhase === 'selecting'" class="selection-area">
+                <view v-if="isChallenger || isDefender" class="lobster-selection">
                     <text class="selection-title">选择你的出战龙虾</text>
                     <view class="lobster-list">
                         <view
@@ -39,41 +39,83 @@
                         </view>
                     </view>
                 </view>
-
-                <!-- 当前玩家是被挑战者，显示被挑战者的龙虾选择 -->
-                <view v-else-if="isDefender" class="lobster-selection">
-                    <text class="selection-title">选择你的出战龙虾</text>
-                    <view class="lobster-list">
-                        <view
-                            v-for="(lobster, index) in myLobsters"
-                            :key="lobster.id"
-                            :class="['lobster-item', { selected: selectedIndex === index }]"
-                            @click="selectLobster(index)"
-                        >
-                            <view class="lobster-icon">🦞</view>
-                            <text class="lobster-name">{{ lobster.name }}</text>
-                        </view>
-                        <view v-if="myLobsters.length === 0" class="no-lobster">
-                            <text>没有可用的龙虾</text>
-                        </view>
-                    </view>
-                </view>
-
-                <!-- 观战者视角 -->
                 <view v-else class="spectator-view">
                     <text class="spectator-text">你是观战者，请等待双方选择龙虾...</text>
                 </view>
+                <view v-if="isChallenger || isDefender" class="modal-actions">
+                    <button
+                        class="action-btn confirm-btn"
+                        :disabled="!canConfirm || hasConfirmed"
+                        @click="handleConfirm"
+                    >
+                        {{ hasConfirmed ? '等待对方...' : '确认选择' }}
+                    </button>
+                </view>
             </view>
 
-            <view class="modal-actions">
-                <button
-                    v-if="isChallenger || isDefender"
-                    class="action-btn confirm-btn"
-                    :disabled="!canConfirm || hasConfirmed"
-                    @click="handleConfirm"
-                >
-                    {{ hasConfirmed ? '等待对方...' : '确认选择' }}
-                </button>
+            <!-- Phase 2: Betting - 观战者投注 -->
+            <view v-if="localPhase === 'betting'" class="betting-area">
+                <view v-if="isSpectator" class="betting-selection">
+                    <text class="selection-title">选择你要支持的龙虾（1金币）</text>
+                    <view class="betting-fighters">
+                        <view class="betting-fighter-card" @click="selectBetTarget('challenger')">
+                            <text class="bf-label">{{ challenger?.name }}</text>
+                            <text class="bf-lobster">{{ store.challengerLobster?.name || '龙虾' }}</text>
+                            <view :class="['bf-select', { selected: betTarget === 'challenger', disabled: !canBet }]">
+                                <text>投1金币</text>
+                            </view>
+                        </view>
+                        <text class="vs-text">VS</text>
+                        <view class="betting-fighter-card" @click="selectBetTarget('defender')">
+                            <text class="bf-label">{{ defender?.name }}</text>
+                            <text class="bf-lobster">{{ store.defenderLobster?.name || '龙虾' }}</text>
+                            <view :class="['bf-select', { selected: betTarget === 'defender', disabled: !canBet }]">
+                                <text>投1金币</text>
+                            </view>
+                        </view>
+                    </view>
+                    <view v-if="!canBet" class="gold-warning">
+                        <text>金币不足，无法投注</text>
+                    </view>
+                    <view class="modal-actions">
+                        <button class="action-btn confirm-btn" :disabled="hasBet || !canBet" @click="handleBet">
+                            {{ hasBet ? '已投注，等待其他观战者...' : '确认投注' }}
+                        </button>
+                        <button class="action-btn skip-btn" :disabled="hasBet" @click="handleSkipBet">跳过投注</button>
+                    </view>
+                </view>
+                <view v-else class="spectator-view">
+                    <text class="spectator-text">龙虾已选定！等待观战者投注...</text>
+                    <view class="lobster-preview">
+                        <view class="preview-card">
+                            <text class="preview-label">{{ challenger?.name }}</text>
+                            <text class="preview-lobster">{{ store.challengerLobster?.name || '' }}</text>
+                        </view>
+                        <text class="vs-text">VS</text>
+                        <view class="preview-card">
+                            <text class="preview-label">{{ defender?.name }}</text>
+                            <text class="preview-lobster">{{ store.defenderLobster?.name || '' }}</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+
+            <!-- Phase 3: Ready - 投注结果 + 倒计时 -->
+            <view v-if="localPhase === 'ready'" class="ready-area">
+                <text class="ready-title">投注结果</text>
+                <view class="bet-results">
+                    <view v-for="(bet, pid) in store.spectatorBets" :key="pid" class="bet-result-item">
+                        <text class="bet-player-name">{{ getPlayerName(pid) }}</text>
+                        <text class="bet-detail" v-if="bet.amount > 0">
+                            投了 {{ getBetTargetName(bet.targetFighterId) }} {{ bet.amount }}金币
+                        </text>
+                        <text class="bet-detail" v-else>跳过投注</text>
+                    </view>
+                    <view v-if="Object.keys(store.spectatorBets).length === 0" class="bet-result-item">
+                        <text class="bet-detail">无观战者投注</text>
+                    </view>
+                </view>
+                <text class="countdown-text">进入竞技场：{{ countdown }}秒</text>
             </view>
         </view>
     </view>
@@ -81,10 +123,13 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { getLobsterGradeName } from '@utils/gameUtils'
+import { useOnlineGameStore } from '@stores/online-game.js'
+import { usePlayerStore } from '@stores/player.js'
 import socketModule from '@utils/socket.js'
 
 const socketService = socketModule.socketService || socketModule
+const store = useOnlineGameStore()
+const playerStore = usePlayerStore()
 
 const props = defineProps({
     visible: {
@@ -111,14 +156,21 @@ const props = defineProps({
 
 const emit = defineEmits(['confirm', 'cancel', 'bothReady'])
 
+// ============ 本地状态 ============
+const localPhase = ref('selecting')
 const selectedIndex = ref(-1)
 const hasConfirmed = ref(false)
-const challengerReady = ref(false)
-const defenderReady = ref(false)
-const challengerSelectedLobster = ref(null)
-const defenderSelectedLobster = ref(null)
+const hasBet = ref(false)
+const betTarget = ref('')
+const countdown = ref(5)
+let countdownTimer = null
+let currentBattleId = ''
 
-// 判断当前玩家身份
+// 从 store 读取双方选择状态
+const challengerReady = computed(() => store.challengerReady)
+const defenderReady = computed(() => store.defenderReady)
+
+// ============ 身份判断 ============
 const isChallenger = computed(() => {
     if (props.playerId === null || !props.challenger) return false
     return String(props.challenger.id) === String(props.playerId)
@@ -129,35 +181,45 @@ const isDefender = computed(() => {
     return String(props.defender.id) === String(props.playerId)
 })
 
-// 获取当前玩家的龙虾列表
+const isFighter = computed(() => isChallenger.value || isDefender.value)
+const isSpectator = computed(() => !isFighter.value)
+
+// ============ 计算属性 ============
 const myLobsters = computed(() => {
-    if (isChallenger.value || isDefender.value) {
+    if (isFighter.value) {
         const player = isChallenger.value ? props.challenger : props.defender
-
-        // 过滤普通龙虾 (id = 'normal')
         const validLobsters = player?.lobsters?.filter((l) => l && l.id && l.id !== 'normal') || []
-
-        // 添加 titleCards 作为参战选项
         const titleCards = player?.titleCards?.filter((t) => t && t.id) || []
-
-        // 合并两个列表
         return [...validLobsters, ...titleCards]
     }
     return []
 })
 
-const canConfirm = computed(() => {
-    return selectedIndex.value >= 0
+const canConfirm = computed(() => selectedIndex.value >= 0)
+const canBet = computed(() => {
+    const myPlayer = playerStore.getPlayerById(store.playerId)
+    return (myPlayer?.coins || 0) >= 1
 })
 
-const getSubtitle = () => {
-    if (isChallenger.value) return '你是挑战者，请选择出战龙虾'
-    if (isDefender.value) return '你是被挑战者，请选择出战龙虾'
-    return '观战模式'
-}
+const subtitle = computed(() => {
+    if (localPhase.value === 'selecting') {
+        if (isChallenger.value) return '你是挑战者，请选择出战龙虾'
+        if (isDefender.value) return '你是被挑战者，请选择出战龙虾'
+        return '观战模式'
+    }
+    if (localPhase.value === 'betting') {
+        if (isSpectator.value) return '请选择你要支持的龙虾'
+        return '等待观战者投注...'
+    }
+    if (localPhase.value === 'ready') {
+        return '即将进入竞技场'
+    }
+    return ''
+})
 
+// ============ 选龙虾逻辑 ============
 const selectLobster = (index) => {
-    if (hasConfirmed.value) return // 已确认后不能再更改
+    if (hasConfirmed.value) return
     selectedIndex.value = index
 }
 
@@ -167,119 +229,493 @@ const handleConfirm = () => {
     const selectedLobster = myLobsters.value[selectedIndex.value]
     hasConfirmed.value = true
 
-    console.log('[LobsterSelect] 发送选择结果:', {
-        roomId: props.roomId,
-        playerId: props.playerId,
-        lobster: selectedLobster
-    })
+    // 构建 battle context
+    const battle = store.arenaBattleQueue[0]
+    if (!battle) return
+    const spectators = store.players
+        .filter((p) => p.id !== battle.challengerId && p.id !== battle.defenderId)
+        .map((p) => p.id)
 
-    // 发送选择结果到服务器
     socketService._send('lobsterSelected', {
         roomId: props.roomId,
         playerId: props.playerId,
-        lobster: selectedLobster
+        lobster: selectedLobster,
+        battleId: currentBattleId,
+        challengerId: battle.challengerId,
+        defenderId: battle.defenderId,
+        spectators
     })
 
-    // 本地标记自己已选择
+    // 本地标记自己已选择（写入 store）
     if (isChallenger.value) {
-        challengerReady.value = true
-        challengerSelectedLobster.value = selectedLobster
+        store.challengerReady = true
+        store.challengerSelectedLobster = selectedLobster
     } else if (isDefender.value) {
-        defenderReady.value = true
-        defenderSelectedLobster.value = selectedLobster
-    }
-
-    checkBothReady()
-}
-
-const handleCancel = () => {
-    emit('cancel')
-}
-
-const handleOverlayClick = () => {
-    // 点击遮罩层不关闭，必须点取消按钮
-}
-
-// 检查双方是否都已准备好
-const checkBothReady = () => {
-    if (challengerReady.value && defenderReady.value) {
-        // 双方都已选择，触发进入竞技场
-        emit('bothReady', {
-            challenger: props.challenger,
-            defender: props.defender,
-            challengerLobster: challengerSelectedLobster.value,
-            defenderLobster: defenderSelectedLobster.value
-        })
+        store.defenderReady = true
+        store.defenderSelectedLobster = selectedLobster
     }
 }
 
-// 处理对手的选择结果（从服务器接收）
-const handleOpponentSelected = (data) => {
-    console.log('[LobsterSelect] 收到选择事件:', data)
-    console.log('[LobsterSelect] 当前玩家ID:', props.playerId)
-    console.log('[LobsterSelect] 挑战者ID:', props.challenger?.id)
-    console.log('[LobsterSelect] 被挑战者ID:', props.defender?.id)
-
-    // 忽略自己的选择（自己已经本地标记了）
-    if (String(data.playerId) === String(props.playerId)) {
-        console.log('[LobsterSelect] 忽略自己的选择')
-        return
-    }
-
-    if (String(data.playerId) === String(props.challenger?.id)) {
-        console.log('[LobsterSelect] 挑战者已选择')
-        challengerReady.value = true
-        challengerSelectedLobster.value = data.lobster
-    } else if (String(data.playerId) === String(props.defender?.id)) {
-        console.log('[LobsterSelect] 被挑战者已选择')
-        defenderReady.value = true
-        defenderSelectedLobster.value = data.lobster
-    }
-    checkBothReady()
+// ============ 投注逻辑 ============
+const selectBetTarget = (target) => {
+    if (hasBet.value) return
+    betTarget.value = target
 }
 
-// 注册WebSocket监听
-const setupListeners = () => {
-    console.log('[LobsterSelect] 注册监听器')
-    socketService.on('lobsterSelected', handleOpponentSelected)
+const handleBet = () => {
+    if (hasBet.value || !betTarget.value) return
+    hasBet.value = true
+
+    const battle = store.arenaBattleQueue[0]
+    if (!battle) return
+    const targetFighterId = betTarget.value === 'challenger' ? battle.challengerId : battle.defenderId
+
+    socketService._send('spectatorBet', {
+        roomId: props.roomId,
+        playerId: props.playerId,
+        battleId: currentBattleId,
+        betAmount: 1,
+        targetFighterId
+    })
 }
 
-const cleanupListeners = () => {
-    console.log('[LobsterSelect] 清理监听器')
-    socketService.off('lobsterSelected', handleOpponentSelected)
+const handleSkipBet = () => {
+    if (hasBet.value) return
+    hasBet.value = true
+
+    socketService._send('spectatorBet', {
+        roomId: props.roomId,
+        playerId: props.playerId,
+        battleId: currentBattleId,
+        betAmount: 0,
+        targetFighterId: null
+    })
 }
 
-// 当弹窗打开时重置状态
+// ============ Ready 阶段辅助 ============
+const getPlayerName = (playerId) => {
+    const player = store.players.find((p) => String(p.id) === String(playerId))
+    return player?.name || '未知玩家'
+}
+
+const getBetTargetName = (targetFighterId) => {
+    if (String(targetFighterId) === String(props.challenger?.id)) return props.challenger?.name || '挑战者'
+    if (String(targetFighterId) === String(props.defender?.id)) return props.defender?.name || '被挑战者'
+    return '未知'
+}
+
+const startCountdown = () => {
+    countdown.value = 5
+    countdownTimer = setInterval(() => {
+        countdown.value--
+        if (countdown.value <= 0) {
+            clearInterval(countdownTimer)
+            countdownTimer = null
+            emit('bothReady', {
+                challenger: props.challenger,
+                defender: props.defender,
+                challengerLobster: store.challengerSelectedLobster || store.challengerLobster,
+                defenderLobster: store.defenderSelectedLobster || store.defenderLobster
+            })
+        }
+    }, 1000)
+}
+
+// ============ 监听 store 阶段变化 ============
 watch(
-    () => props.visible,
-    (newVal) => {
-        if (newVal) {
-            selectedIndex.value = -1
-            hasConfirmed.value = false
-            challengerReady.value = false
-            defenderReady.value = false
-            challengerSelectedLobster.value = null
-            defenderSelectedLobster.value = null
-            setupListeners()
-        } else {
-            cleanupListeners()
+    () => store.arenaPhase,
+    (newPhase) => {
+        if (newPhase === 'betting') {
+            localPhase.value = 'betting'
+        } else if (newPhase === 'ready') {
+            localPhase.value = 'ready'
+            startCountdown()
         }
     }
 )
 
-// 组件挂载时也注册监听器（防止弹窗已打开时没有注册）
-onMounted(() => {
-    if (props.visible) {
-        setupListeners()
+// ============ 弹窗开关 ============
+watch(
+    () => props.visible,
+    (newVal) => {
+        if (newVal) {
+            // 重置所有状态
+            localPhase.value = 'selecting'
+            selectedIndex.value = -1
+            hasConfirmed.value = false
+            store.challengerReady = false
+            store.defenderReady = false
+            store.challengerSelectedLobster = null
+            store.defenderSelectedLobster = null
+            hasBet.value = false
+            betTarget.value = ''
+            countdown.value = 5
+            if (countdownTimer) {
+                clearInterval(countdownTimer)
+                countdownTimer = null
+            }
+            // 生成一致的 battleId
+            const battle = store.arenaBattleQueue[0]
+            currentBattleId = battle ? `${store.roomId}_${battle.slotIndex}` : ''
+        } else {
+            if (countdownTimer) {
+                clearInterval(countdownTimer)
+                countdownTimer = null
+            }
+        }
     }
+)
+
+onMounted(() => {
+    // store 已统一管理 lobsterSelected 监听
 })
 
 onUnmounted(() => {
-    cleanupListeners()
+    if (countdownTimer) {
+        clearInterval(countdownTimer)
+        countdownTimer = null
+    }
 })
 
-// 暴露方法供外部调用（处理对手选择）
-defineExpose({
-    handleOpponentSelected
-})
+const handleOverlayClick = () => {
+    // 点击遮罩层不关闭
+}
 </script>
+
+<style scoped>
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-container {
+    background: #1a1a2e;
+    border-radius: 16px;
+    padding: 24px;
+    width: 90%;
+    max-width: 400px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.modal-title {
+    font-size: 22px;
+    font-weight: bold;
+    color: #e94560;
+    display: block;
+}
+
+.modal-subtitle {
+    font-size: 14px;
+    color: #a0a0b0;
+    margin-top: 8px;
+    display: block;
+}
+
+.battle-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.player-info {
+    flex: 1;
+    text-align: center;
+    padding: 12px;
+    border-radius: 10px;
+    background: #16213e;
+    position: relative;
+}
+
+.player-info.active {
+    border: 2px solid #e94560;
+    box-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
+}
+
+.player-label {
+    font-size: 12px;
+    color: #a0a0b0;
+    display: block;
+}
+
+.player-name {
+    font-size: 16px;
+    font-weight: bold;
+    color: #fff;
+    display: block;
+    margin-top: 4px;
+}
+
+.ready-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #0f3460;
+    color: #4ecca3;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.vs-text {
+    font-size: 18px;
+    font-weight: bold;
+    color: #e94560;
+    margin: 0 10px;
+}
+
+/* Selecting phase */
+.selection-area {
+    margin-top: 10px;
+}
+
+.selection-title {
+    font-size: 14px;
+    color: #a0a0b0;
+    display: block;
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.lobster-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+.lobster-item {
+    background: #16213e;
+    border: 2px solid #0f3460;
+    border-radius: 10px;
+    padding: 12px 16px;
+    text-align: center;
+    cursor: pointer;
+    min-width: 80px;
+    transition: all 0.2s;
+}
+
+.lobster-item.selected {
+    border-color: #e94560;
+    background: rgba(233, 69, 96, 0.15);
+}
+
+.lobster-icon {
+    font-size: 28px;
+}
+
+.lobster-name {
+    font-size: 12px;
+    color: #fff;
+    margin-top: 4px;
+    display: block;
+}
+
+.no-lobster {
+    text-align: center;
+    padding: 20px;
+    color: #a0a0b0;
+}
+
+.spectator-view {
+    text-align: center;
+    padding: 20px;
+}
+
+.spectator-text {
+    font-size: 14px;
+    color: #a0a0b0;
+}
+
+/* Betting phase */
+.betting-area {
+    margin-top: 10px;
+}
+
+.betting-selection .selection-title {
+    margin-bottom: 16px;
+}
+
+.betting-fighters {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.betting-fighter-card {
+    flex: 1;
+    text-align: center;
+    padding: 12px;
+    border-radius: 10px;
+    background: #16213e;
+}
+
+.bf-label {
+    font-size: 12px;
+    color: #a0a0b0;
+    display: block;
+}
+
+.bf-lobster {
+    font-size: 14px;
+    font-weight: bold;
+    color: #fff;
+    display: block;
+    margin: 4px 0 8px;
+}
+
+.bf-select {
+    background: #0f3460;
+    color: #a0a0b0;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.bf-select.selected {
+    background: #e94560;
+    color: #fff;
+}
+
+.bf-select.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.gold-warning {
+    text-align: center;
+    margin: 8px 0;
+    padding: 6px;
+    background: rgba(233, 69, 96, 0.15);
+    border-radius: 6px;
+}
+
+.gold-warning text {
+    font-size: 13px;
+    color: #e94560;
+}
+
+.lobster-preview {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 12px;
+}
+
+.preview-card {
+    flex: 1;
+    text-align: center;
+    padding: 10px;
+    border-radius: 8px;
+    background: #16213e;
+}
+
+.preview-label {
+    font-size: 12px;
+    color: #a0a0b0;
+    display: block;
+}
+
+.preview-lobster {
+    font-size: 14px;
+    font-weight: bold;
+    color: #4ecca3;
+    display: block;
+    margin-top: 4px;
+}
+
+/* Ready phase */
+.ready-area {
+    margin-top: 10px;
+    text-align: center;
+}
+
+.ready-title {
+    font-size: 16px;
+    font-weight: bold;
+    color: #4ecca3;
+    display: block;
+    margin-bottom: 16px;
+}
+
+.bet-results {
+    margin-bottom: 20px;
+}
+
+.bet-result-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    background: #16213e;
+    border-radius: 6px;
+}
+
+.bet-player-name {
+    font-size: 13px;
+    color: #fff;
+}
+
+.bet-detail {
+    font-size: 13px;
+    color: #a0a0b0;
+}
+
+.countdown-text {
+    font-size: 28px;
+    font-weight: bold;
+    color: #e94560;
+    display: block;
+    margin-top: 10px;
+}
+
+/* Actions */
+.modal-actions {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.action-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: bold;
+    border: none;
+    cursor: pointer;
+}
+
+.action-btn[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.confirm-btn {
+    background: #e94560;
+    color: #fff;
+}
+
+.skip-btn {
+    background: #0f3460;
+    color: #a0a0b0;
+}
+</style>

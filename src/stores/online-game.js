@@ -11,6 +11,7 @@ import {
 } from '@utils/slotConstants'
 import { SHRIMP_CATCHING_SLOTS, calculateShrimpCatchingReward, executeShrimpCatching } from '@utils/shrimpCatchingUtils'
 import { createLobster } from '@utils/gameUtils'
+import { getNextLobsterGrade } from '@utils/gameUtils'
 
 const socketService = socketModule.socketService || socketModule
 
@@ -76,6 +77,14 @@ export const useOnlineGameStore = defineStore('online-game', () => {
     // ============ 竞技场状态 ============
     const arenaBattleQueue = ref([])
     const currentArenaBattle = ref(null)
+    const arenaPhase = ref('idle') // 'idle' | 'betting' | 'ready'
+    const challengerLobster = ref(null)
+    const defenderLobster = ref(null)
+    const challengerReady = ref(false)
+    const defenderReady = ref(false)
+    const challengerSelectedLobster = ref(null)
+    const defenderSelectedLobster = ref(null)
+    const spectatorBets = ref({})
 
     // ============ 计算属性 ============
     const myPlayer = computed(() => {
@@ -146,6 +155,12 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         socketService.on('tributeSubmitted', handleGenericUpdate)
         socketService.on('downtownActionExecuted', handleGenericUpdate)
         socketService.on('battleStart', handleBattleStart)
+        socketService.on('lobsterSelected', handleLobsterSelected)
+        socketService.on('arenaBettingStart', handleArenaBettingStart)
+        socketService.on('arenaBettingComplete', handleArenaBettingComplete)
+        socketService.on('betResult', handleBetResult)
+        socketService.on('playerResourceUpdate', handlePlayerResourceUpdate)
+        socketService.on('battleEnded', handleBattleEnded)
         socketService.on('error', (data) => {
             uni.showToast({ title: data.message || '发生错误', icon: 'none' })
         })
@@ -164,7 +179,12 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         currentPhase.value = data.phase || 'placement'
         currentRound.value = data.currentRound || 1
         currentPlayerIndex.value = data.currentPlayerIndex || 0
-        if (data.players) players.value = data.players
+        if (data.players) {
+            players.value = data.players
+            data.players.forEach((p) => {
+                playerStore.updatePlayerResources(p.id, p)
+            })
+        }
         if (data.areas) areas.value = data.areas
         if (data.tributeTasks) tributeTasks.value = data.tributeTasks
         if (data.downtownCards) downtownCards.value = data.downtownCards
@@ -222,6 +242,68 @@ export const useOnlineGameStore = defineStore('online-game', () => {
                 })
             }
         }
+    }
+
+    function handleLobsterSelected(data) {
+        // 忽略自己的选择
+        if (String(data.playerId) === String(playerId.value)) return
+
+        // 根据当前战斗的 betting state 识别 fighter 身份
+        const betting = currentArenaBattle.value
+        if (!betting) return
+
+        if (String(data.playerId) === String(betting.challenger?.id)) {
+            challengerReady.value = true
+            challengerSelectedLobster.value = data.lobster
+        } else if (String(data.playerId) === String(betting.defender?.id)) {
+            defenderReady.value = true
+            defenderSelectedLobster.value = data.lobster
+        }
+    }
+
+    function handleArenaBettingStart(data) {
+        challengerLobster.value = data.challengerLobster
+        defenderLobster.value = data.defenderLobster
+        arenaPhase.value = 'betting'
+        addLog('观战者投注阶段开始', 'info')
+    }
+
+    function handleArenaBettingComplete(data) {
+        spectatorBets.value = data.bets || {}
+        arenaPhase.value = 'ready'
+        addLog('投注阶段结束，即将进入竞技场', 'info')
+    }
+
+    function handleBetResult(data) {
+        const myResult = data.betResults?.[String(playerId.value)]
+        if (myResult?.won) {
+            addLog(`投注成功！获得 ${myResult.reward} 金币`, 'success')
+            playerStore.updatePlayerResources(playerId.value, { coins: myResult.reward })
+        } else if (myResult && !myResult.won) {
+            addLog('投注失败', 'warning')
+        }
+    }
+
+    function handlePlayerResourceUpdate(data) {
+        if (!data.playerId || !data.resources) return
+        playerStore.updatePlayerResources(data.playerId, data.resources)
+    }
+
+    function handleBattleEnded(data) {
+        const { winnerId, upgradeFrom, upgradeTo } = data
+        if (winnerId !== null && upgradeFrom && upgradeTo) {
+            const winner = playerStore.getPlayerById(winnerId)
+            if (winner && winner.lobsters) {
+                const lobster = winner.lobsters.find((l) => l.grade === upgradeFrom)
+                if (lobster) {
+                    lobster.grade = upgradeTo
+                }
+            }
+        }
+    }
+
+    function setArenaPhase(phase) {
+        arenaPhase.value = phase
     }
 
     function updateGameState(data) {
@@ -296,6 +378,10 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         socketService.off('tributeSubmitted')
         socketService.off('downtownActionExecuted')
         socketService.off('battleStart')
+        socketService.off('lobsterSelected')
+        socketService.off('arenaBettingStart')
+        socketService.off('arenaBettingComplete')
+        socketService.off('betResult')
         socketService.off('error')
     }
 
@@ -337,6 +423,14 @@ export const useOnlineGameStore = defineStore('online-game', () => {
 
         arenaBattleQueue.value = []
         currentArenaBattle.value = null
+        arenaPhase.value = 'idle'
+        challengerLobster.value = null
+        defenderLobster.value = null
+        challengerReady.value = false
+        defenderReady.value = false
+        challengerSelectedLobster.value = null
+        defenderSelectedLobster.value = null
+        spectatorBets.value = {}
 
         cleanupListeners()
     }
@@ -499,6 +593,14 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         // 竞技场状态
         arenaBattleQueue,
         currentArenaBattle,
+        arenaPhase,
+        challengerLobster,
+        defenderLobster,
+        challengerReady,
+        defenderReady,
+        challengerSelectedLobster,
+        defenderSelectedLobster,
+        spectatorBets,
 
         // 计算属性
         myPlayer,
@@ -531,6 +633,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         // 竞技场方法
         executeArenaSettlement,
         setCurrentArenaBattle,
-        getAvailableLobsters
+        getAvailableLobsters,
+        setArenaPhase
     }
 })

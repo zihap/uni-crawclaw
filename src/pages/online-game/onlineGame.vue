@@ -253,13 +253,17 @@
         <LobsterSelect
             ref="lobsterSelectRef"
             :visible="showArenaModal"
-            :challenger="currentArenaBattle?.challenger"
-            :defender="currentArenaBattle?.defender"
+            :challenger="onlineGameStore.currentArenaBattle?.challenger"
+            :defender="onlineGameStore.currentArenaBattle?.defender"
             :player-id="onlineGameStore.playerId"
             :room-id="onlineGameStore.roomId"
-            @confirm="handleArenaConfirm"
             @both-ready="handleBothReady"
         />
+
+        <!-- 竞技场弹窗重新打开按钮 -->
+        <view v-if="showArenaReopen" class="arena-reopen-btn" @click="showArenaModal = true">
+            <text>竞技场</text>
+        </view>
     </view>
 </template>
 
@@ -479,8 +483,10 @@ const handleNextPhase = () => {
 // ============ 竞技场战斗逻辑（联机特有） ============
 
 const showArenaModal = ref(false)
-const currentArenaBattle = ref(null)
 const arenaBattleQueue = computed(() => onlineGameStore.arenaBattleQueue)
+const showArenaReopen = computed(() => {
+    return onlineGameStore.arenaPhase !== 'idle' && !showArenaModal.value && arenaBattleQueue.value.length > 0
+})
 
 /**
  * 监听竞技场战斗队列变化
@@ -488,7 +494,12 @@ const arenaBattleQueue = computed(() => onlineGameStore.arenaBattleQueue)
 watch(
     () => arenaBattleQueue.value,
     (queue) => {
-        if (queue.length > 0 && onlineGameStore.currentPhase === 'settlement') {
+        if (
+            queue.length > 0 &&
+            onlineGameStore.currentPhase === 'settlement' &&
+            onlineGameStore.arenaPhase === 'idle'
+        ) {
+            onlineGameStore.setCurrentArenaBattle(0)
             showArenaModal.value = true
         }
     },
@@ -496,17 +507,11 @@ watch(
 )
 
 /**
- * 处理单方龙虾选择确认（只是确认自己的选择）
- */
-const handleArenaConfirm = ({}) => {
-    // 单方确认时不做跳转，等待双方都选择
-}
-
-/**
- * 处理双方都选择完成，进入竞技场
+ * 处理双方都选择完成（含投注完成+倒计时结束），进入竞技场
  */
 const handleBothReady = ({ challenger, defender, challengerLobster, defenderLobster }) => {
     showArenaModal.value = false
+    onlineGameStore.setArenaPhase('idle')
 
     const player1Data = {
         id: challenger.id,
@@ -536,7 +541,7 @@ const handleBothReady = ({ challenger, defender, challengerLobster, defenderLobs
     uni.setStorageSync(storageKey, onlineGameStore.arenaBattleQueue)
 
     uni.navigateTo({
-        url: `/pages/arena/arena?player1=${encodeURIComponent(JSON.stringify(player1Data))}&player2=${encodeURIComponent(JSON.stringify(player2Data))}&roomId=${onlineGameStore.roomId}&playerId=${onlineGameStore.playerId}&challengeSlot=${currentArenaBattle.value?.slotIndex}`
+        url: `/pages/arena/arena?player1=${encodeURIComponent(JSON.stringify(player1Data))}&player2=${encodeURIComponent(JSON.stringify(player2Data))}&roomId=${onlineGameStore.roomId}&playerId=${onlineGameStore.playerId}&challengeSlot=${onlineGameStore.currentArenaBattle?.slotIndex}`
     })
 }
 
@@ -576,3 +581,30 @@ onUnmounted(() => {
     onlineGameStore.cleanupListeners()
 })
 </script>
+
+<style scoped>
+.arena-reopen-btn {
+    position: fixed;
+    bottom: 120px;
+    right: 20px;
+    background: #e94560;
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 24px;
+    font-size: 15px;
+    font-weight: bold;
+    z-index: 999;
+    box-shadow: 0 4px 12px rgba(233, 69, 96, 0.4);
+    animation: arena-pulse 2s ease-in-out infinite;
+}
+
+@keyframes arena-pulse {
+    0%,
+    100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.08);
+    }
+}
+</style>

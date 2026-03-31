@@ -561,6 +561,37 @@ export const useBattleStore = defineStore('battle', () => {
         initiativeDice.value = { p1: null, p2: null }
     }
 
+    // ============ battleAction 事件处理 ============
+    let _onRewardSelected = null
+
+    function handleBattleAction(data) {
+        if (!data.battleData) return
+
+        // 跳过自己发送的消息回显
+        if (data.senderId !== myPlayerIndex.value) {
+            updateFromSync(data.battleData)
+        }
+
+        // 监听奖励选择完成，通过回调通知外部
+        if (data.battleData.lastAction === 'rewardSelected') {
+            const winnerId = data.battleData.winner?.id
+            const myPlayerId = battleData.value?.players?.[myPlayerIndex.value]?.id
+            if (winnerId === myPlayerId && _onRewardSelected) {
+                _onRewardSelected()
+            }
+        }
+    }
+
+    function setupBattleActionListener(onRewardSelected) {
+        _onRewardSelected = onRewardSelected || null
+        socketService.on('battleAction', handleBattleAction)
+    }
+
+    function cleanupBattleActionListener() {
+        socketService.off('battleAction')
+        _onRewardSelected = null
+    }
+
     return {
         battleData,
         myPlayerIndex,
@@ -582,6 +613,8 @@ export const useBattleStore = defineStore('battle', () => {
         quitBattle,
         addLog,
         updateFromSync,
-        resetBattle
+        resetBattle,
+        setupBattleActionListener,
+        cleanupBattleActionListener
     }
 })
