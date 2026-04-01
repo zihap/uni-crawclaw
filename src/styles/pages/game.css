@@ -609,6 +609,11 @@
     transform: translateY(-2px);
 }
 
+.lobster-card.selected {
+    border-color: var(--color-primary);
+    background: rgba(102, 126, 234, 0.1);
+}
+
 .lobster-card.max-royal {
     cursor: not-allowed;
     opacity: 0.7;
@@ -694,6 +699,9 @@
     font-size: 1.5rem;
 }
 
+/* ============================
+   单选/多选框通用组件样式 (修复无选中效果)
+============================ */
 .checkbox-wrapper {
     display: flex;
     align-items: center;
@@ -733,6 +741,49 @@
     content: '✓';
     color: white;
     font-size: 0.8rem;
+}
+
+/* 修复：追加单选钮专属样式 */
+.custom-radio {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid var(--color-border-strong);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.custom-radio.checked {
+    border-color: var(--color-primary);
+}
+
+.custom-radio.checked::after {
+    content: '';
+    width: 0.625rem;
+    height: 0.625rem;
+    background: var(--color-primary);
+    border-radius: 50%;
+}
+
+.custom-radio-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border-default);
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+/* 修复：追加激活边框的高亮样式 */
+.custom-radio-wrap.active {
+    border-color: var(--color-primary);
+    background: rgba(102, 126, 234, 0.05);
 }
 
 .checkbox-text {
@@ -907,7 +958,7 @@
 }
 
 /* ============================
-   海鲜市场独有样式 (新增)
+   海鲜市场独有样式
 ============================ */
 .market-display-board {
     background: var(--color-bg-tertiary);
@@ -1137,6 +1188,171 @@
     border-radius: 0.5rem;
 }
 
+/* ============================
+   上供区独有样式
+============================ */
+.taverns-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.tavern-box {
+    background: var(--color-bg-tertiary);
+    border: 2px solid var(--color-border-default);
+    border-radius: 0.75rem;
+    padding: 1rem;
+}
+
+.tavern-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px dashed var(--color-border-default);
+}
+
+.tavern-name {
+    font-size: 1.125rem;
+    font-weight: bold;
+    color: var(--color-primary-dark);
+}
+
+.tavern-status {
+    font-size: 0.75rem;
+    color: var(--color-success);
+    background: rgba(76, 175, 80, 0.1);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-weight: bold;
+}
+
+.tribute-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.tribute-card {
+    background: var(--color-bg-primary);
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-border-light);
+}
+
+.tc-name {
+    font-weight: bold;
+    font-size: 1rem;
+    color: var(--color-text-primary);
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.tc-desc {
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.tc-req {
+    font-size: 0.8125rem;
+    color: var(--color-error);
+    font-weight: 500;
+}
+
+.tc-rew {
+    font-size: 0.8125rem;
+    color: var(--color-success);
+    font-weight: 500;
+}
+
+/* 裸交面板样式 */
+.naked-mode-panel {
+    background: rgba(255, 152, 0, 0.05);
+    border: 2px dashed var(--color-warning);
+    border-radius: 0.75rem;
+}
+
+.naked-intro {
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.warn-text {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: var(--color-error);
+    display: block;
+}
+
+.sub-text {
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+}
+
+/* 裸交面板酒楼选择 */
+.tavern-select-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.tavern-select-btn {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border-default);
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.tavern-select-btn.active {
+    border-color: var(--color-primary);
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.tavern-select-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: var(--color-bg-tertiary);
+}
+
+.ts-name {
+    font-size: 0.875rem;
+    font-weight: bold;
+    color: var(--color-text-primary);
+}
+
+.ts-status {
+    font-size: 0.6875rem;
+    color: var(--color-text-secondary);
+}
+
+.ts-lock {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: var(--color-error);
+    color: white;
+    font-size: 0.6rem;
+    padding: 0.1rem 0.3rem;
+    border-bottom-left-radius: 0.5rem;
+}
+
+.reward-options {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
 /* 按钮与通用底部 */
 .modal-actions {
     display: flex;
@@ -1161,79 +1377,79 @@
     .game-container {
         padding-bottom: 10rem;
     }
-
+    
     .game-header {
         padding: 0.75rem 1rem;
     }
-
+    
     .round-number {
         font-size: 1.125rem;
     }
-
+    
     .phase-label {
         font-size: 1rem;
     }
-
+    
     .next-btn {
         padding: 0.5rem 1rem;
         font-size: 0.75rem;
     }
-
+    
     .players-bar {
         padding: 0.75rem;
     }
-
+    
     .player-item {
         min-width: 6.25rem;
         padding: 0.75rem;
     }
-
+    
     .main-board {
         padding: 0.75rem;
         max-height: calc(100vh - 20rem);
     }
-
+    
     .board-section {
         padding: 1rem;
         margin-bottom: 0.75rem;
     }
-
+    
     .slot {
         min-width: 6rem;
         padding: 0.75rem 0.5rem;
     }
-
+    
     .current-player-panel {
         bottom: 5.5rem;
         left: 0.75rem;
         right: 0.75rem;
         padding: 0.75rem;
     }
-
+    
     .panel-resources {
         gap: 0.5rem;
     }
-
+    
     .resource-item {
         padding: 0.5rem;
     }
-
+    
     .log-header {
         padding: 0.625rem 1rem;
     }
-
+    
     .log-content.expanded {
         height: 12rem;
     }
-
+    
     .log-item {
         padding: 0.5rem 1rem;
     }
-
+    
     .lobster-grid {
         grid-template-columns: repeat(2, 1fr);
     }
-
+    
     .slots-container {
         grid-template-columns: repeat(4, 1fr);
     }

@@ -109,9 +109,9 @@
             <view class="board-section">
                 <view class="section-header">
                     <text class="section-title">上供区</text>
-                    <text class="section-desc">放置里长完成上供任务</text>
+                    <text class="section-desc">结交酒楼势力，争夺席位</text>
                 </view>
-                <view class="area-slots">
+                <view class="area-slots tribute-slots">
                     <view v-for="i in 6" :key="i" :class="['slot', {
                         occupied: isSlotOccupied('tribute', i - 1),
                         disabled: !canPlaceOnSlot('tribute', i - 1),
@@ -135,7 +135,7 @@
                 <view class="area-slots">
                     <view v-for="i in 3" :key="i" :class="['slot', {
                         occupied: isSlotOccupied('marketplace', i - 1),
-                        disabled: !canPlaceOnSlot('marketplace', i - 1)
+                        disabled: !canPlaceOnSlot('marketplace', i - 1) || !isMarketplaceAvailable(i)
                     }]" :style="getSlotStyle('marketplace', i - 1)" @click="handleSlotClick('marketplace', i - 1)">
                         <view v-if="getSlotOccupantLabel('marketplace', i - 1)" class="slot-occupant-badge">
                             {{ getSlotOccupantLabel('marketplace', i - 1) }}
@@ -264,8 +264,28 @@
                                 </button>
                             </view>
 
+                            <!-- 修复：升级皇家额外奖励选择（使用 custom-radio 和绑定 class 实现高亮） -->
+                            <view class="req-title" style="margin-top: 1rem;">请选择升级皇家奖励：</view>
+                            <view class="reward-options">
+                                <view class="custom-radio-wrap"
+                                      :class="{'active': breedingState.royalRewardType === 'de'}"
+                                      @click="breedingState.royalRewardType = 'de'">
+                                    <view class="custom-radio"
+                                          :class="{'checked': breedingState.royalRewardType === 'de'}"></view>
+                                    获得 1 德
+                                </view>
+                                <view class="custom-radio-wrap"
+                                      :class="{'active': breedingState.royalRewardType === 'wang'}"
+                                      @click="breedingState.royalRewardType = 'wang'">
+                                    <view class="custom-radio"
+                                          :class="{'checked': breedingState.royalRewardType === 'wang'}"></view>
+                                    获得 1 望
+                                </view>
+                            </view>
+
                             <!-- 如果本回合还有剩余称号卡，玩家升到皇家必须强制获取 -->
-                            <view v-if="gameStore.gameTitleCards.length > 0" class="title-selection">
+                            <view v-if="gameStore.gameTitleCards.length > 0" class="title-selection"
+                                  style="margin-top: 1rem;">
                                 <text class="req-title">请挑选一个霸气称号：</text>
                                 <view class="title-cards">
                                     <view v-for="card in gameStore.gameTitleCards" :key="card.id"
@@ -317,9 +337,8 @@
                     </view>
 
                     <!-- 第二步：展示对应选项 (针对非自动执行且为exchange类型的兑换卡，加入空数组安全兜底) -->
-                    <view
-                        v-if="marketplaceState.selectedCard && !marketplaceState.selectedCard.auto && marketplaceState.selectedCard.action?.type === 'exchange'"
-                        class="mp-options-panel animate-fade-in">
+                    <view v-if="marketplaceState.selectedCard && !marketplaceState.selectedCard.auto && marketplaceState.selectedCard.action?.type === 'exchange'"
+                          class="mp-options-panel animate-fade-in">
                         <text class="section-label">请选择执行方案：</text>
                         <view class="mp-options">
                             <view v-for="(opt, idx) in (marketplaceState.selectedCard.action?.options || [])" :key="idx"
@@ -348,7 +367,7 @@
             </view>
         </view>
 
-        <!-- 海鲜市场结算弹窗 (新增) -->
+        <!-- 海鲜市场结算弹窗 -->
         <view class="modal-overlay" v-if="gameStore.pendingSeafoodMarket">
             <view class="modal-content seafood-market-modal">
                 <view class="modal-header">
@@ -465,8 +484,7 @@
                                 <text class="slot-rew" v-else>送: {{ formatHireReward(slot.reward) }}</text>
 
                                 <view class="status-mask" v-if="gameStore.hiredLiZhangSlots[idx] !== null">
-                                    <text
-                                        v-if="gameStore.hiredLiZhangSlots[idx] === currentPendingSeafoodMarket.player.id">
+                                    <text v-if="gameStore.hiredLiZhangSlots[idx] === currentPendingSeafoodMarket.player.id">
                                         已归你
                                     </text>
                                     <text v-else>已被占</text>
@@ -484,6 +502,120 @@
             </view>
         </view>
 
+        <!-- 上供区结算弹窗 -->
+        <view class="modal-overlay" v-if="gameStore.pendingTribute">
+            <view class="modal-content tribute-modal">
+                <view class="modal-header">
+                    <view class="modal-title-group">
+                        <text class="modal-title">{{ currentPendingTribute.player.name }} 的上供行动</text>
+                        <text class="modal-subtitle">请选择一家酒楼并支付资源，或者选择裸交</text>
+                    </view>
+                </view>
+
+                <!-- 常规上供卡列表面板 -->
+                <view class="modal-body" v-if="!tributeState.isNakedMode">
+                    <view class="taverns-list">
+                        <view v-for="tavern in gameStore.taverns" :key="tavern.id" class="tavern-box">
+                            <view class="tavern-header">
+                                <text class="tavern-name">🏮 {{ tavern.name }}</text>
+                                <text class="tavern-status"
+                                      v-if="tavern.occupants.includes(currentPendingTribute.player.id)">已占席位
+                                </text>
+                            </view>
+
+                            <view v-if="tavern.cards.length === 0" class="empty-hint">上供卡已被抢空</view>
+
+                            <view class="tribute-cards">
+                                <view v-for="card in tavern.cards" :key="card.id" class="tribute-card">
+                                    <text class="tc-name">{{ card.name }}</text>
+                                    <text class="tc-desc">{{ card.effectDesc }}</text>
+                                    <view class="tc-req">需求：{{ formatTributeReq(card.requirements) }}</view>
+                                    <view class="tc-rew">奖励：{{ formatTributeRew(card.reward) }}</view>
+
+                                    <button class="btn btn-primary btn-sm mt-2"
+                                            :disabled="!checkTributeReq(card.requirements, currentPendingTribute.player) || tavern.occupants.includes(currentPendingTribute.player.id)"
+                                            @click="confirmTributeCard(tavern.id, card.id)">
+                                        缴纳上供
+                                    </button>
+                                </view>
+                            </view>
+                        </view>
+                    </view>
+                </view>
+
+                <!-- 裸交模式面板 -->
+                <view class="modal-body naked-mode-panel animate-fade-in" v-else>
+                    <view class="naked-intro">
+                        <text class="warn-text">🔥 裸交模式 🔥</text>
+                        <text class="sub-text">
+                            如果你无法满足任何酒楼的卡牌要求，你可以选择献祭一只【三品及以上】的龙虾强行上供并抢夺一家酒楼的席位！
+                        </text>
+                    </view>
+
+                    <view class="section-label">1. 请选择要强行献祭的龙虾：</view>
+                    <view class="lobster-grid">
+                        <view v-for="(lobster, index) in getValidNakedLobsters(currentPendingTribute.player)"
+                              :key="lobster.id"
+                              class="lobster-card"
+                              :class="{'selected': tributeState.nakedLobsterIndex === lobster.originalIndex}"
+                              @click="tributeState.nakedLobsterIndex = lobster.originalIndex">
+                            <text class="lobster-icon">🦞</text>
+                            <text class="lobster-grade">{{ getLobsterGradeName(lobster.grade) }}</text>
+                            <text class="lobster-title" v-if="lobster.title">{{ lobster.title.name }}</text>
+                        </view>
+                    </view>
+                    <view v-if="getValidNakedLobsters(currentPendingTribute.player).length === 0"
+                          class="error-hint mt-2">
+                        你连一只三品以上的龙虾都没有，怎么好意思裸交？
+                    </view>
+
+                    <view class="section-label mt-4">2. 请选择你要抢占席位的酒楼：</view>
+                    <view class="tavern-select-grid">
+                        <view v-for="t in gameStore.taverns" :key="t.id"
+                              class="tavern-select-btn"
+                              :class="{ 'active': tributeState.nakedTavernId === t.id, 'disabled': t.occupants.includes(currentPendingTribute.player.id) }"
+                              @click="!t.occupants.includes(currentPendingTribute.player.id) && (tributeState.nakedTavernId = t.id)">
+                            <text class="ts-name">{{ t.name }}</text>
+                            <text class="ts-status">席位: {{ t.occupants.length }}/4</text>
+                            <text v-if="t.occupants.includes(currentPendingTribute.player.id)" class="ts-lock">已占
+                            </text>
+                        </view>
+                    </view>
+
+                    <view class="section-label mt-4">3. 请选择保底奖励：</view>
+                    <!-- 修复：裸交模式下的奖励选择，也使用绑定 class 实现高亮 -->
+                    <view class="reward-options">
+                        <view class="custom-radio-wrap" :class="{'active': tributeState.nakedRewardType === 'de'}"
+                              @click="tributeState.nakedRewardType = 'de'">
+                            <view class="custom-radio"
+                                  :class="{'checked': tributeState.nakedRewardType === 'de'}"></view>
+                            获得 1 德
+                        </view>
+                        <view class="custom-radio-wrap" :class="{'active': tributeState.nakedRewardType === 'wang'}"
+                              @click="tributeState.nakedRewardType = 'wang'">
+                            <view class="custom-radio"
+                                  :class="{'checked': tributeState.nakedRewardType === 'wang'}"></view>
+                            获得 1 望
+                        </view>
+                    </view>
+                </view>
+
+                <view class="modal-footer">
+                    <view class="modal-actions" v-if="!tributeState.isNakedMode">
+                        <button class="btn btn-ghost" @click="tributeState.isNakedMode = true">强行裸交</button>
+                        <button class="btn btn-secondary" @click="skipTributeAction">放弃上供</button>
+                    </view>
+                    <view class="modal-actions" v-else>
+                        <button class="btn btn-ghost" @click="tributeState.isNakedMode = false">返回卡牌列表</button>
+                        <button class="btn btn-warning"
+                                :disabled="tributeState.nakedLobsterIndex === -1 || tributeState.nakedTavernId === ''"
+                                @click="confirmNakedTribute">确认献祭并抢席位
+                        </button>
+                    </view>
+                </view>
+            </view>
+        </view>
+
     </view>
 </template>
 
@@ -493,6 +625,7 @@ import { useGameStore, GAME_PHASES, LOBSTER_GRADES } from '@stores/game.js'
 import { DEFAULT_SLOT_STYLE, getOccupiedSlotStyle, PLAYER_COLORS } from '@utils/slotConstants.js'
 import { getLobsterGradeName, getNextLobsterGrade } from '@utils/gameUtils.js'
 import {HIRE_LIZHANG_SLOTS, getMarketPrices} from '@utils/seafoodMarketUtils.js'
+import {TRIBUTE_SLOTS} from '@utils/tributeUtils.js'
 
 const gameStore = useGameStore()
 const showLog = ref(false)
@@ -501,13 +634,17 @@ const showLog = ref(false)
 const isPlacementPhase = computed(() => gameStore.currentPhase === GAME_PHASES.PLACEMENT)
 const currentPlacementPlayerName = computed(() => gameStore.currentPlacementPlayer?.name || '')
 
-// 闹市区 1/2/3 号分别在 2/3/4 回合可用，即 currentRound >= i + 1 即可
+// 闹市区 1/2/3 号分别在 2/3/4 回合可用
 const isMarketplaceAvailable = (i) => gameStore.currentRound >= i + 1
 
 const canPlaceOnSlot = (area, slotIndex) => {
     if (!isPlacementPhase.value || gameStore.isPlacementComplete || isSlotOccupied(area, slotIndex)) return false
-    // 判断闹市区是否解锁
     if (area === 'marketplace' && !isMarketplaceAvailable(slotIndex + 1)) return false
+    // 判断上供区是否解锁 (3号格(idx=2) 和 6号挑战格(idx=5) 需要第4回合开放)
+    if (area === 'tribute') {
+        const slotConf = TRIBUTE_SLOTS[slotIndex];
+        if (slotConf && gameStore.currentRound < slotConf.availableFrom) return false;
+    }
     return true
 }
 
@@ -590,11 +727,18 @@ const handleSlotClick = (area, slotIndex) => {
 
     // 拦截未开放的闹市区行动格强行点击
     if (area === 'marketplace' && !isMarketplaceAvailable(slotIndex + 1)) {
-        showToast(`该行动格在第${slotIndex + 2}回合才开放`)
+        showToast(`该行动格在第${slotIndex + 2}回合才开放`);
         return
     }
 
-    // 如果行动格已被占用，显示占用者信息
+    if (area === 'tribute') {
+        const slotConf = TRIBUTE_SLOTS[slotIndex];
+        if (slotConf && gameStore.currentRound < slotConf.availableFrom) {
+            showToast(`该行动格在第${slotConf.availableFrom}回合才开放`);
+            return;
+        }
+    }
+
     if (isSlotOccupied(area, slotIndex)) {
         const status = gameStore.getSlotStatus(area, slotIndex)
         showToast(`该行动格已被${gameStore.players[status.playerId]?.name || '未知玩家'}占用`)
@@ -618,8 +762,9 @@ const currentPendingBreeding = computed(() => gameStore.pendingBreeding)
 const breedingState = reactive({
     lobsterIndex: -1,
     useSeaweed: false,
-    royalCostType: '', // 'cage' | 'coin'
-    selectedTitleId: ''
+    royalCostType: '',
+    selectedTitleId: '',
+    royalRewardType: 'de'
 })
 
 const targetLobster = computed(() => {
@@ -636,10 +781,8 @@ const isSeaweedUseful = computed(() => {
 // 目标推演：免费一品 + 选配海草额外一品
 const projectedGrade = computed(() => {
     if (!targetLobster.value) return null
-    let grade = getNextLobsterGrade(targetLobster.value.grade) // 免费一品
-    if (breedingState.useSeaweed) {
-        grade = getNextLobsterGrade(grade) // 海草额外一品
-    }
+    let grade = getNextLobsterGrade(targetLobster.value.grade)
+    if (breedingState.useSeaweed) grade = getNextLobsterGrade(grade)
     return grade
 })
 
@@ -667,21 +810,18 @@ const selectLobsterForBreeding = (index) => {
     breedingState.useSeaweed = false
     breedingState.royalCostType = ''
     breedingState.selectedTitleId = ''
+    breedingState.royalRewardType = 'de'
 }
 
 const toggleSeaweed = () => {
     // 如果海草无效（已达一品升皇家阶段），禁止点击
     if (!isSeaweedUseful.value) {
-        showToast('已达满级，无需消耗海草')
+        showToast('已达满级，无需消耗海草');
         return
     }
-
     const player = currentPendingBreeding.value.player
-    if (player.seaweed >= 1 || breedingState.useSeaweed) {
-        breedingState.useSeaweed = !breedingState.useSeaweed
-    } else {
-        showToast('海草数量不足')
-    }
+    if (player.seaweed >= 1 || breedingState.useSeaweed) breedingState.useSeaweed = !breedingState.useSeaweed
+    else showToast('海草数量不足')
 }
 
 const cancelBreedingAction = () => {
@@ -695,26 +835,34 @@ const confirmBreedingAction = () => {
     let logMsg = `${player.name}将龙虾从[${getLobsterGradeName(lobster.grade)}]培养至[${getLobsterGradeName(projectedGrade.value)}]，`
 
     if (breedingState.useSeaweed) {
-        player.seaweed -= 1
+        player.seaweed -= 1;
         logMsg += `消耗1海草，`
     }
 
     if (isUpgradingToRoyal.value) {
         if (breedingState.royalCostType === 'cage') {
-            player.cages -= 1
+            player.cages -= 1;
             logMsg += `消耗1虾笼支付皇家费用，`
         } else if (breedingState.royalCostType === 'coin') {
-            player.coins -= 3
+            player.coins -= 3;
             logMsg += `消耗3金币支付皇家费用，`
         }
+
         if (breedingState.selectedTitleId) {
             const titleIndex = gameStore.gameTitleCards.findIndex(c => c.id === breedingState.selectedTitleId)
             if (titleIndex > -1) {
-                // UI层直接切走被选中的称号卡，后续玩家只能在剩下的卡里选
                 const titleCard = gameStore.gameTitleCards.splice(titleIndex, 1)[0]
                 lobster.title = titleCard
                 logMsg += `并夺得霸气称号【${titleCard.name}】`
             }
+        }
+
+        if (breedingState.royalRewardType === 'de') {
+            player.de += 1
+            logMsg += `，额外获得 1 德`
+        } else if (breedingState.royalRewardType === 'wang') {
+            player.wang += 1
+            logMsg += `，额外获得 1 望`
         }
     }
 
@@ -724,26 +872,18 @@ const confirmBreedingAction = () => {
     gameStore.addLog(logMsg, 'success')
     currentPendingBreeding.value.actionCount -= 1
     cancelBreedingAction()
-
-    if (currentPendingBreeding.value.actionCount <= 0) {
-        finishBreeding()
-    }
+    if (currentPendingBreeding.value.actionCount <= 0) finishBreeding()
 }
 
 const finishBreeding = () => {
-    if (currentPendingBreeding.value && currentPendingBreeding.value.resolve) {
-        currentPendingBreeding.value.resolve()
-    }
+    if (currentPendingBreeding.value && currentPendingBreeding.value.resolve) currentPendingBreeding.value.resolve()
 }
 
 // ==========================================
 // 闹市区交互逻辑 (Marketplace Actions)
 // ==========================================
 const currentPendingMarketplace = computed(() => gameStore.pendingMarketplace)
-const marketplaceState = reactive({
-    selectedCard: null,
-    selectedOptionIndex: 0
-})
+const marketplaceState = reactive({selectedCard: null, selectedOptionIndex: 0})
 
 const selectMarketplaceCard = (card) => {
     if (card.usedThisRound) return
@@ -751,11 +891,11 @@ const selectMarketplaceCard = (card) => {
     marketplaceState.selectedOptionIndex = 0
 }
 
-// 通用的选项文本格式化方法
 const getResourceName = (key) => {
     const map = {coins: '金币', seaweed: '海草', cages: '虾笼', lobsters: '只龙虾', de: '德', wang: '望'}
     return map[key] || key
 }
+
 const formatOptionText = (opt) => {
     if (!opt || !opt.cost || !opt.reward) return ''
     const costStrs = Object.entries(opt.cost).map(([k, v]) => `${v} ${getResourceName(k)}`)
@@ -767,12 +907,11 @@ const formatOptionText = (opt) => {
 const canConfirmMarketplace = computed(() => {
     if (!marketplaceState.selectedCard) return false
     const card = marketplaceState.selectedCard
-    const player = currentPendingMarketplace.value?.player // 添加可选链防爆
-
+    const player = currentPendingMarketplace.value?.player
     if (!player) return false
 
     if (!card.auto && card.action?.type === 'exchange') {
-        const options = card.action?.options || [] // 兜底处理
+        const options = card.action?.options || []
         const opt = options[marketplaceState.selectedOptionIndex]
         if (!opt || !opt.cost) return false
 
@@ -807,24 +946,17 @@ const skipMarketplaceAction = () => {
 // 海鲜市场交互逻辑 (Seafood Market)
 // ==========================================
 const currentPendingSeafoodMarket = computed(() => gameStore.pendingSeafoodMarket)
-const smTab = ref('trade') // 'trade' | 'hire' 切换控制
+const smTab = ref('trade')
 
-// 动态计算当前物价
-const currentMarketPrices = computed(() => {
-    return getMarketPrices(gameStore.seafoodMarketLobsters)
-})
+const currentMarketPrices = computed(() => getMarketPrices(gameStore.seafoodMarketLobsters))
 
-// 计算摊位填充逻辑 (从右到左填满，0-7分别对应1~3号摊位左至右的格子。如果有 N 只虾，那么填满最后 N 个格子)
-const isSpaceFilled = (overallIndex) => {
-    return overallIndex >= (8 - gameStore.seafoodMarketLobsters)
-}
+const isSpaceFilled = (overallIndex) => overallIndex >= (8 - gameStore.seafoodMarketLobsters)
 
 const doSeafoodTrade = (actionType) => {
     if (!currentPendingSeafoodMarket.value) return
     gameStore.processSeafoodMarketAction(currentPendingSeafoodMarket.value.player, actionType)
 }
 
-// 雇佣相关方法
 const formatHireReward = (reward) => {
     if (reward.seaweed) return `${reward.seaweed}海草`
     if (reward.lobster) return `1只${getLobsterGradeName(LOBSTER_GRADES[reward.lobster.toUpperCase()] || LOBSTER_GRADES.NORMAL)}`
@@ -844,14 +976,14 @@ const canHireAny = computed(() => {
 const canHireSlot = (idx) => {
     if (!canHireAny.value) return false
     const slot = HIRE_LIZHANG_SLOTS[idx]
-    if (gameStore.currentRound < slot.availableFrom) return false // 未开放
-    if (gameStore.hiredLiZhangSlots[idx] !== null) return false // 已被占
+    if (gameStore.currentRound < slot.availableFrom) return false
+    if (gameStore.hiredLiZhangSlots[idx] !== null) return false
     return true
 }
 
 const doSeafoodHire = (idx) => {
     if (!canHireSlot(idx)) {
-        showToast('无法雇佣该位置')
+        showToast('无法雇佣该位置');
         return
     }
     gameStore.processSeafoodMarketAction(currentPendingSeafoodMarket.value.player, 'hire', idx)
@@ -864,12 +996,114 @@ const skipSeafoodMarketAction = () => {
     }
 }
 
+// ==========================================
+// 上供区交互逻辑 (Tribute Actions)
+// ==========================================
+const currentPendingTribute = computed(() => gameStore.pendingTribute)
+
+const tributeState = reactive({
+    isNakedMode: false,
+    nakedLobsterIndex: -1,
+    nakedTavernId: '',
+    nakedRewardType: 'de'
+})
+
+// 格式化上供区卡牌资源需求
+const formatTributeReq = (req) => {
+    const parts = []
+    if (req.coins) parts.push(`${req.coins}金币`)
+    if (req.seaweed) parts.push(`${req.seaweed}海草`)
+    if (req.cages) parts.push(`${req.cages}虾笼`)
+    if (req.lobsters) {
+        for (const [gradeKey, count] of Object.entries(req.lobsters)) {
+            const gradeName = getLobsterGradeName(LOBSTER_GRADES[gradeKey.toUpperCase()] || LOBSTER_GRADES.NORMAL)
+            parts.push(`${count}只${gradeName}`)
+        }
+    }
+    return parts.join(' + ') || '无要求'
+}
+
+const formatTributeRew = (rew) => {
+    const parts = []
+    if (rew.de) parts.push(`+${rew.de}德`)
+    if (rew.wang) parts.push(`+${rew.wang}望`)
+    return parts.join('，') || '无附加点数'
+}
+
+// 检查玩家是否有足够资源上供该卡
+const checkTributeReq = (req, player) => {
+    if (!player) return false;
+    if (req.coins && player.coins < req.coins) return false;
+    if (req.seaweed && player.seaweed < req.seaweed) return false;
+    if (req.cages && player.cages < req.cages) return false;
+
+    if (req.lobsters) {
+        let tempLobsters = [...player.lobsters];
+        for (const [gradeKey, count] of Object.entries(req.lobsters)) {
+            let foundCount = 0;
+            for (let i = 0; i < count; i++) {
+                const reqGradeVal = Object.values(LOBSTER_GRADES).indexOf(LOBSTER_GRADES[gradeKey.toUpperCase()]);
+                const matchIdx = tempLobsters.findIndex(l => Object.values(LOBSTER_GRADES).indexOf(l.grade) >= reqGradeVal);
+                if (matchIdx !== -1) {
+                    foundCount++;
+                    tempLobsters.splice(matchIdx, 1);
+                }
+            }
+            if (foundCount < count) return false;
+        }
+    }
+    return true;
+}
+
+const confirmTributeCard = (tavernId, cardId) => {
+    if (currentPendingTribute.value) {
+        currentPendingTribute.value.resolve({
+            isNaked: false,
+            tavernId,
+            cardId
+        });
+    }
+}
+
+// 裸交：筛选三品以上的龙虾
+const getValidNakedLobsters = (player) => {
+    if (!player) return [];
+    return player.lobsters.map((l, index) => ({...l, originalIndex: index}))
+            .filter(l => l.grade === LOBSTER_GRADES.GRADE3 || l.grade === LOBSTER_GRADES.GRADE2 || l.grade === LOBSTER_GRADES.GRADE1 || l.grade === LOBSTER_GRADES.ROYAL);
+}
+
+const confirmNakedTribute = () => {
+    if (currentPendingTribute.value) {
+        currentPendingTribute.value.resolve({
+            isNaked: true,
+            tavernId: tributeState.nakedTavernId,
+            nakedLobsterIndex: tributeState.nakedLobsterIndex,
+            nakedRewardType: tributeState.nakedRewardType
+        });
+
+        // 恢复默认状态
+        tributeState.isNakedMode = false;
+        tributeState.nakedLobsterIndex = -1;
+        tributeState.nakedTavernId = '';
+    }
+}
+
+const skipTributeAction = () => {
+    if (currentPendingTribute.value) {
+        currentPendingTribute.value.resolve(null);
+    }
+}
+
 // ============ 工具方法 ============
 const getPhaseText = () => `${gameStore.getPhaseText()}阶段`
 const getShrimpCatchingSlotDesc = (i) => ['1虾笼,夺起始,1次捕虾', '1虾笼,2次捕虾', '1金币,3次捕虾', '4次捕虾'][i - 1]
 const getSeafoodMarketSlotDesc = (i) => ['1金币,2次交易', '3次交易', '1金币,3次交易', '2金币,3次交易'][i - 1]
 const getBreedingSlotDesc = (i) => ['1草,1次培养', '2次培养', '1金币,2次培养', '3次培养'][i - 1]
-const getTributeSlotDesc = (i) => i <= 3 ? (i === 3 ? '第4回合可用,1次上供' : '1次上供') : `挑战${i - 3}号位,1次上供`
+// 上供区 1/2/3 号是常规，4/5/6 是挑战
+const getTributeSlotDesc = (i) => {
+    const conf = TRIBUTE_SLOTS[i - 1];
+    return conf ? conf.description : '';
+}
 const getMarketplaceSlotDesc = (i) => ['第2回合可用,1次闹市', '1金币,第3回合可用,1次闹市', '2金币,第4回合可用,1次闹市'][i - 1]
 
 const handleNextPhase = async () => {

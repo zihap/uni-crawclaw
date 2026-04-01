@@ -91,67 +91,255 @@
     "tributeCards": [
         {
             "id": "tribute_1",
-            "name": "王爷",
+            "name": "上供指令1",
             "requirements": {
-                "lobsters": { "grade1": 1 },
-                "seaweed": 2
+                "lobsters": {
+                    "grade2": 1
+                },
+                "coins": 2
             },
-            "reward": { "de": 3 },
-            "aura": {
-                "type": "doubleWinReward",
-                "description": "龙虾斗场获胜奖励翻倍"
+            "reward": {
+                "wang": 2
             },
-            "bonusScore": 0
+            "effectDesc": "获得卡片时执行3次培养龙虾升级",
+            "effectType": "instant_breed_3"
         },
         {
             "id": "tribute_2",
-            "name": "知府",
+            "name": "上供指令2",
             "requirements": {
-                "lobsters": { "grade3": 2 },
-                "coins": 5
+                "seaweed": 1,
+                "cages": 2
             },
-            "reward": { "wang": 2 },
-            "aura": {
-                "type": "bonusGold",
-                "value": 1,
-                "description": "每回合额外获得1金币"
+            "reward": {
+                "de": 2
             },
-            "bonusScore": 2
+            "effectDesc": "每次培养升级龙虾可以额外升1品",
+            "effectType": "aura_breed_bonus"
         },
         {
             "id": "tribute_3",
-            "name": "县令",
+            "name": "上供指令3",
             "requirements": {
-                "lobsters": { "grade3": 1 },
-                "seaweed": 3
+                "coins": 6
             },
-            "reward": { "de": 2 },
-            "aura": null,
-            "bonusScore": 3
+            "reward": {
+                "wang": 2
+            },
+            "effectDesc": "一回合1次，你的里长可以改为执行相邻行动格的行动并拿取相邻格的资源",
+            "effectType": "aura_adjacent_action"
         },
         {
             "id": "tribute_4",
-            "name": "乡绅",
+            "name": "上供指令4",
             "requirements": {
-                "coins": 10
+                "lobsters": {
+                    "royal": 1
+                },
+                "cages": 1
             },
-            "reward": { "wang": 3 },
-            "aura": null,
-            "bonusScore": 1
+            "reward": {
+                "de": 3
+            },
+            "effectDesc": "指定龙虾或者虾笼，所有其他玩家需要弃置1个对应的资源",
+            "effectType": "instant_discard_attack"
         },
         {
             "id": "tribute_5",
-            "name": "举人",
+            "name": "上供指令5",
             "requirements": {
-                "lobsters": { "grade3": 3 }
+                "lobsters": {
+                    "royal": 1
+                },
+                "seaweed": 1
             },
-            "reward": { "de": 1 },
-            "aura": {
-                "type": "extraCage",
-                "value": 1,
-                "description": "游戏开始时额外获得1个虾笼"
+            "reward": {
+                "de": 1
             },
-            "bonusScore": 2
+            "effectDesc": "在上贡区上贡支付上贡卡的资源清单时可以少付1个金币",
+            "effectType": "aura_tribute_discount_coin"
+        },
+        {
+            "id": "tribute_6",
+            "name": "上供指令6",
+            "requirements": {
+                "lobsters": {
+                    "royal": 1,
+                    "normal": 1
+                }
+            },
+            "reward": {
+                "wang": 1
+            },
+            "effectDesc": "在上贡区上贡支付上贡卡的资源清单时可以少付1只普通龙虾",
+            "effectType": "aura_tribute_discount_lobster"
+        },
+        {
+            "id": "tribute_7",
+            "name": "上供指令7",
+            "requirements": {
+                "lobsters": {
+                    "normal": 4
+                }
+            },
+            "reward": {
+                "de": 2
+            },
+            "effectDesc": "集市里购买普通龙虾只需要支付1金币，但不能再卖龙虾给集市",
+            "effectType": "aura_market_rule"
+        },
+        {
+            "id": "tribute_8",
+            "name": "上供指令8",
+            "requirements": {
+                "lobsters": {
+                    "royal": 1
+                },
+                "seaweed": 1,
+                "cages": 1
+            },
+            "reward": {
+                "wang": 2
+            },
+            "effectDesc": "每次斗龙虾挑战时可以先获得1个资源（金币/海草/普通龙虾自选）",
+            "effectType": "aura_battle_bonus"
+        },
+        {
+            "id": "tribute_9",
+            "name": "上供指令9",
+            "requirements": {
+                "cages": 1,
+                "coins": 2
+            },
+            "reward": {
+                "wang": 1
+            },
+            "effectDesc": "获得本卡时支付1/2/3个金币，获取3/2/1品龙虾",
+            "effectType": "instant_buy_advanced_lobster"
+        },
+        {
+            "id": "tribute_10",
+            "name": "上供指令10",
+            "requirements": {
+                "seaweed": 4
+            },
+            "reward": {
+                "de": 2
+            },
+            "effectDesc": "无附加效果",
+            "effectType": "none"
+        },
+        {
+            "id": "tribute_11",
+            "name": "上供指令11",
+            "requirements": {
+                "lobsters": {
+                    "grade3": 1
+                }
+            },
+            "reward": {
+                "wang": 1
+            },
+            "effectDesc": "获得本卡时玩家所有龙虾都升1品",
+            "effectType": "instant_upgrade_all"
+        },
+        {
+            "id": "tribute_12",
+            "name": "上供指令12",
+            "requirements": {
+                "lobsters": {
+                    "normal": 1
+                },
+                "coins": 2
+            },
+            "reward": {
+                "wang": 1
+            },
+            "effectDesc": "押注成功可以额外获得1个金币",
+            "effectType": "aura_bet_bonus"
+        },
+        {
+            "id": "tribute_13",
+            "name": "上供指令13",
+            "requirements": {
+                "coins": 4
+            },
+            "reward": {
+                "de": 1
+            },
+            "effectDesc": "游戏结束最终结算前可以支付3/5/8个金币增加1/2/3德",
+            "effectType": "aura_endgame_score"
+        },
+        {
+            "id": "tribute_14",
+            "name": "上供指令14",
+            "requirements": {
+                "lobsters": {
+                    "grade1": 1
+                },
+                "seaweed": 3
+            },
+            "reward": {
+                "de": 2
+            },
+            "effectDesc": "获得2个虾笼",
+            "effectType": "instant_gain_cages"
+        },
+        {
+            "id": "tribute_15",
+            "name": "上供指令15",
+            "requirements": {
+                "coins": 3
+            },
+            "reward": {
+                "wang": 1
+            },
+            "effectDesc": "获得本卡时以及后续每轮游戏开始时获得1个海草",
+            "effectType": "aura_round_seaweed"
+        },
+        {
+            "id": "tribute_16",
+            "name": "上供指令16",
+            "requirements": {
+                "cages": 1,
+                "lobsters": {
+                    "normal": 2
+                }
+            },
+            "reward": {
+                "wang": 2
+            },
+            "effectDesc": "玩家以后卖虾笼可以多获得1个金币，买虾笼少支付1个金币",
+            "effectType": "aura_cage_trade"
+        },
+        {
+            "id": "tribute_17",
+            "name": "上供指令17",
+            "requirements": {
+                "lobsters": {
+                    "normal": 2
+                }
+            },
+            "reward": {
+                "wang": 1
+            },
+            "effectDesc": "获得本卡时以及后续每轮游戏开始时获得1个金币",
+            "effectType": "aura_round_coin"
+        },
+        {
+            "id": "tribute_18",
+            "name": "上供指令18",
+            "requirements": {
+                "lobsters": {
+                    "normal": 1,
+                    "grade3": 1
+                }
+            },
+            "reward": {
+                "de": 1
+            },
+            "effectDesc": "游戏结束最终结算前可以支付2/4/7个海草增加1/2/3德",
+            "effectType": "aura_endgame_score_seaweed"
         }
     ],
     "marketplaceCards": [
@@ -161,8 +349,22 @@
             "action": {
                 "type": "exchange",
                 "options": [
-                    { "cost": { "lobsters": 1 }, "reward": { "wang": 1 } },
-                    { "cost": { "lobsters": 3 }, "reward": { "wang": 2 } }
+                    {
+                        "cost": {
+                            "lobsters": 1
+                        },
+                        "reward": {
+                            "wang": 1
+                        }
+                    },
+                    {
+                        "cost": {
+                            "lobsters": 3
+                        },
+                        "reward": {
+                            "wang": 2
+                        }
+                    }
                 ]
             },
             "description": "玩家支付1只龙虾换1望，或者3只龙虾换2望"
@@ -173,8 +375,22 @@
             "action": {
                 "type": "exchange",
                 "options": [
-                    { "cost": { "seaweed": 2 }, "reward": { "de": 1 } },
-                    { "cost": { "coins": 5 }, "reward": { "de": 2 } }
+                    {
+                        "cost": {
+                            "seaweed": 2
+                        },
+                        "reward": {
+                            "de": 1
+                        }
+                    },
+                    {
+                        "cost": {
+                            "coins": 5
+                        },
+                        "reward": {
+                            "de": 2
+                        }
+                    }
                 ]
             },
             "description": "支付2根海草换1德，或5金币换2德"
@@ -185,8 +401,22 @@
             "action": {
                 "type": "exchange",
                 "options": [
-                    { "cost": { "coins": 3 }, "reward": { "lobsters": 2 } },
-                    { "cost": { "cages": 1 }, "reward": { "seaweed": 3 } }
+                    {
+                        "cost": {
+                            "coins": 3
+                        },
+                        "reward": {
+                            "lobsters": 2
+                        }
+                    },
+                    {
+                        "cost": {
+                            "cages": 1
+                        },
+                        "reward": {
+                            "seaweed": 3
+                        }
+                    }
                 ]
             },
             "description": "3金币换2只龙虾，或1个虾笼换3根海草"
@@ -197,11 +427,87 @@
             "action": {
                 "type": "exchange",
                 "options": [
-                    { "cost": { "lobsters": 1 }, "reward": { "coins": 2 } },
-                    { "cost": { "de": 1 }, "reward": { "coins": 5 } }
+                    {
+                        "cost": {
+                            "lobsters": 1
+                        },
+                        "reward": {
+                            "coins": 2
+                        }
+                    },
+                    {
+                        "cost": {
+                            "de": 1
+                        },
+                        "reward": {
+                            "coins": 5
+                        }
+                    }
                 ]
             },
             "description": "1只龙虾换2金币，或1德换5金币"
+        },
+        {
+            "id": "marketplace_5",
+            "name": "县衙",
+            "action": {
+                "type": "exchange",
+                "options": [
+                    {
+                        "cost": {
+                            "coins": 2
+                        },
+                        "reward": {
+                            "de": 1
+                        }
+                    },
+                    {
+                        "cost": {
+                            "coins": 5
+                        },
+                        "reward": {
+                            "de": 2
+                        }
+                    }
+                ]
+            },
+            "description": "花2金币换1德，或者花5金币换2德"
+        },
+        {
+            "id": "marketplace_6",
+            "name": "学堂",
+            "action": {
+                "type": "academy"
+            },
+            "description": "你的德望轨最低的一个提升一格，如果一样低则提升望的轨道一格",
+            "auto": true
+        },
+        {
+            "id": "marketplace_7",
+            "name": "善堂",
+            "action": {
+                "type": "charity"
+            },
+            "description": "所有玩家中德轨最低者损失2只龙虾，望轨最低者损失2个金币",
+            "auto": true
+        },
+        {
+            "id": "marketplace_8",
+            "name": "善学",
+            "action": {
+                "type": "breeding"
+            },
+            "description": "进行3次培养龙虾升级的行动",
+            "auto": true
+        },
+        {
+            "id": "marketplace_9",
+            "name": "不劳而获",
+            "action": {
+                "type": "freebie"
+            },
+            "description": "可以直接获取一只普通龙虾",
+            "auto": true
         }
     ]
 }
