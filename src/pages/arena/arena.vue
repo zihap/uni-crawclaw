@@ -561,7 +561,7 @@ function onDiceClick() {
     if (!canRoll.value || isRolling.value) return
     const bonus = seaweedBonus.value
     if (bonus > 0) {
-        socketService.gameAction('useSeaweed', {})
+        socketService.clientGameAction('useSeaweed', {})
         seaweedLocked.value = true
     }
     const diceValue = battleStore.getDiceValue(battleData.value?.currentPlayer)

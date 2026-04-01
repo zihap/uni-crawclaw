@@ -5,8 +5,18 @@
 
 from typing import Dict
 from utils.constants import AREAS, MARKET_PRICES
-from utils.events import ServerEvents
+from utils.events import ServerEvents, ServerRoomActionTypes, ServerGameActionTypes
 from utils.game_state import draw_tribute_tasks, draw_downtown_cards
+
+
+def _srg(action_type, data):
+    """构造 serverGameAction 消息体"""
+    return {'actionType': action_type, **data}
+
+
+def _srr(action_type, data):
+    """构造 serverRoomAction 消息体"""
+    return {'actionType': action_type, **data}
 
 
 def update_market_prices(game_state: dict):
@@ -133,12 +143,13 @@ async def handle_player_disconnect(room_id: str, player_id: int, player_name: st
         cleanup_room(room_id, rooms, manager)
         return
 
-    await manager.broadcast_to_room_members(room_id, ServerEvents.PLAYER_STATUS_CHANGE, {
-        'playerId': player_id,
-        'playerName': player_name,
-        'status': 'offline',
-        'players': game_state['players']
-    })
+    await manager.broadcast_to_room_members(room_id, ServerEvents.SERVER_ROOM_ACTION,
+        _srr(ServerRoomActionTypes.PLAYER_STATUS_CHANGE, {
+            'playerId': player_id,
+            'playerName': player_name,
+            'status': 'offline',
+            'players': game_state['players']
+        }))
 
 
 async def broadcast_room_state(room_id: str, rooms: dict, manager):
@@ -150,7 +161,8 @@ async def broadcast_room_state(room_id: str, rooms: dict, manager):
             'status': game_state['status'],
             'maxPlayers': game_state.get('maxPlayers', 4)
         }
-        await manager.send_to_room(room_id, ServerEvents.ROOM_STATE_UPDATE, data)
+        await manager.send_to_room(room_id, ServerEvents.SERVER_ROOM_ACTION,
+            _srr(ServerRoomActionTypes.ROOM_STATE_UPDATE, data))
 
 
 async def broadcast_game_state(room_id: str, rooms: dict, manager):
@@ -165,7 +177,8 @@ async def broadcast_game_state(room_id: str, rooms: dict, manager):
             'areas': game_state.get('areas', {}),
             'status': game_state['status']
         }
-        await manager.send_to_room(room_id, ServerEvents.GAME_STATE_UPDATE, data)
+        await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
+            _srg(ServerGameActionTypes.GAME_STATE_UPDATE, data))
 
 
 async def start_game(room_id: str, rooms: dict, manager):
@@ -205,7 +218,8 @@ async def start_game(room_id: str, rooms: dict, manager):
     print(f"  players in room: {len(game_state['players'])}")
     print(f"  active_connections: {list(manager.active_connections.get(room_id, {}).keys())}")
 
-    await manager.send_to_room(room_id, ServerEvents.GAME_STARTED, game_state)
+    await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
+        _srg(ServerGameActionTypes.GAME_STARTED, game_state))
     await broadcast_game_state(room_id, rooms, manager)
     print(f"Game started in room {room_id}")
 
@@ -227,7 +241,8 @@ async def next_round(room_id: str, rooms: dict, manager):
             reverse=True
         )[0]
 
-        await manager.send_to_room(room_id, ServerEvents.GAME_ENDED, {'winner': winner, 'gameState': game_state})
+        await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
+            _srg(ServerGameActionTypes.GAME_ENDED, {'winner': winner, 'gameState': game_state}))
         return
 
     game_state['currentRound'] += 1
@@ -247,5 +262,6 @@ async def next_round(room_id: str, rooms: dict, manager):
     draw_tribute_tasks(game_state)
     draw_downtown_cards(game_state)
 
-    await manager.send_to_room(room_id, ServerEvents.ROUND_STARTED, {'round': game_state['currentRound'], 'gameState': game_state})
+    await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
+        _srg(ServerGameActionTypes.ROUND_STARTED, {'round': game_state['currentRound'], 'gameState': game_state}))
     await broadcast_game_state(room_id, rooms, manager)

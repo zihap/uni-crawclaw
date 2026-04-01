@@ -165,7 +165,7 @@ function setupListeners() {
         errorMessage.value = '连接服务器失败，请检查网络'
     })
 
-    socketService.on('roomCreated', (data) => {
+    socketService.onAction('serverRoomAction', 'roomCreated', (data) => {
         loading.value = false
         createdRoomId.value = data.roomId
         playerId.value = data.playerId
@@ -184,7 +184,7 @@ function setupListeners() {
         })
     })
 
-    socketService.on('playerReconnected', (data) => {
+    socketService.onAction('serverRoomAction', 'playerReconnected', (data) => {
         loading.value = false
         if (data.player) {
             playerId.value = data.player.id
@@ -205,7 +205,7 @@ function setupListeners() {
         }
     })
 
-    socketService.on('playerJoined', (data) => {
+    socketService.onAction('serverRoomAction', 'playerJoined', (data) => {
         loading.value = false
         playerId.value = data.playerId
 
@@ -224,7 +224,7 @@ function setupListeners() {
         })
     })
 
-    socketService.on('gameStarted', (gameState) => {
+    socketService.onAction('serverGameAction', 'gameStarted', (gameState) => {
         uni.redirectTo({
             url: `/pages/online-game/onlineGame?roomId=${gameState.gameId}&playerId=${playerId.value}`
         })
@@ -241,10 +241,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-    socketService.off('roomCreated')
-    socketService.off('playerJoined')
-    socketService.off('playerReconnected')
-    socketService.off('gameStarted')
+    socketService.offAction('serverRoomAction')
+    socketService.offAction('serverGameAction')
     socketService.off('error')
     socketService.off('connect')
     socketService.off('disconnect')

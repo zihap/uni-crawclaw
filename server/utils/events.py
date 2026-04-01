@@ -15,29 +15,38 @@ class ClientEvents:
     # 连接层
     HEARTBEAT = 'heartbeat'
 
-    # 房间管理
+    # 房间管理 (通过 action_type 区分具体操作)
+    CLIENT_ROOM_ACTION = 'clientRoomAction'
+
+    # 战斗 (通过 action_type 区分具体操作)
+    CLIENT_BATTLE_ACTION = 'clientBattleAction'
+
+    # 统一游戏行动 (通过 actionType 区分具体操作)
+    CLIENT_GAME_ACTION = 'clientGameAction'
+
+
+# =============================================================================
+# 客户端 → 服务端 行动类型
+# =============================================================================
+
+class ClientRoomActionTypes:
+    """clientRoomAction 事件中的 action_type 取值"""
     CREATE_ROOM = 'createRoom'
     JOIN_ROOM = 'joinRoom'
     LEAVE_ROOM = 'leaveRoom'
     SET_READY = 'setReady'
 
-    # 统一游戏行动 (通过 actionType 区分具体操作)
-    GAME_ACTION = 'gameAction'
 
-    # 战斗 (数据量大、实时性要求高，保留独立事件)
+class ClientBattleActionTypes:
+    """clientBattleAction 事件中的 action_type 取值"""
     BATTLE_START = 'battleStart'
-    BATTLE_ACTION = 'battleAction'
     LOBSTER_SELECTED = 'lobsterSelected'
     SPECTATOR_BET = 'spectatorBet'
     NO_LOBSTER_FORFEIT = 'noLobsterForfeit'
 
 
-# =============================================================================
-# 游戏操作类型 (gameAction 的 actionType)
-# =============================================================================
-
 class GameActionTypes:
-    """gameAction 事件中的 actionType 取值"""
+    """clientGameAction 事件中的 actionType 取值"""
 
     USE_SEAWEED = 'useSeaweed'
     PLACE_HEADMAN = 'placeHeadman'
@@ -63,7 +72,31 @@ class ServerEvents:
     HEARTBEAT_ACK = 'heartbeatAck'
     PONG = 'pong'
 
-    # 房间管理
+    # 房间管理 (通过 actionType 区分具体操作)
+    SERVER_ROOM_ACTION = 'serverRoomAction'
+
+    # 游戏流程 (通过 actionType 区分具体操作)
+    SERVER_GAME_ACTION = 'serverGameAction'
+
+    # 战斗 (通过 actionType 区分具体操作)
+    SERVER_BATTLE_ACTION = 'serverBattleAction'
+
+    # 结算阶段 (通过 actionType 区分具体操作)
+    SERVER_AREA_ACTION = 'serverAreaAction'
+
+    # 资源 (独立事件)
+    PLAYER_RESOURCE_UPDATE = 'playerResourceUpdate'
+
+    # 错误 (独立事件)
+    ERROR = 'error'
+
+
+# =============================================================================
+# 服务端 → 客户端 行动类型
+# =============================================================================
+
+class ServerRoomActionTypes:
+    """serverRoomAction 事件中的 actionType 取值"""
     ROOM_CREATED = 'roomCreated'
     PLAYER_JOINED = 'playerJoined'
     PLAYER_RECONNECTED = 'playerReconnected'
@@ -72,14 +105,18 @@ class ServerEvents:
     ROOM_STATE_UPDATE = 'roomStateUpdate'
     PLAYER_READY = 'playerReady'
 
-    # 游戏流程
+
+class ServerGameActionTypes:
+    """serverGameAction 事件中的 actionType 取值"""
     GAME_STARTED = 'gameStarted'
     GAME_ENDED = 'gameEnded'
     ROUND_STARTED = 'roundStarted'
     GAME_STATE_UPDATE = 'gameStateUpdate'
-    AREA_SETTLED = 'areaSettled'
+    GAME_ACTION = 'gameAction'
 
-    # 战斗
+
+class ServerBattleActionTypes:
+    """serverBattleAction 事件中的 actionType 取值"""
     BATTLE_START = 'battleStart'
     BATTLE_ACTION = 'battleAction'
     BATTLE_ENDED = 'battleEnded'
@@ -88,15 +125,10 @@ class ServerEvents:
     ARENA_BETTING_COMPLETE = 'arenaBettingComplete'
     BET_RESULT = 'betResult'
 
-    # 结算阶段
-    AREA_SETTLEMENT_START = 'areaSettlementStart'
+
+class ServerAreaActionTypes:
+    """serverAreaAction 事件中的 actionType 取值"""
     AREA_WAITING_UI = 'areaWaitingUI'
+    AREA_SETTLEMENT_START = 'areaSettlementStart'
     AREA_ACTION_COMPLETE = 'areaActionComplete'
     SETTLEMENT_COMPLETE = 'settlementComplete'
-
-    # 资源
-    PLAYER_RESOURCE_UPDATE = 'playerResourceUpdate'
-    GAME_ACTION = 'gameAction'
-
-    # 错误
-    ERROR = 'error'

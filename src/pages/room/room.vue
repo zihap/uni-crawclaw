@@ -197,7 +197,7 @@ function setupSocketListeners() {
         })
     })
 
-    socketService.on('roomStateUpdate', (data) => {
+    socketService.onAction('serverRoomAction', 'roomStateUpdate', (data) => {
         if (data && data.players) {
             players.value = data.players
             const me = data.players.find((p) => String(p.id) === String(playerId.value))
@@ -210,7 +210,7 @@ function setupSocketListeners() {
         }
     })
 
-    socketService.on('playerJoined', (data) => {
+    socketService.onAction('serverRoomAction', 'playerJoined', (data) => {
         uni.showToast({
             title: `${data.player?.name || '玩家'} 加入了房间`,
             icon: 'none',
@@ -221,7 +221,7 @@ function setupSocketListeners() {
         }
     })
 
-    socketService.on('playerLeft', (data) => {
+    socketService.onAction('serverRoomAction', 'playerLeft', (data) => {
         uni.showToast({
             title: `${data.playerName || '玩家'} 离开了房间`,
             icon: 'none',
@@ -232,19 +232,15 @@ function setupSocketListeners() {
         }
     })
 
-    socketService.on('playerOnline', (data) => {
-        if (data.players) {
+    socketService.onAction('serverRoomAction', 'playerStatusChange', (data) => {
+        if (data.status === 'online' && data.players) {
+            players.value = data.players
+        } else if (data.status === 'offline' && data.players) {
             players.value = data.players
         }
     })
 
-    socketService.on('playerOffline', (data) => {
-        if (data.players) {
-            players.value = data.players
-        }
-    })
-
-    socketService.on('playerReady', (data) => {
+    socketService.onAction('serverRoomAction', 'playerReady', (data) => {
         if (data.players) {
             players.value = data.players
             const me = data.players.find((p) => String(p.id) === String(playerId.value))
@@ -254,7 +250,7 @@ function setupSocketListeners() {
         }
     })
 
-    socketService.on('playerReconnected', (data) => {
+    socketService.onAction('serverRoomAction', 'playerReconnected', (data) => {
         uni.showToast({
             title: `${data.player?.name || '玩家'} 已重新连接`,
             icon: 'success',
@@ -265,7 +261,7 @@ function setupSocketListeners() {
         }
     })
 
-    socketService.on('gameStarted', (gameState) => {
+    socketService.onAction('serverGameAction', 'gameStarted', (gameState) => {
         const gameStateStr = encodeURIComponent(JSON.stringify(gameState))
         uni.redirectTo({
             url: `/pages/online-game/onlineGame?roomId=${roomId.value}&playerId=${playerId.value}&gameState=${gameStateStr}`
@@ -286,14 +282,8 @@ function cleanupListeners() {
     socketService.off('connectError')
     socketService.off('reconnecting')
     socketService.off('reconnectFailed')
-    socketService.off('roomStateUpdate')
-    socketService.off('playerJoined')
-    socketService.off('playerLeft')
-    socketService.off('playerOnline')
-    socketService.off('playerOffline')
-    socketService.off('playerReady')
-    socketService.off('playerReconnected')
-    socketService.off('gameStarted')
+    socketService.offAction('serverRoomAction')
+    socketService.offAction('serverGameAction')
     socketService.off('error')
 }
 

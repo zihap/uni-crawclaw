@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 统一游戏行动路由器
-将客户端发送的 gameAction 事件按 actionType 分发到具体 handler
+将客户端发送的 clientGameAction 事件按 actionType 分发到具体 handler
 """
 
 from utils.events import GameActionTypes
@@ -34,6 +34,7 @@ def get_game_action_handlers():
         handle_cultivate_lobster,
         handle_submit_tribute,
         handle_downtown_action,
+        handle_area_action,
     )
     return {
         GameActionTypes.USE_SEAWEED: handle_use_seaweed,
@@ -46,6 +47,7 @@ def get_game_action_handlers():
         GameActionTypes.CULTIVATE_LOBSTER: handle_cultivate_lobster,
         GameActionTypes.SUBMIT_TRIBUTE: handle_submit_tribute,
         GameActionTypes.DOWNTOWN_ACTION: handle_downtown_action,
+        GameActionTypes.AREA_ACTION: handle_area_action,
     }
 
 

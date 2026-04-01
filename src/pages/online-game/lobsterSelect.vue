@@ -217,7 +217,8 @@ const resetLocalState = () => {
 }
 
 const sendBetMessage = (betAmount, targetFighterId) => {
-    socketService._send('spectatorBet', {
+    socketService._send('clientBattleAction', {
+        action_type: 'spectatorBet',
         battleId: currentBattleId,
         betAmount,
         targetFighterId
@@ -225,7 +226,7 @@ const sendBetMessage = (betAmount, targetFighterId) => {
 }
 
 const getPlayerName = (playerId) => {
-    const player = store.players.find((p) => String(p.id) === String(playerId))
+    const player = playerStore.players.find((p) => String(p.id) === String(playerId))
     return player?.name || '未知玩家'
 }
 
@@ -245,7 +246,7 @@ const buildBattleContext = () => {
     const battle = store.arenaBattleQueue[0]
     if (!battle) return null
     return {
-        spectators: store.players
+        spectators: playerStore.players
             .filter((p) => p.id !== battle.challengerId && p.id !== battle.defenderId)
             .map((p) => p.id),
         battle
@@ -261,7 +262,8 @@ const handleConfirm = () => {
     const context = buildBattleContext()
     if (!context) return
 
-    socketService._send('lobsterSelected', {
+    socketService._send('clientBattleAction', {
+        action_type: 'lobsterSelected',
         lobster: selectedLobster,
         battleId: currentBattleId,
         challengerId: context.battle.challengerId,

@@ -60,6 +60,7 @@ class WebSocketService {
         this._connected = false // 连接状态标志
         this.connecting = false // 是否正在连接
         this.listeners = {} // 事件监听器 { eventName: [callbacks] }
+        this.actionListeners = {} // 聚合事件监听器 { eventName: { actionType: [callbacks] } }
         this.heartbeatTimer = null // 心跳定时器
         this.reconnectTimer = null // 重连定时器
         this.reconnectAttempts = 0 // 重连尝试次数
@@ -186,6 +187,21 @@ class WebSocketService {
                 var event = message.event
                 var data = message.data
                 console.log('WebSocket message:', event, data)
+
+                // 聚合事件分发: 检查是否为 serverRoomAction / serverGameAction / serverBattleAction / serverAreaAction
+                if (event && data && data.actionType) {
+                    var actionCbs = self.actionListeners[event]
+                    console.log('[WebSocket] Received:', event, data.actionType, data)
+                    if (actionCbs) {
+                        var typeCbs = actionCbs[data.actionType]
+                        if (typeCbs && typeCbs.length > 0) {
+                            typeCbs.forEach(function (cb) {
+                                cb(data)
+                            })
+                        }
+                    }
+                }
+
                 self._emit(event, data)
             } catch (e) {
                 console.error('Failed to parse WebSocket message:', e)
@@ -417,6 +433,45 @@ class WebSocketService {
     }
 
     /**
+     * 订阅聚合事件的特定 actionType
+     *
+     * @param {string} event - 聚合事件名称 (如 serverRoomAction)
+     * @param {string} actionType - 行动类型 (如 roomCreated)
+     * @param {function} callback - 回调函数
+     *
+     * 使用示例:
+     * ```javascript
+     * socketService.onAction('serverRoomAction', 'roomCreated', (data) => {
+     *   // 处理房间创建
+     * })
+     * ```
+     */
+    onAction(event, actionType, callback) {
+        if (!this.actionListeners[event]) {
+            this.actionListeners[event] = {}
+        }
+        if (!this.actionListeners[event][actionType]) {
+            this.actionListeners[event][actionType] = []
+        }
+        this.actionListeners[event][actionType].push(callback)
+    }
+
+    /**
+     * 取消订阅聚合事件的特定 actionType
+     *
+     * @param {string} event - 聚合事件名称
+     * @param {string} actionType - 行动类型（可选，不提供则移除该事件所有 actionType 监听）
+     */
+    offAction(event, actionType) {
+        if (!this.actionListeners[event]) return
+        if (actionType) {
+            delete this.actionListeners[event][actionType]
+        } else {
+            delete this.actionListeners[event]
+        }
+    }
+
+    /**
      * 断开WebSocket连接
      *
      * 断开逻辑:
@@ -469,7 +524,12 @@ class WebSocketService {
     createRoom(playerName, userId, maxPlayers) {
         maxPlayers = maxPlayers || 4
         this.userId = userId
-        this._send('createRoom', { playerName: playerName, userId: userId, maxPlayers: maxPlayers })
+        this._send('clientRoomAction', {
+            action_type: 'createRoom',
+            playerName: playerName,
+            userId: userId,
+            maxPlayers: maxPlayers
+        })
     }
 
     /**
@@ -488,7 +548,12 @@ class WebSocketService {
      */
     joinRoom(roomId, playerName, userId) {
         this.userId = userId
-        this._send('joinRoom', { roomId: roomId, playerName: playerName, userId: userId })
+        this._send('clientRoomAction', {
+            action_type: 'joinRoom',
+            roomId: roomId,
+            playerName: playerName,
+            userId: userId
+        })
     }
 
     /**
@@ -502,7 +567,11 @@ class WebSocketService {
      */
     leaveRoom() {
         if (this.currentRoomId && this.currentPlayerId !== null) {
-            this._send('leaveRoom', { roomId: this.currentRoomId, playerId: this.currentPlayerId })
+            this._send('clientRoomAction', {
+                action_type: 'leaveRoom',
+                roomId: this.currentRoomId,
+                playerId: this.currentPlayerId
+            })
         }
         this.clearRoomContext()
     }
@@ -522,7 +591,8 @@ class WebSocketService {
     setReady(ready, forceStart) {
         forceStart = forceStart || false
         if (this.currentRoomId && this.currentPlayerId !== null) {
-            this._send('setReady', {
+            this._send('clientRoomAction', {
+                action_type: 'setReady',
                 roomId: this.currentRoomId,
                 playerId: this.currentPlayerId,
                 ready: ready,
@@ -546,25 +616,29 @@ class WebSocketService {
      */
     sendBattleAction(actionType, battleData, senderId) {
         if (this.currentRoomId && this.currentPlayerId !== null) {
-            this._send('battleAction', {
+            this._send('clientBattleAction', {
+                action_type: actionType,
                 roomId: this.currentRoomId,
                 playerId: this.currentPlayerId,
                 senderId: senderId,
-                actionType: actionType,
                 battleData: battleData
             })
         }
     }
 
-    gameAction(actionType, payload) {
+    clientGameAction(actionType, payload) {
         if (this.currentRoomId && this.currentPlayerId !== null) {
-            this._send('gameAction', {
+            this._send('clientGameAction', {
+                actionType: actionType,
                 roomId: this.currentRoomId,
                 playerId: this.currentPlayerId,
-                actionType: actionType,
                 payload: payload || {}
             })
         }
+    }
+
+    gameAction(actionType, payload) {
+        this.clientGameAction(actionType, payload)
     }
 }
 
