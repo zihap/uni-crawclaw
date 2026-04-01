@@ -8,6 +8,9 @@ import json
 
 AREAS = ['shrimp_catching', 'seafood_market', 'breeding', 'tribute', 'marketplace']
 
+# 龙虾等级集合（用于资源检查与更新）
+LOBSTER_GRADES = {'normal', 'grade3', 'grade2', 'grade1', 'royal'}
+
 # 龙虾升级: 新grade → 旧grade (用于 battleEnd 时反推消耗)
 GRADE_UPGRADE = {'grade2': 'grade3', 'grade1': 'grade2', 'royal': 'grade1'}
 

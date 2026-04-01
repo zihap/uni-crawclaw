@@ -316,289 +316,208 @@ const initiativeDisplayP2 = ref(null)
 const initiativeResult = ref('')
 let pendingApplyTimer = null
 
-// 海草相关状态
+// ============ 海草状态 ============
+
 const seaweedCount = computed(() => {
     const player = playerStore.getPlayerById(savedPlayerId.value)
     return player?.seaweed || 0
 })
-const isSeaweedChecked = ref(false) // 是否勾选使用海草
-const seaweedLocked = ref(false) // 海草状态锁定（勇者龙虾重掷时使用）
+const isSeaweedChecked = ref(false)
+const seaweedLocked = ref(false)
 
-// 是否可以使用海草
 const canUseSeaweed = computed(() => {
     if (seaweedCount.value <= 0) return false
     if (battleData.value?.currentPlayer !== battleStore.myPlayerIndex) return false
     if (battleData.value?.phase !== 'rolling') return false
-    if (seaweedLocked.value) return false // 锁定时不可修改
-    if (battleStore.canReroll) return false // 重掷弹窗显示时不可修改
-    if (battleData.value?.rollDiceTimestamp) return false // 已掷骰后不可修改
-
-    const currentPlayer = battleData.value?.currentPlayer
-    const player = battleData.value?.players[currentPlayer]
-    // 三品龙虾（grade3）不能吃海草
+    if (seaweedLocked.value) return false
+    if (battleStore.canReroll) return false
+    if (battleData.value?.rollDiceTimestamp) return false
+    const player = battleData.value?.players[battleData.value?.currentPlayer]
     return player?.lobsterId !== 'grade3'
 })
 
-// 海草加成值
 const seaweedBonus = computed(() => {
     if (!isSeaweedChecked.value) return 0
-    const currentPlayer = battleData.value?.currentPlayer
-    const player = battleData.value?.players[currentPlayer]
-
+    const player = battleData.value?.players[battleData.value?.currentPlayer]
     switch (player?.lobsterId) {
         case 'grade2':
-            return 1 // 二品龙虾
+            return 1
         case 'grade1':
-            return 2 // 一品龙虾
+            return 2
         default:
-            return 3 // 御赐及其他龙虾
+            return 3
     }
 })
 
+// ============ 计算属性 ============
+
 const battleData = computed(() => battleStore.battleData)
 
-// 获胜方是否可以升级龙虾
 const winnerCanUpgrade = computed(() => {
-    const winner = battleData.value?.winner
-    if (!winner) return false
-    const grade = winner.lobsterId
-    // 只有 normal, grade3, grade2, grade1 可以升级
+    const grade = battleData.value?.winner?.lobsterId
     return grade === 'normal' || grade === 'grade3' || grade === 'grade2' || grade === 'grade1'
 })
 
-// 当前玩家是否是获胜者
 const isWinner = computed(() => {
     if (battleStore.myPlayerIndex < 0) return true
     return battleData.value?.winner?.id === savedPlayerId.value
 })
 
-// 根据当前玩家的skill获取对应的骰子图片
+const DICE_IMAGE_MAP = {
+    6: '/static/images/dice_d6.png',
+    8: '/static/images/dice_d8.png',
+    10: '/static/images/dice_d10.png',
+    12: '/static/images/dice_d12.png'
+}
+
 const currentDiceImage = computed(() => {
-    const currentPlayer = battleData.value?.currentPlayer
-    if (currentPlayer === undefined || currentPlayer === null) {
-        return '/static/images/dice_d6.png'
-    }
-    const player = battleData.value?.players[currentPlayer]
-    if (!player || !player.lobsterId) {
-        return '/static/images/dice_d6.png'
-    }
-    const diceSides = battleStore.getDiceSides(currentPlayer)
-    const diceImageMap = {
-        6: '/static/images/dice_d6.png',
-        8: '/static/images/dice_d8.png',
-        10: '/static/images/dice_d10.png',
-        12: '/static/images/dice_d12.png'
-    }
-    return diceImageMap[diceSides] || '/static/images/dice_d6.png'
+    const player = battleData.value?.players[battleData.value?.currentPlayer]
+    if (!player?.lobsterId) return DICE_IMAGE_MAP[6]
+    return DICE_IMAGE_MAP[battleStore.getDiceSides(battleData.value.currentPlayer)] || DICE_IMAGE_MAP[6]
 })
 
-// 获取玩家初始位置
-const getInitialPosition = (playerIndex) => {
-    return playerIndex === 0 ? -1 : battleData.value?.totalCells || 8
-}
+// ============ 棋盘 & 龙虾可见性 ============
 
-// 龙虾图片路径映射
-const getLobsterImage = (playerIndex) => {
-    return playerIndex === 0 ? '/static/images/lobster_left.png' : '/static/images/lobster_right.png'
-}
+const getInitialPosition = (playerIndex) => (playerIndex === 0 ? -1 : battleData.value?.totalCells || 8)
 
-// 龙虾容器样式类计算属性
+const getLobsterImage = (playerIndex) =>
+    playerIndex === 0 ? '/static/images/lobster_left.png' : '/static/images/lobster_right.png'
+
+const animatingPlayers = ref([false, false])
+const movingPlayers = ref([false, false])
+
 const getLobsterWrapperClass = (playerIndex) => {
-    const player = battleData.value?.players[playerIndex]
-    if (!player) return ''
-
     const classes = []
-
-    // 如果玩家已开始（started为true），则添加可移动类
-    if (player.started) {
-        classes.push('movable')
-    }
-
-    // 如果正在动画中，添加动画类
-    if (animatingPlayers.value[playerIndex]) {
-        classes.push('animating')
-    }
-
+    const player = battleData.value?.players[playerIndex]
+    if (player?.started) classes.push('movable')
+    if (animatingPlayers.value[playerIndex]) classes.push('animating')
     return classes.join(' ')
 }
 
-// 用于检测移动的响应式变量
-const movingPlayers = ref([false, false])
+const getMovingClass = (playerIndex) => (movingPlayers.value[playerIndex] ? 'moving' : '')
 
-// 获取移动类
-const getMovingClass = (playerIndex) => {
-    return movingPlayers.value[playerIndex] ? 'moving' : ''
-}
-
-// 判断是否应该显示lobster-wrapper
 const shouldShowLobsterWrapper = (playerIndex) => {
     const player = battleData.value?.players[playerIndex]
     if (!player) return false
-
-    // 如果正在动画中，显示lobster-wrapper
     if (animatingPlayers.value[playerIndex]) return true
-
-    // 如果未开始（started为false），显示lobster-wrapper
     if (!player.started) return true
-
-    // 如果位置在初始位置，显示lobster-wrapper
     return player.position === getInitialPosition(playerIndex)
 }
 
-// 判断是否应该在棋盘上显示龙虾图标
 const shouldShowOnBoard = (playerIndex) => {
     const player = battleData.value?.players[playerIndex]
     if (!player) return false
-
-    // 如果started为false，不在棋盘上显示
     if (!player.started) return false
-
-    // 如果位置在初始位置，不在棋盘上显示
     if (player.position === getInitialPosition(playerIndex)) return false
-
-    // 如果正在动画中，不在棋盘上显示
-    if (animatingPlayers.value[playerIndex]) return false
-
-    return true
+    return !animatingPlayers.value[playerIndex]
 }
 
-// 监听玩家started状态变化
-const animatingPlayers = ref([false, false])
+const handlePositionChange = (playerIndex, oldPos, newPos) => {
+    const player = battleData.value?.players[playerIndex]
+    if (!player) return
+    if (player.started) {
+        if (oldPos === getInitialPosition(playerIndex)) {
+            animatingPlayers.value[playerIndex] = true
+            animateLobsterMove(playerIndex)
+        } else {
+            movingPlayers.value[playerIndex] = true
+            setTimeout(() => {
+                movingPlayers.value[playerIndex] = false
+            }, 500)
+        }
+    } else {
+        movingPlayers.value[playerIndex] = true
+        setTimeout(() => {
+            movingPlayers.value[playerIndex] = false
+        }, 500)
+    }
+}
 
-// 监听玩家位置变化，当位置变化时触发动画
 watch(
     () => [battleData.value?.players[0]?.position, battleData.value?.players[1]?.position],
     (newPositions, oldPositions) => {
         if (!oldPositions) return
-
         for (let i = 0; i < 2; i++) {
-            const player = battleData.value?.players[i]
-            if (!player) continue
-
-            // 检查位置是否变化
-            if (newPositions[i] !== oldPositions[i] && newPositions[i] !== null) {
-                if (player.started) {
-                    // 检查是否从初始位置移动到棋盘上
-                    if (oldPositions[i] === getInitialPosition(i)) {
-                        // 从lobster-wrapper移动到棋盘，触发动画
-                        animatingPlayers.value[i] = true
-                        animateLobsterMove(i)
-                    } else {
-                        // 在棋盘上移动，使用移动动画
-                        movingPlayers.value[i] = true
-                        setTimeout(() => {
-                            movingPlayers.value[i] = false
-                        }, 500)
-                    }
-                } else {
-                    // 未开始时的位置变化，触发移动动画
-                    movingPlayers.value[i] = true
-                    setTimeout(() => {
-                        movingPlayers.value[i] = false
-                    }, 500)
-                }
+            if (newPositions[i] !== oldPositions[i] && newPositions[i] != null) {
+                handlePositionChange(i, oldPositions[i], newPositions[i])
             }
         }
     },
     { deep: true }
 )
 
-// 龙虾移动动画函数 - 闪现效果（仅H5环境）
+// ============ 龙虾移动动画 ============
+
 function animateLobsterMove(playerIndex) {
     if (!animatingPlayers.value[playerIndex]) return
-
-    // 非H5环境（小程序）跳过DOM动画，直接结束
     if (typeof document === 'undefined') {
         animatingPlayers.value[playerIndex] = false
         return
     }
 
     nextTick(() => {
-        // 获取lobster-wrapper元素
         const wrapperClass = playerIndex === 0 ? '.player1-card .lobster-wrapper' : '.player2-card .lobster-wrapper'
         const wrapperEl = document.querySelector(wrapperClass)
-
-        // 获取玩家的新位置
         const player = battleData.value?.players[playerIndex]
-        if (!player) return
-
-        // 获取棋盘区域的位置
         const boardElement = document.querySelector('.battle-board')
-        if (!boardElement) return
-
-        const boardRect = boardElement.getBoundingClientRect()
-
-        // 计算目标位置
-        // 对于player1，位置从左到右增加
-        // 对于player2，位置从右到左减少
-        const totalCells = battleData.value?.totalCells || 8
-        const cellWidth = boardRect.width / totalCells
-
-        let targetX
-        if (playerIndex === 0) {
-            // player1: 从左边开始，位置从0开始
-            targetX = boardRect.left + player.position * cellWidth
-        } else {
-            // player2: 从右边开始，位置从totalCells开始
-            targetX = boardRect.left + (totalCells - player.position - 1) * cellWidth
+        if (!player || !boardElement) {
+            animatingPlayers.value[playerIndex] = false
+            return
         }
 
+        const boardRect = boardElement.getBoundingClientRect()
+        const totalCells = battleData.value?.totalCells || 8
+        const cellWidth = boardRect.width / totalCells
+        const targetX =
+            playerIndex === 0
+                ? boardRect.left + player.position * cellWidth
+                : boardRect.left + (totalCells - player.position - 1) * cellWidth
         const targetY = boardRect.top + boardRect.height / 2
 
         if (wrapperEl) {
-            // 获取起始位置
             const startRect = wrapperEl.getBoundingClientRect()
-
-            // 创建克隆元素
             const clone = document.createElement('div')
             clone.className = 'lobster-clone'
-            clone.style.cssText = `
-        position: fixed;
-        top: ${startRect.top}px;
-        left: ${startRect.left}px;
-        width: ${startRect.width}px;
-        height: ${startRect.height}px;
-        z-index: 1000;
-        pointer-events: none;
-      `
-
-            // 复制龙虾图标
+            clone.style.cssText = `position:fixed;top:${startRect.top}px;left:${startRect.left}px;width:${startRect.width}px;height:${startRect.height}px;z-index:1000;pointer-events:none;`
             const img = document.createElement('img')
             img.src = getLobsterImage(playerIndex)
-            img.style.cssText = 'width: 100%; height: 100%; object-fit: contain;'
+            img.style.cssText = 'width:100%;height:100%;object-fit:contain;'
             clone.appendChild(img)
-
             document.body.appendChild(clone)
-
-            // 隐藏原始wrapper
             wrapperEl.style.opacity = '0'
 
-            // 闪现到目标位置
             setTimeout(() => {
                 clone.classList.add('flash')
                 clone.style.top = `${targetY - startRect.height / 2}px`
                 clone.style.left = `${targetX - startRect.width / 2}px`
             }, 50)
 
-            // 动画结束后
             setTimeout(() => {
                 clone.remove()
                 wrapperEl.style.opacity = '1'
                 animatingPlayers.value[playerIndex] = false
             }, 350)
         } else {
-            // 如果找不到元素，直接结束动画
             animatingPlayers.value[playerIndex] = false
         }
     })
 }
 
-const halfIndex = computed(() => {
-    return Math.floor((battleData.value?.totalCells || 8) / 2)
-})
+// ============ 棋盘初始化 ============
 
+const halfIndex = computed(() => Math.floor((battleData.value?.totalCells || 8) / 2))
 const leftCells = computed(() => boardCells.value.slice(0, halfIndex.value))
 const rightCells = computed(() => boardCells.value.slice(halfIndex.value))
+
+function initBoard() {
+    const totalCells = battleData.value?.totalCells || 8
+    boardCells.value = Array.from({ length: totalCells }, (_, i) => ({
+        index: i,
+        img: `battle_num${(i % 8) + 1}.png`
+    }))
+}
+
+// ============ 日志 & 掷骰 ============
 
 const lastLogMessage = ref('')
 let logMessageTimer = null
@@ -607,11 +526,10 @@ watch(
     () => battleData.value?.battleLog,
     (logs) => {
         if (logMessageTimer) clearTimeout(logMessageTimer)
-        if (!logs || logs.length === 0) {
+        if (!logs?.length) {
             lastLogMessage.value = ''
             return
         }
-        // 掷骰动画进行中或掷骰已开始但未完成，跳过服务器同步触发的更新
         if (isRolling.value || battleData.value?.rollDiceTimestamp) return
         for (let i = logs.length - 1; i >= 0; i--) {
             if (logs[i].message.includes('掷出')) {
@@ -632,50 +550,31 @@ const canRoll = computed(() => {
     if (!battleStore.isMyTurn) return false
     if (battleData.value?.phase !== 'rolling') return false
     if (battleStore.canReroll) return false
-    if (battleData.value?.rollDiceTimestamp) return false
-    return true
+    return !battleData.value?.rollDiceTimestamp
 })
 
-function initBoard() {
-    const totalCells = battleData.value?.totalCells || 8
-    const cells = []
-    for (let i = 0; i < totalCells; i++) {
-        const imgIndex = (i % 8) + 1
-        cells.push({ index: i, img: `battle_num${imgIndex}.png` })
-    }
-    boardCells.value = cells
-}
-
 function toggleSeaweed() {
-    if (!canUseSeaweed.value) return
-    isSeaweedChecked.value = !isSeaweedChecked.value
+    if (canUseSeaweed.value) isSeaweedChecked.value = !isSeaweedChecked.value
 }
 
-async function onDiceClick() {
+function onDiceClick() {
     if (!canRoll.value || isRolling.value) return
-
     const bonus = seaweedBonus.value
     if (bonus > 0) {
-        socketService.sendUseSeaweed()
-        seaweedLocked.value = true // 锁定海草状态
+        socketService.gameAction('useSeaweed', {})
+        seaweedLocked.value = true
     }
-
     const diceValue = battleStore.getDiceValue(battleData.value?.currentPlayer)
-    const finalValue = diceValue + bonus // 直接累加
-
-    battleStore.rollDice(finalValue, bonus)
+    battleStore.rollDice(diceValue + bonus, bonus)
 }
 
 function onReroll() {
     if (!battleStore.canReroll || isRolling.value) return
     displayDice.value = null
     rollCompleted.value = false
-
     const bonus = seaweedBonus.value
     const diceValue = battleStore.getDiceValue(battleData.value?.currentPlayer)
-    const finalValue = diceValue + bonus // 海草加成也应用于重掷
-
-    battleStore.rollDice(finalValue, bonus)
+    battleStore.rollDice(diceValue + bonus, bonus)
 }
 
 function onConfirmDice() {
@@ -687,103 +586,79 @@ function onConfirmDice() {
     }, 500)
 }
 
-function getInitiativeDiceImage(playerIndex) {
-    const diceSides = battleStore.getDiceSides(playerIndex)
-    const diceImageMap = {
-        6: '/static/images/dice_d6.png',
-        8: '/static/images/dice_d8.png',
-        10: '/static/images/dice_d10.png',
-        12: '/static/images/dice_d12.png'
-    }
-    return diceImageMap[diceSides] || '/static/images/dice_d6.png'
-}
+// ============ 先手骰子动画 ============
 
-function playInitiativeAnimation(result, isFromSync) {
+const getInitiativeDiceImage = (playerIndex) =>
+    DICE_IMAGE_MAP[battleStore.getDiceSides(playerIndex)] || DICE_IMAGE_MAP[6]
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+async function playInitiativeAnimation(result, isFromSync) {
     if (initiativeRolling.value) return
     initiativeRolling.value = true
     initiativeDisplayP1.value = null
     initiativeDisplayP2.value = null
     initiativeResult.value = ''
 
-    const animationDuration = 1500
-    const interval = 80
-    const steps = animationDuration / interval
-    let step = 0
-
     const p1Sides = battleStore.getDiceSides(0)
     const p2Sides = battleStore.getDiceSides(1)
+    const steps = 1500 / 80
 
-    const rollInterval = setInterval(() => {
-        step++
+    for (let step = 0; step < steps; step++) {
         initiativeDisplayP1.value = Math.floor(Math.random() * p1Sides) + 1
         initiativeDisplayP2.value = Math.floor(Math.random() * p2Sides) + 1
+        await sleep(80)
+    }
 
-        if (step >= steps) {
-            clearInterval(rollInterval)
-            initiativeRolling.value = false
-            initiativeDisplayP1.value = result.p1
-            initiativeDisplayP2.value = result.p2
+    initiativeRolling.value = false
+    initiativeDisplayP1.value = result.p1
+    initiativeDisplayP2.value = result.p2
 
-            setTimeout(() => {
-                const p1Name = battleData.value?.players[0]?.name || '玩家1'
-                const p2Name = battleData.value?.players[1]?.name || '玩家2'
+    await sleep(500)
 
-                if (result.p1 > result.p2) {
-                    initiativeResult.value = `${p1Name} 获得先手！`
-                } else if (result.p2 > result.p1) {
-                    initiativeResult.value = `${p2Name} 获得先手！`
-                } else {
-                    initiativeResult.value = `点数一致，${p2Name} 获得先手！`
-                }
+    const p1Name = battleData.value?.players[0]?.name || '玩家1'
+    const p2Name = battleData.value?.players[1]?.name || '玩家2'
+    if (result.p1 > result.p2) initiativeResult.value = `${p1Name} 获得先手！`
+    else if (result.p2 > result.p1) initiativeResult.value = `${p2Name} 获得先手！`
+    else initiativeResult.value = `点数一致，${p2Name} 获得先手！`
 
-                setTimeout(() => {
-                    if (!isFromSync) {
-                        battleStore.applyInitiative()
-                    }
-                    showInitiativeOverlay.value = false
-                    initiativeDisplayP1.value = null
-                    initiativeDisplayP2.value = null
-                    initiativeResult.value = ''
-                }, 2000)
-            }, 500)
-        }
-    }, interval)
+    await sleep(2000)
+
+    if (!isFromSync) battleStore.applyInitiative()
+    showInitiativeOverlay.value = false
+    initiativeDisplayP1.value = null
+    initiativeDisplayP2.value = null
+    initiativeResult.value = ''
 }
 
 function triggerInitiativeRoll() {
     if (showInitiativeOverlay.value) return
-
     const initiative = battleData.value?.initiative
-    const isFromSync = initiative && initiative.p1 !== null && initiative.p2 !== null
+    const isFromSync = initiative?.p1 !== null && initiative?.p2 !== null
     const isHost = battleStore.myPlayerIndex === 0 || battleStore.myPlayerIndex < 0
 
     showInitiativeOverlay.value = true
 
     let result
-    if (isFromSync) {
-        result = { p1: initiative.p1, p2: initiative.p2 }
-    } else if (isHost) {
+    if (isFromSync) result = { p1: initiative.p1, p2: initiative.p2 }
+    else if (isHost) {
         result = battleStore.rollInitiativeDice()
         if (!result) return
-    } else {
-        return
-    }
+    } else return
 
     playInitiativeAnimation(result, isFromSync)
 }
+
+// ============ 龙虾信息弹窗 ============
 
 function showLobsterInfo(playerIndex) {
     const player = battleData.value?.players[playerIndex]
     if (!player) return
     const skill = getSkill(player.lobsterId)
-    let skillDesc = ''
-    if (skill) {
-        skillDesc = skill.description
-    }
     lobsterPopupData.value = {
         lobsterName: player.lobsterName,
         lobsterDesc: player.lobsterDesc,
-        skillDesc: skillDesc
+        skillDesc: skill?.description || ''
     }
     showLobsterPopup.value = true
 }
@@ -792,18 +667,16 @@ function closeLobsterPopup() {
     showLobsterPopup.value = false
 }
 
+// ============ 战斗结果 & 导航 ============
+
 function showResult() {
     if (resultShown.value || !battleData.value?.winner) return
     resultShown.value = true
-
     const winnerIndex = battleData.value.winner.id === battleData.value.players[0].id ? 0 : 1
     loser.value = battleData.value.players[1 - winnerIndex]
-
-    if (battleStore.myPlayerIndex < 0) {
-        showDefeat.value = true
-    } else {
-        battleStore.myPlayerIndex === winnerIndex ? (showVictory.value = true) : (showDefeat.value = true)
-    }
+    if (battleStore.myPlayerIndex < 0) showDefeat.value = true
+    else if (battleStore.myPlayerIndex === winnerIndex) showVictory.value = true
+    else showDefeat.value = true
 }
 
 function selectReward(choice) {
@@ -823,6 +696,9 @@ function closeResult() {
 function exitBattle() {
     showExitPopup.value = true
 }
+function cancelExit() {
+    showExitPopup.value = false
+}
 
 function confirmExit() {
     showExitPopup.value = false
@@ -832,52 +708,30 @@ function confirmExit() {
     showDefeat.value = true
 }
 
-function cancelExit() {
-    showExitPopup.value = false
-}
-
-function navigateBackToGame() {
-    // 使用 store 中的队列数据
-    const battleQueue = onlineGameStore.arenaBattleQueue
-
-    // 检查 arenaBattleQueue 中是否还有战斗
-    if (battleQueue && battleQueue.length > 0) {
-        // 保存队列到本地存储，使用 roomId 作为 key 区分不同房间
-        const storageKey = `arenaBattleQueue_${savedRoomId.value}`
-        uni.setStorageSync(storageKey, battleQueue)
-
-        // 还有战斗，返回 online-game 页面，触发下一场战斗
-        battleStore.resetBattle()
-        resultShown.value = false
-        showVictory.value = false
-        showDefeat.value = false
-
-        // 返回 online-game 页面，watch 会自动检测到队列变化并显示下一场
-        if (savedRoomId.value && savedPlayerId.value !== null) {
-            uni.reLaunch({
-                url: `/pages/online-game/onlineGame?roomId=${savedRoomId.value}&playerId=${savedPlayerId.value}`
-            })
-        } else {
-            uni.reLaunch({ url: '/pages/online-game/onlineGame' })
-        }
-
-        return
-    }
-
-    // 没有剩余战斗，返回 onlineGame 页面
+const resetBattleState = () => {
     battleStore.resetBattle()
     resultShown.value = false
     showVictory.value = false
     showDefeat.value = false
-
-    if (savedRoomId.value && savedPlayerId.value !== null) {
-        uni.reLaunch({
-            url: `/pages/online-game/onlineGame?roomId=${savedRoomId.value}&playerId=${savedPlayerId.value}`
-        })
-    } else {
-        uni.reLaunch({ url: '/pages/online-game/onlineGame' })
-    }
 }
+
+const buildReturnUrl = () => {
+    if (savedRoomId.value && savedPlayerId.value !== null) {
+        return `/pages/online-game/onlineGame?roomId=${savedRoomId.value}&playerId=${savedPlayerId.value}`
+    }
+    return '/pages/online-game/onlineGame'
+}
+
+function navigateBackToGame() {
+    const battleQueue = onlineGameStore.arenaBattleQueue
+    if (battleQueue?.length > 0) {
+        uni.setStorageSync(`arenaBattleQueue_${savedRoomId.value}`, battleQueue)
+    }
+    resetBattleState()
+    uni.reLaunch({ url: buildReturnUrl() })
+}
+
+// ============ 监听器 ============
 
 watch(
     () => battleData.value?.battleLog?.length,
@@ -911,7 +765,6 @@ watch(
             clearTimeout(pendingApplyTimer)
             pendingApplyTimer = null
         }
-
         if (!newTimestamp) {
             displayDice.value = null
             isRolling.value = false
@@ -920,18 +773,14 @@ watch(
         }
 
         lastLogMessage.value = ''
-
         const diceRoller = battleData.value?.diceRoller
         const newDice = battleData.value?.diceValue
-        if (diceRoller === undefined || diceRoller === null || !newDice) return
+        if (diceRoller == null || !newDice) return
 
         isRolling.value = true
         rollCompleted.value = false
-        const animationDuration = 1000
-        const interval = 100
-        const steps = animationDuration / interval
-
         let step = 0
+        const steps = 1000 / 100
         const rollInterval = setInterval(() => {
             step++
             displayDice.value = Math.floor(Math.random() * 6) + 1
@@ -940,7 +789,6 @@ watch(
                 displayDice.value = battleData.value?.diceValue || newDice
                 isRolling.value = false
                 rollCompleted.value = true
-
                 if (!battleStore.canReroll && diceRoller === battleStore.myPlayerIndex) {
                     pendingApplyTimer = setTimeout(() => {
                         pendingApplyTimer = null
@@ -950,7 +798,7 @@ watch(
                     }, 1500)
                 }
             }
-        }, interval)
+        }, 100)
     }
 )
 
@@ -968,7 +816,6 @@ watch(
     }
 )
 
-// 等待先手骰子同步数据到达后触发动画（覆盖非房主和race condition场景）
 watch(
     () => battleData.value?.initiative,
     (newInitiative) => {
@@ -979,7 +826,6 @@ watch(
     { deep: true }
 )
 
-// 回合切换时重置海草状态
 watch(
     () => battleData.value?.currentPlayer,
     () => {
@@ -988,23 +834,25 @@ watch(
     }
 )
 
-onMounted(() => {
-    const pages = getCurrentPages()
-    const currentPage = pages[pages.length - 1]
-    const options = currentPage.options || {}
+// ============ 生命周期 ============
 
+const parseArenaOptions = (options) => {
     let player1Data = {}
     let player2Data = {}
     let battleDataFromParams = null
-
     try {
         if (options.player1) player1Data = JSON.parse(decodeURIComponent(options.player1))
         if (options.player2) player2Data = JSON.parse(decodeURIComponent(options.player2))
         if (options.battleData) battleDataFromParams = JSON.parse(decodeURIComponent(options.battleData))
-    } catch (e) {
-        console.error('解析玩家数据失败:', e)
+    } catch {
+        // ignore parse errors
     }
+    return { player1Data, player2Data, battleDataFromParams }
+}
 
+onMounted(() => {
+    const options = getCurrentPages().slice(-1)[0].options || {}
+    const { player1Data, player2Data, battleDataFromParams } = parseArenaOptions(options)
     const myPlayerId = parseInt(options.playerId)
     savedRoomId.value = options.roomId
     savedPlayerId.value = myPlayerId
@@ -1023,7 +871,6 @@ onMounted(() => {
     }
 
     initBoard()
-
     battleStore.setupBattleActionListener(() => {
         showVictory.value = false
         showDefeat.value = false

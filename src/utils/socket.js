@@ -556,12 +556,15 @@ class WebSocketService {
         }
     }
 
-    /**
-     * 发送海草消耗事件（竞技场掷骰子时使用）
-     * 服务端扣除海草后广播 playerResourceUpdate 给所有玩家
-     */
-    sendUseSeaweed() {
-        this._send('useSeaweed', {})
+    gameAction(actionType, payload) {
+        if (this.currentRoomId && this.currentPlayerId !== null) {
+            this._send('gameAction', {
+                roomId: this.currentRoomId,
+                playerId: this.currentPlayerId,
+                actionType: actionType,
+                payload: payload || {}
+            })
+        }
     }
 }
 

@@ -6,6 +6,8 @@
 import random
 import string
 from typing import Dict
+from utils.constants import LOBSTER_GRADES
+from utils.events import ServerEvents
 
 
 def generate_room_id(existing_rooms: Dict[str, dict]) -> str:
@@ -18,7 +20,7 @@ def generate_room_id(existing_rooms: Dict[str, dict]) -> str:
 
 async def send_error(websocket, message: str):
     """发送错误消息给客户端"""
-    await websocket.send_json({'event': 'error', 'data': {'message': message}})
+    await websocket.send_json({'event': ServerEvents.ERROR, 'data': {'message': message}})
 
 
 def _count_lobsters_by_grade(player: dict) -> dict:
@@ -38,130 +40,69 @@ def _find_lobster_by_grade(player: dict, grade: str) -> dict:
     return None
 
 
+def _update_lobster_grade(player: dict, grade: str, delta: int):
+    """添加或移除指定等级的龙虾"""
+    if delta > 0:
+        for _ in range(delta):
+            player['lobsters'].append({
+                'id': ''.join(random.choices(string.ascii_lowercase + string.digits, k=9)),
+                'grade': grade,
+                'title': None
+            })
+    elif delta < 0:
+        for _ in range(abs(delta)):
+            lobster = _find_lobster_by_grade(player, grade)
+            if lobster:
+                player['lobsters'].remove(lobster)
+
+
+def _build_resource_snapshot(player: dict) -> dict:
+    """构建玩家完整资源快照"""
+    return {
+        'coins': player.get('coins', 0),
+        'seaweed': player.get('seaweed', 0),
+        'cages': player.get('cages', 0),
+        'de': player.get('de', 0),
+        'wang': player.get('wang', 0),
+        'liZhang': player.get('liZhang', 0),
+        'bubbles': player.get('bubbles', 0),
+        'bonusGold': player.get('bonusGold', 0),
+        'lobsters': player.get('lobsters', []),
+        'titleCards': player.get('titleCards', []),
+    }
+
+
 def has_resources(player: dict, cost: dict) -> bool:
     """查询: 玩家是否有足够资源"""
     lobster_counts = _count_lobsters_by_grade(player)
     for k, v in cost.items():
-        if k == 'lobsters':
+        if k in LOBSTER_GRADES:
+            if lobster_counts.get(k, 0) < v:
+                return False
+        elif k == 'lobsters':
             for grade, amount in v.items():
                 if lobster_counts.get(grade, 0) < amount:
                     return False
-        elif k == 'normal':
-            if lobster_counts.get('normal', 0) < v:
-                return False
-        elif k == 'grade3':
-            if lobster_counts.get('grade3', 0) < v:
-                return False
-        elif k == 'grade2':
-            if lobster_counts.get('grade2', 0) < v:
-                return False
-        elif k == 'grade1':
-            if lobster_counts.get('grade1', 0) < v:
-                return False
-        elif k == 'royal':
-            if lobster_counts.get('royal', 0) < v:
-                return False
         else:
             if player.get(k, 0) < v:
                 return False
     return True
 
 
-async def update_resources(player: dict, deltas: dict, sign: int = 1, broadcast_fn=None):
-    """更新: 对玩家资源做增减并广播。sign=1 奖励, sign=-1 扣除。
-    broadcast_fn: async def(player_id, client_resources) 广播回调"""
-    changed = {}
+async def update_resources(player: dict, deltas: dict, broadcast_fn=None):
+    """更新玩家资源。delta 正数增加，负数减少。
+    广播完整资源快照，客户端直接替换。"""
     for k, v in deltas.items():
-        if k == 'lobsters':
+        if k in LOBSTER_GRADES:
+            _update_lobster_grade(player, k, v)
+        elif k == 'lobsters':
             for grade, amount in v.items():
-                delta = amount * sign
-                if delta > 0:
-                    for _ in range(delta):
-                        player['lobsters'].append({
-                            'id': ''.join(random.choices(string.ascii_lowercase + string.digits, k=9)),
-                            'grade': grade,
-                            'title': None
-                        })
-                elif delta < 0:
-                    for _ in range(abs(delta)):
-                        lobster = _find_lobster_by_grade(player, grade)
-                        if lobster:
-                            player['lobsters'].remove(lobster)
-        elif k == 'normal':
-            delta = v * sign
-            if delta > 0:
-                for _ in range(delta):
-                    player['lobsters'].append({
-                        'id': ''.join(random.choices(string.ascii_lowercase + string.digits, k=9)),
-                        'grade': 'normal',
-                        'title': None
-                    })
-            elif delta < 0:
-                for _ in range(abs(delta)):
-                    lobster = _find_lobster_by_grade(player, 'normal')
-                    if lobster:
-                        player['lobsters'].remove(lobster)
-        elif k == 'grade3':
-            delta = v * sign
-            if delta > 0:
-                for _ in range(delta):
-                    player['lobsters'].append({
-                        'id': ''.join(random.choices(string.ascii_lowercase + string.digits, k=9)),
-                        'grade': 'grade3',
-                        'title': None
-                    })
-            elif delta < 0:
-                for _ in range(abs(delta)):
-                    lobster = _find_lobster_by_grade(player, 'grade3')
-                    if lobster:
-                        player['lobsters'].remove(lobster)
-        elif k == 'grade2':
-            delta = v * sign
-            if delta > 0:
-                for _ in range(delta):
-                    player['lobsters'].append({
-                        'id': ''.join(random.choices(string.ascii_lowercase + string.digits, k=9)),
-                        'grade': 'grade2',
-                        'title': None
-                    })
-            elif delta < 0:
-                for _ in range(abs(delta)):
-                    lobster = _find_lobster_by_grade(player, 'grade2')
-                    if lobster:
-                        player['lobsters'].remove(lobster)
-        elif k == 'grade1':
-            delta = v * sign
-            if delta > 0:
-                for _ in range(delta):
-                    player['lobsters'].append({
-                        'id': ''.join(random.choices(string.ascii_lowercase + string.digits, k=9)),
-                        'grade': 'grade1',
-                        'title': None
-                    })
-            elif delta < 0:
-                for _ in range(abs(delta)):
-                    lobster = _find_lobster_by_grade(player, 'grade1')
-                    if lobster:
-                        player['lobsters'].remove(lobster)
-        elif k == 'royal':
-            delta = v * sign
-            if delta > 0:
-                for _ in range(delta):
-                    player['lobsters'].append({
-                        'id': ''.join(random.choices(string.ascii_lowercase + string.digits, k=9)),
-                        'grade': 'royal',
-                        'title': None
-                    })
-            elif delta < 0:
-                for _ in range(abs(delta)):
-                    lobster = _find_lobster_by_grade(player, 'royal')
-                    if lobster:
-                        player['lobsters'].remove(lobster)
+                _update_lobster_grade(player, grade, amount)
         else:
-            player[k] = player.get(k, 0) + v * sign
-            changed[k] = player[k]
-    if changed and broadcast_fn:
-        await broadcast_fn(player['id'], changed)
+            player[k] = player.get(k, 0) + v
+
+    if broadcast_fn:
+        await broadcast_fn(player['id'], _build_resource_snapshot(player))
 
 
 def get_player(game_state: dict, player_id: int) -> dict:

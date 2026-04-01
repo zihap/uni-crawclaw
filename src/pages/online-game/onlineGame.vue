@@ -7,7 +7,7 @@
                 <text class="round-number">{{ onlineGameStore.currentRound }}/{{ onlineGameStore.maxRounds }}</text>
             </view>
             <view class="phase-info">
-                <text class="phase-label">{{ getPhaseText() }}</text>
+                <text class="phase-label">{{ phaseText }}</text>
             </view>
             <button class="next-btn" @click="handleNextPhase" :disabled="!onlineGameStore.isMyTurn">下一阶段</button>
         </view>
@@ -25,7 +25,7 @@
         <!-- 玩家栏 -->
         <view class="players-bar">
             <view
-                v-for="(player, index) in onlineGameStore.players"
+                v-for="(player, index) in playerStore.players"
                 :key="player.id"
                 :class="[
                     'player-item',
@@ -223,7 +223,7 @@
                 </view>
                 <view class="resource-item">
                     <text class="resource-label">龙虾</text>
-                    <text class="resource-value">{{onlineGameStore.myPlayer.lobsters?.length }}</text>
+                    <text class="resource-value">{{ onlineGameStore.myPlayer.lobsters?.length }}</text>
                 </view>
             </view>
         </view>
@@ -249,7 +249,6 @@
 
         <!-- 竞技场龙虾选择弹窗 -->
         <LobsterSelect
-            ref="lobsterSelectRef"
             :visible="showArenaModal"
             :challenger="onlineGameStore.currentArenaBattle?.challenger"
             :defender="onlineGameStore.currentArenaBattle?.defender"
@@ -268,32 +267,37 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useOnlineGameStore } from '@stores/online-game.js'
+import { usePlayerStore } from '@stores/player.js'
 import { DEFAULT_SLOT_STYLE, getOccupiedSlotStyle, PLAYER_COLORS } from '@utils/slotConstants.js'
 import LobsterSelect from './LobsterSelect.vue'
 import socketModule from '@utils/socket.js'
 
 const socketService = socketModule.socketService || socketModule
 const onlineGameStore = useOnlineGameStore()
+const playerStore = usePlayerStore()
 const showLog = ref(false)
-const lobsterSelectRef = ref(null)
+const showArenaModal = ref(false)
 
 // ============ 计算属性 ============
 const isPlacementPhase = computed(() => onlineGameStore.currentPhase === 'placement')
 
 const currentPlacementPlayerName = computed(() => {
-    const player = onlineGameStore.players[onlineGameStore.currentPlayerIndex]
+    const player = playerStore.players[onlineGameStore.currentPlayerIndex]
     return player?.name || '未知'
 })
 
-// ============ 视觉样式方法 ============
+const phaseText = computed(() => `${onlineGameStore.phaseText}阶段`)
 
-/**
- * 获取玩家栏目的样式
- * 用于区分当前轮到放置的玩家
- */
+const arenaBattleQueue = computed(() => onlineGameStore.arenaBattleQueue)
+
+const showArenaReopen = computed(
+    () => onlineGameStore.arenaPhase !== 'idle' && !showArenaModal.value && arenaBattleQueue.value.length > 0
+)
+
+// ============ 样式方法 ============
+
 const getPlayerItemStyle = (playerId) => {
     if (!isCurrentPlacementPlayer(playerId)) return {}
-
     const color = PLAYER_COLORS[playerId]
     if (!color) return {}
     return {
@@ -302,14 +306,9 @@ const getPlayerItemStyle = (playerId) => {
     }
 }
 
-/**
- * 获取行动格的样式
- * 根据占用状态返回不同的视觉样式
- */
 const getSlotStyle = (area, slotIndex) => {
     const occupant = onlineGameStore.getSlotOccupant(area, slotIndex)
-
-    if (occupant !== null && occupant !== undefined) {
+    if (occupant != null) {
         const style = getOccupiedSlotStyle(occupant)
         return {
             background: style.background,
@@ -318,109 +317,33 @@ const getSlotStyle = (area, slotIndex) => {
             color: style.color
         }
     }
-
-    // 未占用状态
     return {
         background: DEFAULT_SLOT_STYLE.background,
         opacity: isPlacementPhase.value ? 1 : 0.6
     }
 }
 
-/**
- * 检查行动格是否被占用
- */
-const isSlotOccupied = (area, slotIndex) => {
-    return onlineGameStore.isSlotOccupied(area, slotIndex)
-}
+// ============ 状态查询 ============
 
-/**
- * 获取占用行动格的玩家标签
- * 用于在UI上显示"1P"、"2P"等标识
- */
+const isSlotOccupied = (area, slotIndex) => onlineGameStore.isSlotOccupied(area, slotIndex)
+
 const getSlotOccupantLabel = (area, slotIndex) => {
     const occupant = onlineGameStore.getSlotOccupant(area, slotIndex)
-    if (occupant !== null && occupant !== undefined) {
-        const style = getOccupiedSlotStyle(occupant)
-        return style.playerLabel
-    }
-    return null
+    return occupant != null ? getOccupiedSlotStyle(occupant).playerLabel : null
 }
 
-/**
- * 检查是否可以在该行动格放置
- * 用于UI按钮的禁用状态判断
- */
 const canPlaceOnSlot = (area, slotIndex) => {
-    // 如果不是工放阶段，不能放置
     if (!isPlacementPhase.value) return false
-
-    // 如果不是我的回合，不能放置（联机特有）
     if (!onlineGameStore.isMyTurn) return false
-
-    // 如果行动格已被占用，不能放置
     if (isSlotOccupied(area, slotIndex)) return false
-
     return true
 }
 
-/**
- * 检查是否是当前轮到放置的玩家
- */
-const isCurrentPlacementPlayer = (playerId) => {
-    if (!isPlacementPhase.value) return false
-    return onlineGameStore.currentPlayerIndex === playerId
-}
+const isCurrentPlacementPlayer = (playerId) => isPlacementPhase.value && onlineGameStore.currentPlayerIndex === playerId
 
-// ============ 交互处理方法 ============
+const isMarketplaceAvailable = (slotIndex) => onlineGameStore.currentRound >= slotIndex + 1
 
-/**
- * 显示提示信息
- * @param {string} message - 提示内容
- * @param {string} icon - 图标类型
- */
-const showToast = (message, icon = 'none') => {
-    uni.showToast({
-        title: message,
-        icon: icon,
-        duration: 2000
-    })
-}
-
-/**
- * 处理行动格点击事件
- * 实现放置机制的核心交互逻辑
- */
-const handleSlotClick = (area, slotIndex) => {
-    // 如果不是工放阶段，显示提示
-    if (!isPlacementPhase.value) {
-        showToast('当前不是工放阶段，无法放置里长')
-        return
-    }
-
-    // 如果不是我的回合（联机特有）
-    if (!onlineGameStore.isMyTurn) {
-        showToast('不是你的回合')
-        return
-    }
-
-    // 如果行动格已被占用，显示占用者信息
-    if (isSlotOccupied(area, slotIndex)) {
-        const occupant = onlineGameStore.getSlotOccupant(area, slotIndex)
-        const occupantPlayer = onlineGameStore.players.find((p) => p.id === occupant)
-        const occupantName = occupantPlayer?.name || '未知玩家'
-        showToast(`该行动格已被${occupantName}占用`)
-        return
-    }
-
-    // 执行放置操作
-    onlineGameStore.placeHeadman(area, slotIndex)
-}
-
-// ============ 工具方法 ============
-
-const getPhaseText = () => {
-    return `${onlineGameStore.phaseText}阶段`
-}
+// ============ 行动格描述 ============
 
 const getShrimpCatchingSlotDesc = (i) => {
     const descs = ['1虾笼,夺起始,1次捕虾', '1虾笼,2次捕虾', '1金币,3次捕虾', '4次捕虾']
@@ -452,13 +375,28 @@ const getMarketplaceSlotDesc = (i) => {
     return descs[i - 1]
 }
 
-/**
- * 检查闹市区行动格是否可用
- * 闹市区有回合限制
- */
-const isMarketplaceAvailable = (slotIndex) => {
-    // 1号格第2回合可用，2号格第3回合可用，3号格第4回合可用
-    return onlineGameStore.currentRound >= slotIndex + 2
+// ============ 交互处理 ============
+
+const showToast = (message, icon = 'none') => {
+    uni.showToast({ title: message, icon, duration: 2000 })
+}
+
+const handleSlotClick = (area, slotIndex) => {
+    if (!isPlacementPhase.value) {
+        showToast('当前不是工放阶段，无法放置里长')
+        return
+    }
+    if (!onlineGameStore.isMyTurn) {
+        showToast('不是你的回合')
+        return
+    }
+    if (isSlotOccupied(area, slotIndex)) {
+        const occupant = onlineGameStore.getSlotOccupant(area, slotIndex)
+        const occupantPlayer = playerStore.players.find((p) => p.id === occupant)
+        showToast(`该行动格已被${occupantPlayer?.name || '未知玩家'}占用`)
+        return
+    }
+    onlineGameStore.sendGameAction('placeHeadman', { areaIndex: area, slotIndex })
 }
 
 const handleNextPhase = () => {
@@ -466,130 +404,162 @@ const handleNextPhase = () => {
         showToast('不是你的回合')
         return
     }
-
     if (onlineGameStore.currentPhase === 'placement') {
-        onlineGameStore.nextPlayer()
+        onlineGameStore.sendGameAction('nextPlayer', {})
     } else if (onlineGameStore.currentPhase === 'settlement') {
-        onlineGameStore.nextArea()
+        onlineGameStore.sendGameAction('nextArea', {})
     }
 }
 
-// ============ 竞技场战斗逻辑（联机特有） ============
+// ============ 竞技场逻辑 ============
 
-const showArenaModal = ref(false)
-const arenaBattleQueue = computed(() => onlineGameStore.arenaBattleQueue)
-const showArenaReopen = computed(() => {
-    return onlineGameStore.arenaPhase !== 'idle' && !showArenaModal.value && arenaBattleQueue.value.length > 0
-})
+const checkBattleAvailability = () => {
+    const battle = onlineGameStore.currentArenaBattle
+    if (!battle) return { available: true }
 
-/**
- * 监听竞技场战斗队列变化
- */
+    const challengerAvailable = onlineGameStore.getAvailableLobstersForBattle(battle.challenger?.id).length > 0
+    const defenderAvailable = onlineGameStore.getAvailableLobstersForBattle(battle.defender?.id).length > 0
+
+    if (!defenderAvailable && challengerAvailable) {
+        return { available: false, reason: 'defender_no_lobster', battle }
+    }
+    if (!challengerAvailable) {
+        return { available: false, reason: 'challenger_no_lobster', battle }
+    }
+    return { available: true }
+}
+
+const skipCurrentBattle = (reason, battle) => {
+    if (reason === 'defender_no_lobster') {
+        showToast(`${battle.defender?.name} 无可用龙虾，${battle.challenger?.name} 获胜并交换位置`)
+        socketService._send('noLobsterForfeit', {
+            challengeSlot: battle.slotIndex
+        })
+    } else {
+        showToast(`${battle.challenger?.name} 无可用龙虾，跳过本场战斗`)
+    }
+
+    onlineGameStore.arenaBattleQueue.shift()
+    if (onlineGameStore.arenaBattleQueue.length > 0) {
+        onlineGameStore.setCurrentArenaBattle(0)
+    }
+}
+
+const shouldShowArena = () => {
+    if (arenaBattleQueue.value.length === 0) return false
+    if (onlineGameStore.currentPhase !== 'settlement') return false
+    if (onlineGameStore.arenaPhase !== 'idle') return false
+
+    const check = checkBattleAvailability()
+    if (!check.available) {
+        skipCurrentBattle(check.reason, check.battle)
+        return false
+    }
+    return true
+}
+
+const openArenaModal = () => {
+    onlineGameStore.setCurrentArenaBattle(0)
+    showArenaModal.value = true
+}
+
 watch(
-    () => arenaBattleQueue.value,
-    (queue) => {
-        if (
-            queue.length > 0 &&
-            onlineGameStore.currentPhase === 'settlement' &&
-            onlineGameStore.arenaPhase === 'idle'
-        ) {
-            onlineGameStore.setCurrentArenaBattle(0)
-            showArenaModal.value = true
-        }
+    arenaBattleQueue,
+    () => {
+        if (shouldShowArena()) openArenaModal()
     },
     { deep: true }
 )
 
 watch(
     () => onlineGameStore.currentPhase,
-    (phase) => {
-        if (phase === 'settlement' && arenaBattleQueue.value.length > 0 && onlineGameStore.arenaPhase === 'idle') {
-            onlineGameStore.setCurrentArenaBattle(0)
-            showArenaModal.value = true
-        }
+    () => {
+        if (shouldShowArena()) openArenaModal()
     }
 )
 
-/**
- * 处理双方都选择完成（含投注完成+倒计时结束），进入竞技场
- */
-const handleBothReady = ({ challenger, defender, challengerLobster, defenderLobster }) => {
-    showArenaModal.value = false
-    onlineGameStore.setArenaPhase('idle')
+const buildArenaPlayerData = (player, selectedLobster, defaultColor) => ({
+    id: player.id,
+    name: player.name,
+    lobsterId: selectedLobster.id,
+    lobsterName: selectedLobster.name,
+    lobsterDesc: selectedLobster.description,
+    color: PLAYER_COLORS[player.id]?.bg || defaultColor
+})
 
-    const player1Data = {
-        id: challenger.id,
-        name: challenger.name,
-        lobsterId: challengerLobster.id,
-        lobsterName: challengerLobster.name,
-        lobsterDesc: challengerLobster.description,
-        color: PLAYER_COLORS[challenger.id]?.bg || '#FF6B6B'
-    }
-
-    const player2Data = {
-        id: defender.id,
-        name: defender.name,
-        lobsterId: defenderLobster.id,
-        lobsterName: defenderLobster.name,
-        lobsterDesc: defenderLobster.description,
-        color: PLAYER_COLORS[defender.id]?.bg || '#4ECDC4'
-    }
-
-    // 移除当前这场战斗（开始后就从队列中删除）
+const navigateToArena = (player1Data, player2Data) => {
     if (onlineGameStore.arenaBattleQueue.length > 0) {
         onlineGameStore.arenaBattleQueue.shift()
     }
 
-    // 跳转到竞技场页面
     const storageKey = `arenaBattleQueue_${onlineGameStore.roomId}`
     uni.setStorageSync(storageKey, onlineGameStore.arenaBattleQueue)
 
-    uni.navigateTo({
-        url: `/pages/arena/arena?player1=${encodeURIComponent(JSON.stringify(player1Data))}&player2=${encodeURIComponent(JSON.stringify(player2Data))}&roomId=${onlineGameStore.roomId}&playerId=${onlineGameStore.playerId}&challengeSlot=${onlineGameStore.currentArenaBattle?.slotIndex}`
-    })
+    const battle = onlineGameStore.currentArenaBattle
+    const url = `/pages/arena/arena?player1=${encodeURIComponent(JSON.stringify(player1Data))}&player2=${encodeURIComponent(JSON.stringify(player2Data))}&roomId=${onlineGameStore.roomId}&playerId=${onlineGameStore.playerId}&challengeSlot=${battle?.slotIndex}`
+
+    uni.navigateTo({ url })
 }
 
-// ============ 生命周期（联机特有） ============
+const handleBothReady = ({ challenger, defender, challengerLobster, defenderLobster }) => {
+    showArenaModal.value = false
+    onlineGameStore.setArenaPhase('idle')
 
-onMounted(() => {
+    const player1Data = buildArenaPlayerData(challenger, challengerLobster, '#FF6B6B')
+    const player2Data = buildArenaPlayerData(defender, defenderLobster, '#4ECDC4')
+
+    navigateToArena(player1Data, player2Data)
+}
+
+// ============ 生命周期 ============
+
+const parsePageOptions = () => {
     const pages = getCurrentPages()
-    const currentPage = pages[pages.length - 1]
-    const options = currentPage.options || {}
+    return pages[pages.length - 1].options || {}
+}
 
-    const rId = options.roomId || uni.getStorageSync('roomId') || ''
-    const pId = parseInt(options.playerId) || uni.getStorageSync('playerId')
-
-    // 恢复 arenaBattleQueue（从 arena 页面返回时可能有队列）
-    const storageKey = `arenaBattleQueue_${rId}`
+const restoreArenaQueue = (roomId) => {
+    const storageKey = `arenaBattleQueue_${roomId}`
     const savedQueue = uni.getStorageSync(storageKey)
-    if (savedQueue && savedQueue.length > 0) {
+    if (savedQueue?.length > 0) {
         onlineGameStore.arenaBattleQueue = savedQueue
         uni.removeStorageSync(storageKey)
     }
+}
 
-    if (!rId || pId === null) {
-        uni.redirectTo({ url: '/pages/lobby/lobby' })
-        return
-    }
-
-    // 使用 URL 传递的 gameState 初始化状态，避免 room.vue 销毁到 onlineGame.vue 挂载期间
-    // socket 监听器空窗期导致错过 roomStateUpdate 事件的竞态问题
+const initGameState = (options) => {
     if (options.gameState) {
         try {
             const gs = JSON.parse(decodeURIComponent(options.gameState))
             onlineGameStore.updateGameState(gs)
-        } catch (e) {
-            console.error('Failed to parse gameState from URL:', e)
+        } catch {
+            // ignore parse errors
         }
     }
+}
 
-    onlineGameStore.initOnlineMode(rId, pId)
-
-    const isAlreadyConnected = onlineGameStore.isConnected && onlineGameStore.roomId === rId
+const initSocket = (roomId, playerId) => {
+    const isAlreadyConnected = onlineGameStore.isConnected && onlineGameStore.roomId === roomId
     if (!isAlreadyConnected) {
-        socketService.setRoomContext(rId, pId)
-        socketService.connect(rId, pId)
+        socketService.setRoomContext(roomId, playerId)
+        socketService.connect(roomId, playerId)
     }
+}
+
+onMounted(() => {
+    const options = parsePageOptions()
+    const roomId = options.roomId || uni.getStorageSync('roomId') || ''
+    const playerId = parseInt(options.playerId) || uni.getStorageSync('playerId')
+
+    if (!roomId || playerId === null) {
+        uni.redirectTo({ url: '/pages/lobby/lobby' })
+        return
+    }
+
+    restoreArenaQueue(roomId)
+    initGameState(options)
+    onlineGameStore.initOnlineMode(roomId, playerId)
+    initSocket(roomId, playerId)
 })
 
 onUnmounted(() => {

@@ -43,12 +43,17 @@ class ConnectionManager:
             for player_id in disconnected:
                 self.active_connections[room_id].pop(player_id, None)
 
+        lobby_disconnected = []
         for user_id, ws in list(self.lobby_connections.items()):
             if self.user_rooms.get(user_id) == room_id:
                 try:
                     await ws.send_json({"event": event, "data": data})
                 except Exception:
-                    pass
+                    lobby_disconnected.append(user_id)
+
+        for user_id in lobby_disconnected:
+            self.lobby_connections.pop(user_id, None)
+            self.user_rooms.pop(user_id, None)
 
     async def connect(self, websocket: WebSocket, room_id: str, player_id: int):
         await websocket.accept()
@@ -64,6 +69,11 @@ class ConnectionManager:
             if not self.active_connections[room_id]:
                 del self.active_connections[room_id]
         self.heartbeat_timestamps.pop(fingerprint, None)
+
+        for uid in list(self.user_rooms.keys()):
+            if self.user_rooms[uid] == room_id:
+                self.user_rooms.pop(uid, None)
+
         print(f"Client {player_id} disconnected from room {room_id}")
 
     async def send_to_room(self, room_id: str, event: str, data: dict):
@@ -76,6 +86,7 @@ class ConnectionManager:
                     disconnected.append(player_id)
             for player_id in disconnected:
                 self.active_connections[room_id].pop(player_id, None)
+                print(f"Removed disconnected player {player_id} from room {room_id}")
 
     async def send_to_player(self, room_id: str, player_id: int, event: str, data: dict):
         if room_id in self.active_connections:

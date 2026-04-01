@@ -1,5 +1,5 @@
 <template>
-    <view v-if="visible" class="modal-overlay" @click="handleOverlayClick">
+    <view v-if="visible" class="modal-overlay" @click.stop>
         <view class="modal-container" @click.stop>
             <view class="modal-header">
                 <text class="modal-title">竞技场对决</text>
@@ -10,13 +10,13 @@
                 <view class="player-info" :class="{ active: isChallenger }">
                     <text class="player-label">挑战者</text>
                     <text class="player-name">{{ challenger?.name }}</text>
-                    <view v-if="challengerReady" class="ready-badge">已选择</view>
+                    <view v-if="store.challengerReady" class="ready-badge">已选择</view>
                 </view>
                 <text class="vs-text">VS</text>
                 <view class="player-info" :class="{ active: isDefender }">
                     <text class="player-label">被挑战者</text>
                     <text class="player-name">{{ defender?.name }}</text>
-                    <view v-if="defenderReady" class="ready-badge">已选择</view>
+                    <view v-if="store.defenderReady" class="ready-badge">已选择</view>
                 </view>
             </view>
 
@@ -39,7 +39,7 @@
                         </view>
                     </view>
                 </view>
-                <view v-else class="spectator-view">
+                <view v-if="!isFighter" class="spectator-view">
                     <text class="spectator-text">你是观战者，请等待双方选择龙虾...</text>
                 </view>
                 <view v-if="isChallenger || isDefender" class="modal-actions">
@@ -55,7 +55,7 @@
 
             <!-- Phase 2: Betting - 观战者投注 -->
             <view v-if="localPhase === 'betting'" class="betting-area">
-                <view v-if="isSpectator" class="betting-selection">
+                <view v-if="!isFighter" class="betting-selection">
                     <text class="selection-title">选择你要支持的龙虾（1金币）</text>
                     <view class="betting-fighters">
                         <view class="betting-fighter-card" @click="selectBetTarget('challenger')">
@@ -84,7 +84,7 @@
                         <button class="action-btn skip-btn" :disabled="hasBet" @click="handleSkipBet">跳过投注</button>
                     </view>
                 </view>
-                <view v-else class="spectator-view">
+                <view v-if="isFighter" class="spectator-view">
                     <text class="spectator-text">龙虾已选定！等待观战者投注...</text>
                     <view class="lobster-preview">
                         <view class="preview-card">
@@ -122,39 +122,23 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { useOnlineGameStore } from '@stores/online-game.js'
 import { usePlayerStore } from '@stores/player.js'
-import socketModule from '@utils/socket.js'
+import { socketService } from '@utils/socket.js'
 
-const socketService = socketModule.socketService || socketModule
 const store = useOnlineGameStore()
 const playerStore = usePlayerStore()
 
 const props = defineProps({
-    visible: {
-        type: Boolean,
-        default: false
-    },
-    challenger: {
-        type: Object,
-        default: null
-    },
-    defender: {
-        type: Object,
-        default: null
-    },
-    playerId: {
-        type: [Number, String],
-        default: null
-    },
-    roomId: {
-        type: String,
-        default: ''
-    }
+    visible: { type: Boolean, default: false },
+    challenger: { type: Object, default: null },
+    defender: { type: Object, default: null },
+    playerId: { type: [Number, String], default: null },
+    roomId: { type: String, default: '' }
 })
 
-const emit = defineEmits(['confirm', 'cancel', 'bothReady'])
+const emit = defineEmits(['bothReady'])
 
 // ============ 本地状态 ============
 const localPhase = ref('selecting')
@@ -166,133 +150,80 @@ const countdown = ref(5)
 let countdownTimer = null
 let currentBattleId = ''
 
-// 从 store 读取双方选择状态
-const challengerReady = computed(() => store.challengerReady)
-const defenderReady = computed(() => store.defenderReady)
-
 // ============ 身份判断 ============
-const isChallenger = computed(() => {
-    if (props.playerId === null || !props.challenger) return false
-    return String(props.challenger.id) === String(props.playerId)
-})
+const isChallenger = computed(
+    () => props.playerId !== null && props.challenger && String(props.challenger.id) === String(props.playerId)
+)
 
-const isDefender = computed(() => {
-    if (props.playerId === null || !props.defender) return false
-    return String(props.defender.id) === String(props.playerId)
-})
+const isDefender = computed(
+    () => props.playerId !== null && props.defender && String(props.defender.id) === String(props.playerId)
+)
 
 const isFighter = computed(() => isChallenger.value || isDefender.value)
-const isSpectator = computed(() => !isFighter.value)
 
 // ============ 计算属性 ============
 const myLobsters = computed(() => {
-    if (isFighter.value) {
-        const player = isChallenger.value ? props.challenger : props.defender
-        const validLobsters = player?.lobsters?.filter((l) => l && l.id && l.id !== 'normal') || []
-        const titleCards = player?.titleCards?.filter((t) => t && t.id) || []
-        return [...validLobsters, ...titleCards]
-    }
-    return []
+    if (!isFighter.value) return []
+    const player = isChallenger.value ? props.challenger : props.defender
+    const usedIds = new Set(store.getUsedLobsterIds(player.id))
+    const validLobsters = player?.lobsters?.filter((l) => l?.id && l.id !== 'normal' && !usedIds.has(l.id)) || []
+    const titleCards = player?.titleCards?.filter((t) => t?.id && !usedIds.has(t.id)) || []
+    return [...validLobsters, ...titleCards]
 })
 
 const canConfirm = computed(() => selectedIndex.value >= 0)
+
 const canBet = computed(() => {
     const myPlayer = playerStore.getPlayerById(store.playerId)
     return (myPlayer?.coins || 0) >= 1
 })
 
 const subtitle = computed(() => {
-    if (localPhase.value === 'selecting') {
-        if (isChallenger.value) return '你是挑战者，请选择出战龙虾'
-        if (isDefender.value) return '你是被挑战者，请选择出战龙虾'
-        return '观战模式'
+    const subtitles = {
+        selecting: isChallenger.value
+            ? '你是挑战者，请选择出战龙虾'
+            : isDefender.value
+              ? '你是被挑战者，请选择出战龙虾'
+              : '观战模式',
+        betting: isFighter.value ? '等待观战者投注...' : '请选择你要支持的龙虾',
+        ready: '即将进入竞技场'
     }
-    if (localPhase.value === 'betting') {
-        if (isSpectator.value) return '请选择你要支持的龙虾'
-        return '等待观战者投注...'
-    }
-    if (localPhase.value === 'ready') {
-        return '即将进入竞技场'
-    }
-    return ''
+    return subtitles[localPhase.value] || ''
 })
 
-// ============ 选龙虾逻辑 ============
-const selectLobster = (index) => {
-    if (hasConfirmed.value) return
-    selectedIndex.value = index
-}
+// ============ 工具方法 ============
 
-const handleConfirm = () => {
-    if (!canConfirm.value || hasConfirmed.value) return
-
-    const selectedLobster = myLobsters.value[selectedIndex.value]
-    hasConfirmed.value = true
-
-    // 构建 battle context
-    const battle = store.arenaBattleQueue[0]
-    if (!battle) return
-    const spectators = store.players
-        .filter((p) => p.id !== battle.challengerId && p.id !== battle.defenderId)
-        .map((p) => p.id)
-
-    socketService._send('lobsterSelected', {
-        roomId: props.roomId,
-        playerId: props.playerId,
-        lobster: selectedLobster,
-        battleId: currentBattleId,
-        challengerId: battle.challengerId,
-        defenderId: battle.defenderId,
-        spectators
-    })
-
-    // 本地标记自己已选择（写入 store）
-    if (isChallenger.value) {
-        store.challengerReady = true
-        store.challengerSelectedLobster = selectedLobster
-    } else if (isDefender.value) {
-        store.defenderReady = true
-        store.defenderSelectedLobster = selectedLobster
+const stopCountdown = () => {
+    if (countdownTimer) {
+        clearInterval(countdownTimer)
+        countdownTimer = null
     }
 }
 
-// ============ 投注逻辑 ============
-const selectBetTarget = (target) => {
-    if (hasBet.value) return
-    betTarget.value = target
+const resetLocalState = () => {
+    localPhase.value = 'selecting'
+    selectedIndex.value = -1
+    hasConfirmed.value = false
+    store.challengerReady = false
+    store.defenderReady = false
+    store.challengerSelectedLobster = null
+    store.defenderSelectedLobster = null
+    hasBet.value = false
+    betTarget.value = ''
+    countdown.value = 5
+    stopCountdown()
+    const battle = store.arenaBattleQueue[0]
+    currentBattleId = battle ? `${store.roomId}_${battle.slotIndex}` : ''
 }
 
-const handleBet = () => {
-    if (hasBet.value || !betTarget.value) return
-    hasBet.value = true
-
-    const battle = store.arenaBattleQueue[0]
-    if (!battle) return
-    const targetFighterId = betTarget.value === 'challenger' ? battle.challengerId : battle.defenderId
-
+const sendBetMessage = (betAmount, targetFighterId) => {
     socketService._send('spectatorBet', {
-        roomId: props.roomId,
-        playerId: props.playerId,
         battleId: currentBattleId,
-        betAmount: 1,
+        betAmount,
         targetFighterId
     })
 }
 
-const handleSkipBet = () => {
-    if (hasBet.value) return
-    hasBet.value = true
-
-    socketService._send('spectatorBet', {
-        roomId: props.roomId,
-        playerId: props.playerId,
-        battleId: currentBattleId,
-        betAmount: 0,
-        targetFighterId: null
-    })
-}
-
-// ============ Ready 阶段辅助 ============
 const getPlayerName = (playerId) => {
     const player = store.players.find((p) => String(p.id) === String(playerId))
     return player?.name || '未知玩家'
@@ -304,13 +235,81 @@ const getBetTargetName = (targetFighterId) => {
     return '未知'
 }
 
+// ============ 选龙虾逻辑 ============
+
+const selectLobster = (index) => {
+    if (!hasConfirmed.value) selectedIndex.value = index
+}
+
+const buildBattleContext = () => {
+    const battle = store.arenaBattleQueue[0]
+    if (!battle) return null
+    return {
+        spectators: store.players
+            .filter((p) => p.id !== battle.challengerId && p.id !== battle.defenderId)
+            .map((p) => p.id),
+        battle
+    }
+}
+
+const handleConfirm = () => {
+    if (!canConfirm.value || hasConfirmed.value) return
+
+    const selectedLobster = myLobsters.value[selectedIndex.value]
+    hasConfirmed.value = true
+
+    const context = buildBattleContext()
+    if (!context) return
+
+    socketService._send('lobsterSelected', {
+        lobster: selectedLobster,
+        battleId: currentBattleId,
+        challengerId: context.battle.challengerId,
+        defenderId: context.battle.defenderId,
+        spectators: context.spectators
+    })
+
+    store.markLobsterUsed(props.playerId, selectedLobster.id)
+
+    if (isChallenger.value) {
+        store.challengerReady = true
+        store.challengerSelectedLobster = selectedLobster
+    } else if (isDefender.value) {
+        store.defenderReady = true
+        store.defenderSelectedLobster = selectedLobster
+    }
+}
+
+// ============ 投注逻辑 ============
+
+const selectBetTarget = (target) => {
+    if (!hasBet.value) betTarget.value = target
+}
+
+const handleBet = () => {
+    if (hasBet.value || !betTarget.value) return
+    hasBet.value = true
+
+    const battle = store.arenaBattleQueue[0]
+    if (!battle) return
+    const targetFighterId = betTarget.value === 'challenger' ? battle.challengerId : battle.defenderId
+    sendBetMessage(1, targetFighterId)
+}
+
+const handleSkipBet = () => {
+    if (hasBet.value) return
+    hasBet.value = true
+    sendBetMessage(0, null)
+}
+
+// ============ Ready 阶段 ============
+
 const startCountdown = () => {
     countdown.value = 5
     countdownTimer = setInterval(() => {
         countdown.value--
         if (countdown.value <= 0) {
-            clearInterval(countdownTimer)
-            countdownTimer = null
+            stopCountdown()
             emit('bothReady', {
                 challenger: props.challenger,
                 defender: props.defender,
@@ -321,65 +320,30 @@ const startCountdown = () => {
     }, 1000)
 }
 
-// ============ 监听 store 阶段变化 ============
+// ============ 监听器 ============
+
 watch(
     () => store.arenaPhase,
     (newPhase) => {
-        if (newPhase === 'betting') {
-            localPhase.value = 'betting'
-        } else if (newPhase === 'ready') {
+        if (newPhase === 'betting') localPhase.value = 'betting'
+        else if (newPhase === 'ready') {
             localPhase.value = 'ready'
             startCountdown()
         }
     }
 )
 
-// ============ 弹窗开关 ============
 watch(
     () => props.visible,
     (newVal) => {
-        if (newVal) {
-            // 重置所有状态
-            localPhase.value = 'selecting'
-            selectedIndex.value = -1
-            hasConfirmed.value = false
-            store.challengerReady = false
-            store.defenderReady = false
-            store.challengerSelectedLobster = null
-            store.defenderSelectedLobster = null
-            hasBet.value = false
-            betTarget.value = ''
-            countdown.value = 5
-            if (countdownTimer) {
-                clearInterval(countdownTimer)
-                countdownTimer = null
-            }
-            // 生成一致的 battleId
-            const battle = store.arenaBattleQueue[0]
-            currentBattleId = battle ? `${store.roomId}_${battle.slotIndex}` : ''
-        } else {
-            if (countdownTimer) {
-                clearInterval(countdownTimer)
-                countdownTimer = null
-            }
-        }
+        if (newVal) resetLocalState()
+        else stopCountdown()
     }
 )
 
-onMounted(() => {
-    // store 已统一管理 lobsterSelected 监听
-})
-
 onUnmounted(() => {
-    if (countdownTimer) {
-        clearInterval(countdownTimer)
-        countdownTimer = null
-    }
+    stopCountdown()
 })
-
-const handleOverlayClick = () => {
-    // 点击遮罩层不关闭
-}
 </script>
 
 <style scoped>

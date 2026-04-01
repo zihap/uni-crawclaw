@@ -5,26 +5,54 @@
 返回 False 表示需要 break 循环，否则返回 None。
 """
 
-import random
 from utils.constants import AREAS, GRADE_UPGRADE
+from utils.events import ServerEvents
 from utils.helpers import send_error, has_resources, update_resources, get_player
 from services.game import (
-    broadcast_room_state, start_game, cleanup_room, transfer_host,
-    next_round
+    broadcast_room_state, broadcast_game_state, start_game, cleanup_room, transfer_host,
+    next_round, cleanup_phase
 )
-from services.area import resolve_area
+from services.area import resolve_area_step
 from utils.game_state import arena_betting_state
+from utils.game_state import draw_tribute_tasks, draw_downtown_cards
 
 
 def _make_bf(manager, room_id):
     """创建资源广播闭包"""
     async def bf(player_id, resources):
-        await manager.send_to_room(room_id, 'playerResourceUpdate', {
+        await manager.send_to_room(room_id, ServerEvents.PLAYER_RESOURCE_UPDATE, {
             'playerId': player_id, 'resources': resources
         })
     return bf
 
 
+def require_playing(fn):
+    """装饰器：要求游戏处于 playing 状态"""
+    async def wrapper(websocket, room_id, player_id, rooms, manager, payload):
+        game_state = rooms.get(room_id)
+        if not game_state or game_state.get('status') != 'playing':
+            await send_error(websocket, '游戏未开始')
+            return
+        return await fn(websocket, room_id, player_id, rooms, manager, payload)
+    return wrapper
+
+
+def swap_challenge_slot(game_state, challenge_slot):
+    """交换挑战槽位（challenger 获胜时调用）"""
+    tribute = game_state['areas'].get('tribute')
+    if not tribute:
+        return False
+    slots = tribute.get('slots', [])
+    challenge_slots = tribute.get('challengeSlots', [])
+    slot_map = {3: 0, 4: 1, 5: 2}
+    idx = slot_map.get(challenge_slot)
+    if idx is not None and idx < len(slots) and idx < len(challenge_slots):
+        slots[idx], challenge_slots[idx] = challenge_slots[idx], slots[idx]
+        return True
+    return False
+
+
+@require_playing
 async def handle_use_seaweed(websocket, room_id, player_id, rooms, manager, payload):
     game_state = rooms.get(room_id)
     if not game_state:
@@ -33,7 +61,7 @@ async def handle_use_seaweed(websocket, room_id, player_id, rooms, manager, payl
     if not player or player['seaweed'] <= 0:
         await send_error(websocket, '海草不足')
         return
-    await update_resources(player, {'seaweed': 1}, sign=-1, broadcast_fn=_make_bf(manager, room_id))
+    await update_resources(player, {'seaweed': -1}, broadcast_fn=_make_bf(manager, room_id))
 
 
 async def handle_leave_room(websocket, room_id, player_id, rooms, manager, payload, fingerprint):
@@ -51,17 +79,22 @@ async def handle_leave_room(websocket, room_id, player_id, rooms, manager, paylo
                     manager.user_rooms.pop(uid, None)
 
     manager.disconnect(room_id, player_id, fingerprint)
-    await websocket.close()
 
     if player_name:
         if game_state and game_state['players']:
             transfer_host(room_id, game_state)
             await broadcast_room_state(room_id, rooms, manager)
-            await manager.broadcast_to_room_members(room_id, 'playerLeft', {
-                'playerId': player_id, 'playerName': player_name, 'players': game_state['players']
+            await manager.broadcast_to_room_members(room_id, ServerEvents.PLAYER_STATUS_CHANGE, {
+                'playerId': player_id, 'playerName': player_name,
+                'status': 'offline', 'players': game_state['players']
             })
         else:
             cleanup_room(room_id, rooms, manager)
+
+    try:
+        await websocket.close()
+    except Exception:
+        pass
     return False
 
 
@@ -76,13 +109,13 @@ async def handle_set_ready(websocket, room_id, player_id, rooms, manager, payloa
     player = get_player(game_state, player_id)
     if player:
         player['ready'] = ready
-        await manager.send_to_room(room_id, 'playerReady', {
+        await manager.send_to_room(room_id, ServerEvents.PLAYER_READY, {
             'playerId': player_id, 'ready': ready, 'players': game_state['players']
         })
         await broadcast_room_state(room_id, rooms, manager)
 
         if force_start or (len(game_state['players']) >= 1 and all(p['ready'] for p in game_state['players'])):
-            await start_game(room_id, rooms, manager, lambda r: broadcast_room_state(r, rooms, manager))
+            await start_game(room_id, rooms, manager)
 
 
 async def handle_place_headman(websocket, room_id, player_id, rooms, manager, payload):
@@ -114,17 +147,12 @@ async def handle_place_headman(websocket, room_id, player_id, rooms, manager, pa
     if slot_index < 0 or slot_index >= len(slots) or slots[slot_index] is not None:
         await send_error(websocket, '该位置已有米宝')
         return
-    await update_resources(player, {'liZhang': 1}, sign=-1, broadcast_fn=bf)
+    await update_resources(player, {'liZhang': -1}, broadcast_fn=bf)
     slots[slot_index] = player_id
-
-    await manager.send_to_room(room_id, 'headmanPlaced', {
-        'playerId': player_id, 'areaIndex': area_index, 'slotIndex': slot_index, 'gameState': game_state
-    })
-    await broadcast_room_state(room_id, rooms, manager)
+    await broadcast_game_state(room_id, rooms, manager)
 
 
 async def handle_next_player(websocket, room_id, player_id, rooms, manager, payload):
-    print(f"DEBUG: nextPlayer event handler triggered for player {player_id} in room {room_id}")
     game_state = rooms.get(room_id)
     if not game_state:
         return
@@ -139,81 +167,164 @@ async def handle_next_player(websocket, room_id, player_id, rooms, manager, payl
         game_state['phase'] = 'settlement'
         game_state['currentArea'] = 0
         game_state['battleQueue'] = []
+        game_state['settlementState'] = {
+            'currentSlotIndex': -1,
+            'remainingActions': 0,
+            'waitingForPlayer': None,
+            'areaType': None
+        }
 
-        for i, area_name in enumerate(AREAS):
-            if area_name in game_state['areas']:
-                resolve_area(game_state, i, AREAS)
-
-        # 检查是否有战斗
-        battle_queue = game_state.get('battleQueue', [])
-        if battle_queue:
-            await manager.send_to_room(room_id, 'battleStart', {
-                'battleQueue': battle_queue,
-                'gameState': game_state
-            })
-
-        await manager.send_to_room(room_id, 'playerTurn', {
-            'currentPlayerIndex': game_state.get('currentPlayerIndex', 0), 'gameState': game_state
-        })
-        await broadcast_room_state(room_id, rooms, manager)
-        print(f"All players placed, phase changed to settlement, {len(battle_queue)} battles queued")
+        await _start_area_settlement(websocket, room_id, game_state, rooms, manager)
     else:
         current_idx = game_state.get('currentPlayerIndex', 0)
         game_state['currentPlayerIndex'] = (current_idx + 1) % len(game_state['players'])
-        print(f"Next player: {game_state['currentPlayerIndex']}")
 
-        await manager.send_to_room(room_id, 'playerTurn', {
-            'currentPlayerIndex': game_state.get('currentPlayerIndex', 0), 'gameState': game_state
-        })
-        await broadcast_room_state(room_id, rooms, manager)
+        await broadcast_game_state(room_id, rooms, manager)
 
+
+async def _start_area_settlement(websocket, room_id, game_state, rooms, manager):
+    """启动当前区域的结算流程"""
+    from services.area import resolve_area_step
+
+    current_area = game_state.get('currentArea', 0)
+
+    if current_area >= len(AREAS):
+        await _complete_settlement(room_id, game_state, manager)
+        return
+
+    area_name = AREAS[current_area]
+    area_data = game_state['areas'].get(area_name)
+    if not area_data:
+        game_state['currentArea'] = current_area + 1
+        await _start_area_settlement(websocket, room_id, game_state, manager)
+        return
+
+    result = await resolve_area_step(game_state, current_area, manager, room_id)
+
+    if result == 'auto_next':
+        for area_n in AREAS:
+            if area_n in game_state['areas']:
+                slot_count = len(game_state['areas'][area_n]['slots'])
+                game_state['areas'][area_n]['slots'] = [None] * slot_count
+
+        for p in game_state['players']:
+            p['liZhang'] = min(p['liZhang'] + 1, 5)
+
+        if current_area + 1 >= len(AREAS):
+            await _complete_settlement(room_id, game_state, rooms, manager)
+        else:
+            game_state['currentArea'] = current_area + 1
+            await _start_area_settlement(websocket, room_id, game_state, rooms, manager)
+    elif result == 'waiting_ui':
+        await broadcast_game_state(room_id, rooms, manager)
+
+
+async def _complete_settlement(room_id, game_state, rooms, manager):
+    """完成结算阶段，进入清理和下一回合"""
+    from services.game import cleanup_phase
+
+    cleanup_phase(game_state)
+
+    game_state['phase'] = 'placement'
+    game_state['currentPlayerIndex'] = game_state.get('startingPlayerIndex', 0)
+    game_state['currentArea'] = 0
+
+    for area_name in AREAS:
+        if area_name in game_state['areas']:
+            slot_count = len(game_state['areas'][area_name]['slots'])
+            game_state['areas'][area_name]['slots'] = [None] * slot_count
+
+    for p in game_state['players']:
+        p['royalCountThisRound'] = 0
+
+    draw_tribute_tasks(game_state)
+    draw_downtown_cards(game_state)
+
+    await manager.send_to_room(room_id, ServerEvents.SETTLEMENT_COMPLETE, {
+        'gameState': game_state
+    })
+    await manager.send_to_room(room_id, ServerEvents.ROUND_STARTED, {
+        'round': game_state['currentRound'],
+        'gameState': game_state
+    })
+    await broadcast_game_state(room_id, rooms, manager)
 
 async def handle_next_area(websocket, room_id, player_id, rooms, manager, payload):
     """结算当前区域并进入下一个区域"""
     game_state = rooms.get(room_id)
     if not game_state:
         return
-
     current_area = game_state.get('currentArea', 0)
-
-    # 结算下一个区域
     if current_area + 1 >= len(AREAS):
-        # 所有区域已结算完毕，清空所有槽位，发放里长，进入下一回合
         for area_name in AREAS:
             if area_name in game_state['areas']:
                 slot_count = len(game_state['areas'][area_name]['slots'])
                 game_state['areas'][area_name]['slots'] = [None] * slot_count
-
         for p in game_state['players']:
             p['liZhang'] = min(p['liZhang'] + 1, 5)
-
-        await next_round(room_id, rooms, manager, lambda r: broadcast_room_state(r, rooms, manager))
+        await next_round(room_id, rooms, manager)
     else:
-        # 先结算当前区域
-        resolve_area(game_state, current_area, AREAS)
-
-        # 清空所有区域槽位，发放里长
+        resolve_area_step(game_state, current_area, manager, room_id)
         for area_name in AREAS:
             if area_name in game_state['areas']:
                 slot_count = len(game_state['areas'][area_name]['slots'])
                 game_state['areas'][area_name]['slots'] = [None] * slot_count
-
         for p in game_state['players']:
             p['liZhang'] = min(p['liZhang'] + 1, 5)
-
         current_area += 1
         game_state['currentArea'] = current_area
-
-        await manager.send_to_room(room_id, 'areaSettled', {
+        await manager.send_to_room(room_id, ServerEvents.AREA_SETTLED, {
             'areaIndex': current_area, 'gameState': game_state
         })
-        await broadcast_room_state(room_id, rooms, manager)
+        await broadcast_game_state(room_id, rooms, manager)
+
+@require_playing
+async def handle_area_action(websocket, room_id, player_id, rooms, manager, payload):
+    """处理结算阶段的前端交互操作（海鲜市场买卖、养蛊区培养、闹市区选卡）"""
+    from services.area import process_area_action
+
+    game_state = rooms.get(room_id)
+    if not game_state:
+        return
+
+    if game_state.get('phase') != 'settlement':
+        await send_error(websocket, '当前不在结算阶段')
+        return
+
+    settlement_state = game_state.get('settlementState', {})
+    if settlement_state.get('waitingForPlayer') != player_id:
+        await send_error(websocket, '不是你的操作回合')
+        return
+
+    action_type = payload.get('actionType')
+    action_payload = payload.get('payload', {})
+
+    result = await process_area_action(game_state, action_type, action_payload, manager, room_id, websocket)
+
+    if result == 'action_complete':
+        await broadcast_game_state(room_id, rooms, manager)
+
+        for area_name in AREAS:
+            if area_name in game_state['areas']:
+                slot_count = len(game_state['areas'][area_name]['slots'])
+                game_state['areas'][area_name]['slots'] = [None] * slot_count
+
+        for p in game_state['players']:
+            p['liZhang'] = min(p['liZhang'] + 1, 5)
+
+        current_area = game_state.get('currentArea', 0)
+        if current_area + 1 >= len(AREAS):
+            await _complete_settlement(room_id, game_state, manager)
+        else:
+            game_state['currentArea'] = current_area + 1
+            await _start_area_settlement(websocket, room_id, game_state, manager)
+    elif result == 'continue_ui':
+        await broadcast_game_state(room_id, rooms, manager)
+    elif result == 'error':
+        pass
 
 
-async def handle_next_round(websocket, room_id, player_id, rooms, manager, payload):
-    await next_round(room_id, rooms, manager, lambda r: broadcast_room_state(r, rooms, manager))
-
-
+@require_playing
 async def handle_exchange_signals(websocket, room_id, player_id, rooms, manager, payload):
     exchange_type = payload.get('exchangeType')
 
@@ -226,20 +337,23 @@ async def handle_exchange_signals(websocket, room_id, player_id, rooms, manager,
 
     if exchange_type == '1to1' and player['tempBubbles'] >= 1:
         player['tempBubbles'] -= 1
-        await update_resources(player, {'coins': 1}, sign=1, broadcast_fn=bf)
+        await update_resources(player, {'coins': 1}, broadcast_fn=bf)
     elif exchange_type == '2to3' and player['tempBubbles'] >= 2:
         player['tempBubbles'] -= 2
-        await update_resources(player, {'grade3': 1}, sign=1, broadcast_fn=bf)
+        await update_resources(player, {'grade3': 1}, broadcast_fn=bf)
     elif exchange_type == '3to2' and player['tempBubbles'] >= 3:
         player['tempBubbles'] -= 3
-        await update_resources(player, {'grade2': 1}, sign=1, broadcast_fn=bf)
+        await update_resources(player, {'grade2': 1}, broadcast_fn=bf)
 
-    await manager.send_to_room(room_id, 'signalsExchanged', {
-        'playerId': player_id, 'gameState': game_state
+    await manager.send_to_room(room_id, ServerEvents.GAME_ACTION, {
+        'actionType': 'signalsExchanged',
+        'playerId': player_id,
+        'gameState': game_state
     })
-    await broadcast_room_state(room_id, rooms, manager)
+    await broadcast_game_state(room_id, rooms, manager)
 
 
+@require_playing
 async def handle_buy_item(websocket, room_id, player_id, rooms, manager, payload):
     item_type = payload.get('itemType')
 
@@ -253,31 +367,43 @@ async def handle_buy_item(websocket, room_id, player_id, rooms, manager, payload
     success = False
 
     if item_type == 'lobster' and player['coins'] >= prices['buyLobster']:
-        await update_resources(player, {'coins': prices['buyLobster']}, sign=-1, broadcast_fn=bf)
-        await update_resources(player, {'common': 1}, sign=1, broadcast_fn=bf)
+        await update_resources(player, {
+            'coins': -prices['buyLobster'],
+            'normal': 1
+        }, broadcast_fn=bf)
         success = True
     elif item_type == 'seaweed' and player['coins'] >= prices['buySeaweed']:
-        await update_resources(player, {'coins': prices['buySeaweed']}, sign=-1, broadcast_fn=bf)
-        await update_resources(player, {'seaweed': 1}, sign=1, broadcast_fn=bf)
+        await update_resources(player, {
+            'coins': -prices['buySeaweed'],
+            'seaweed': 1
+        }, broadcast_fn=bf)
         success = True
     elif item_type == 'cage' and player['coins'] >= prices['buyCage']:
-        await update_resources(player, {'coins': prices['buyCage']}, sign=-1, broadcast_fn=bf)
-        await update_resources(player, {'cage': 1}, sign=1, broadcast_fn=bf)
+        await update_resources(player, {
+            'coins': -prices['buyCage'],
+            'cages': 1
+        }, broadcast_fn=bf)
         success = True
     elif item_type == 'headman' and player['coins'] >= prices['hireHeadman']:
-        await update_resources(player, {'coins': prices['hireHeadman']}, sign=-1, broadcast_fn=bf)
-        await update_resources(player, {'liZhang': 1}, sign=1, broadcast_fn=bf)
+        await update_resources(player, {
+            'coins': -prices['hireHeadman'],
+            'liZhang': 1
+        }, broadcast_fn=bf)
         success = True
 
     if success:
-        await manager.send_to_room(room_id, 'itemBought', {
-            'playerId': player_id, 'itemType': item_type, 'gameState': game_state
+        await manager.send_to_room(room_id, ServerEvents.GAME_ACTION, {
+            'actionType': 'itemBought',
+            'playerId': player_id,
+            'data': {'itemType': item_type},
+            'gameState': game_state
         })
-        await broadcast_room_state(room_id, rooms, manager)
+        await broadcast_game_state(room_id, rooms, manager)
     else:
         await send_error(websocket, '资源不足')
 
 
+@require_playing
 async def handle_sell_item(websocket, room_id, player_id, rooms, manager, payload):
     item_type = payload.get('itemType')
 
@@ -290,28 +416,38 @@ async def handle_sell_item(websocket, room_id, player_id, rooms, manager, payloa
     bf = _make_bf(manager, room_id)
     success = False
 
-    if item_type == 'lobster' and has_resources(player, {'common': 1}):
-        await update_resources(player, {'common': 1}, sign=-1, broadcast_fn=bf)
-        await update_resources(player, {'coins': prices['sellLobster']}, sign=1, broadcast_fn=bf)
+    if item_type == 'lobster' and has_resources(player, {'normal': 1}):
+        await update_resources(player, {
+            'normal': -1,
+            'coins': prices['sellLobster']
+        }, broadcast_fn=bf)
         success = True
     elif item_type == 'seaweed' and player['seaweed'] > 0:
-        await update_resources(player, {'seaweed': 1}, sign=-1, broadcast_fn=bf)
-        await update_resources(player, {'coins': prices['sellSeaweed']}, sign=1, broadcast_fn=bf)
+        await update_resources(player, {
+            'seaweed': -1,
+            'coins': prices['sellSeaweed']
+        }, broadcast_fn=bf)
         success = True
     elif item_type == 'cage' and player['cages'] > 0:
-        await update_resources(player, {'cages': 1}, sign=-1, broadcast_fn=bf)
-        await update_resources(player, {'coins': prices['sellCage']}, sign=1, broadcast_fn=bf)
+        await update_resources(player, {
+            'cages': -1,
+            'coins': prices['sellCage']
+        }, broadcast_fn=bf)
         success = True
 
     if success:
-        await manager.send_to_room(room_id, 'itemSold', {
-            'playerId': player_id, 'itemType': item_type, 'gameState': game_state
+        await manager.send_to_room(room_id, ServerEvents.GAME_ACTION, {
+            'actionType': 'itemSold',
+            'playerId': player_id,
+            'data': {'itemType': item_type},
+            'gameState': game_state
         })
-        await broadcast_room_state(room_id, rooms, manager)
+        await broadcast_game_state(room_id, rooms, manager)
     else:
         await send_error(websocket, '物品不足')
 
 
+@require_playing
 async def handle_cultivate_lobster(websocket, room_id, player_id, rooms, manager, payload):
     game_state = rooms.get(room_id)
     if not game_state:
@@ -322,34 +458,35 @@ async def handle_cultivate_lobster(websocket, room_id, player_id, rooms, manager
     upgraded = False
 
     if has_resources(player, {'grade1': 1}) and (player['cages'] > 0 or player['coins'] >= 3):
+        deltas = {'grade1': -1, 'royal': 1}
         if player['cages'] > 0:
-            await update_resources(player, {'cages': 1}, sign=-1, broadcast_fn=bf)
+            deltas['cages'] = -1
         else:
-            await update_resources(player, {'coins': 3}, sign=-1, broadcast_fn=bf)
-        await update_resources(player, {'grade1': 1}, sign=-1, broadcast_fn=bf)
-        await update_resources(player, {'royal': 1}, sign=1, broadcast_fn=bf)
+            deltas['coins'] = -3
+        await update_resources(player, deltas, broadcast_fn=bf)
         if player['royalCountThisRound'] < 2:
             player['royalCountThisRound'] += 1
         upgraded = True
     elif has_resources(player, {'grade2': 1}):
-        await update_resources(player, {'grade2': 1}, sign=-1, broadcast_fn=bf)
-        await update_resources(player, {'grade1': 1}, sign=1, broadcast_fn=bf)
+        await update_resources(player, {'grade2': -1, 'grade1': 1}, broadcast_fn=bf)
         upgraded = True
     elif has_resources(player, {'grade3': 1}):
-        await update_resources(player, {'grade3': 1}, sign=-1, broadcast_fn=bf)
-        await update_resources(player, {'grade2': 1}, sign=1, broadcast_fn=bf)
+        await update_resources(player, {'grade3': -1, 'grade2': 1}, broadcast_fn=bf)
         upgraded = True
-    elif has_resources(player, {'common': 1}):
-        await update_resources(player, {'common': 1}, sign=-1, broadcast_fn=bf)
-        await update_resources(player, {'grade3': 1}, sign=1, broadcast_fn=bf)
+    elif has_resources(player, {'normal': 1}):
+        await update_resources(player, {'normal': -1, 'grade3': 1}, broadcast_fn=bf)
         upgraded = True
 
-    await manager.send_to_room(room_id, 'lobsterCultivated', {
-        'playerId': player_id, 'upgraded': upgraded, 'gameState': game_state
+    await manager.send_to_room(room_id, ServerEvents.GAME_ACTION, {
+        'actionType': 'lobsterCultivated',
+        'playerId': player_id,
+        'data': {'upgraded': upgraded},
+        'gameState': game_state
     })
-    await broadcast_room_state(room_id, rooms, manager)
+    await broadcast_game_state(room_id, rooms, manager)
 
 
+@require_playing
 async def handle_submit_tribute(websocket, room_id, player_id, rooms, manager, payload):
     task_id = payload.get('taskId')
 
@@ -374,8 +511,7 @@ async def handle_submit_tribute(websocket, room_id, player_id, rooms, manager, p
         return
 
     bf = _make_bf(manager, room_id)
-    await update_resources(player, req, sign=-1, broadcast_fn=bf)
-    await update_resources(player, task['reward'], sign=1, broadcast_fn=bf)
+    await update_resources(player, {**req, **task['reward']}, broadcast_fn=bf)
 
     if 'completedTasks' not in player:
         player['completedTasks'] = []
@@ -393,12 +529,16 @@ async def handle_submit_tribute(websocket, room_id, player_id, rooms, manager, p
                 player['permaBuffs'] = []
             player['permaBuffs'].append(aura_type)
 
-    await manager.send_to_room(room_id, 'tributeSubmitted', {
-        'playerId': player_id, 'taskId': task_id, 'gameState': game_state
+    await manager.send_to_room(room_id, ServerEvents.GAME_ACTION, {
+        'actionType': 'tributeSubmitted',
+        'playerId': player_id,
+        'data': {'taskId': task_id},
+        'gameState': game_state
     })
-    await broadcast_room_state(room_id, rooms, manager)
+    await broadcast_game_state(room_id, rooms, manager)
 
 
+@require_playing
 async def handle_downtown_action(websocket, room_id, player_id, rooms, manager, payload):
     card_index = payload.get('cardIndex')
     option_index = payload.get('optionIndex', 0)
@@ -427,19 +567,22 @@ async def handle_downtown_action(websocket, room_id, player_id, rooms, manager, 
         return
 
     bf = _make_bf(manager, room_id)
-    await update_resources(player, cost, sign=-1, broadcast_fn=bf)
-    await update_resources(player, reward, sign=1, broadcast_fn=bf)
+    await update_resources(player, {**cost, **reward}, broadcast_fn=bf)
 
-    await manager.send_to_room(room_id, 'downtownActionExecuted', {
-        'playerId': player_id, 'card': card, 'gameState': game_state
+    await manager.send_to_room(room_id, ServerEvents.GAME_ACTION, {
+        'actionType': 'downtownActionExecuted',
+        'playerId': player_id,
+        'data': {'card': card},
+        'gameState': game_state
     })
-    await broadcast_room_state(room_id, rooms, manager)
+    await broadcast_game_state(room_id, rooms, manager)
 
 
+@require_playing
 async def handle_battle_start(websocket, room_id, player_id, rooms, manager, payload):
     battle_data = payload.get('battleData')
 
-    await manager.send_to_room(room_id, 'battleStart', {
+    await manager.send_to_room(room_id, ServerEvents.BATTLE_START, {
         'battleData': battle_data,
         'initiatorId': player_id
     })
@@ -449,7 +592,7 @@ async def handle_battle_action(websocket, room_id, player_id, rooms, manager, pa
     action_type = payload.get('actionType')
     battle_data = payload.get('battleData')
     sender_id = payload.get('senderId')
-    # 处理 battleEnd 事件，检查是否需要交换 slot
+
     if action_type == 'battleEnd':
         game_state = rooms.get(room_id)
         if game_state:
@@ -462,65 +605,65 @@ async def handle_battle_action(websocket, room_id, player_id, rooms, manager, pa
                 challenger_id = players_data[0]['id']
 
             if winner_id == challenger_id and challenge_slot:
-                tribute_data = game_state['areas'].get('tribute')
-                if tribute_data:
-                    slots = tribute_data.get('slots', [])
-                    challenge_slots = tribute_data.get('challengeSlots', [])
+                if swap_challenge_slot(game_state, challenge_slot):
+                    print(f"[battleEnd] Slot swapped: challenger wins at slot {challenge_slot}")
 
-                    slot_map = {3: 0, 4: 1, 5: 2}
-                    defender_idx = slot_map.get(challenge_slot)
-
-                    if defender_idx is not None and defender_idx < len(slots) and defender_idx < len(challenge_slots):
-                        slots[defender_idx], challenge_slots[defender_idx] = \
-                            challenge_slots[defender_idx], slots[defender_idx]
-                        print(f"[battleEnd] Slot swapped: challenger wins at slot {challenge_slot}")
-
-            # 处理投注结算
+            # 处理投注结算 + 胜者奖励 + 中线望值（合并为一次 update_resources）
             winner_id = battle_data.get('winner', {}).get('id')
             challenge_slot = battle_data.get('challengeSlotIndex')
+            bf = _make_bf(manager, room_id)
+
             for key in list(arena_betting_state.keys()):
                 bs = arena_betting_state[key]
                 if not bs.get('completed') or not key.startswith(f"{room_id}_"):
                     continue
                 if str(challenge_slot) in key:
                     bet_results = {}
-                    bf = _make_bf(manager, room_id)
                     for pid, bet in bs['bets'].items():
                         if bet['amount'] > 0 and bet.get('targetFighterId') == winner_id:
                             bettor = get_player(game_state, pid)
                             if bettor:
-                                await update_resources(bettor, {'coins': bet['amount'] * 2}, sign=1, broadcast_fn=bf)
+                                await update_resources(bettor, {'coins': bet['amount'] * 2}, broadcast_fn=bf)
                             bet_results[str(pid)] = {'won': True, 'reward': bet['amount'] * 2}
                         else:
                             bet_results[str(pid)] = {'won': False, 'reward': 0}
 
-                    await manager.send_to_room(room_id, 'betResult', {
+                    await manager.send_to_room(room_id, ServerEvents.BET_RESULT, {
                         'winnerId': winner_id,
                         'betResults': bet_results
                     })
                     del arena_betting_state[key]
                     break
 
-            # 处理胜者奖励
+            # 处理胜者奖励（含中线望值）
             award_choice = battle_data.get('winnerAwardChoice')
             upgrade_from = None
             upgrade_to = None
             if winner_id is not None and award_choice:
                 winner = get_player(game_state, winner_id)
                 if winner:
-                    bf = _make_bf(manager, room_id)
+                    deltas = {}
                     if award_choice == 'coins':
-                        await update_resources(winner, {'coins': 2}, sign=1, broadcast_fn=bf)
+                        deltas['coins'] = 2
                     elif award_choice == 'gradeUpgrade':
                         new_grade = battle_data.get('winner', {}).get('lobsterId')
                         if new_grade and new_grade in GRADE_UPGRADE:
                             upgrade_from = GRADE_UPGRADE[new_grade]
                             upgrade_to = new_grade
-                            await update_resources(winner, {upgrade_from: 1}, sign=-1, broadcast_fn=bf)
-                            await update_resources(winner, {upgrade_to: 1}, sign=1, broadcast_fn=bf)
+                            deltas[upgrade_from] = -1
+                            deltas[upgrade_to] = 1
 
-            # 广播 battleEnded
-            await manager.send_to_room(room_id, 'battleEnded', {
+                    # 中线望值
+                    for pi, field in [(0, 'p1CrossedMidline'), (1, 'p2CrossedMidline')]:
+                        if battle_data.get(field):
+                            p = players_data[pi] if pi < len(players_data) else None
+                            if p and p.get('id') == winner_id:
+                                deltas['wang'] = deltas.get('wang', 0) + 1
+
+                    if deltas:
+                        await update_resources(winner, deltas, broadcast_fn=bf)
+
+            await manager.send_to_room(room_id, ServerEvents.BATTLE_ENDED, {
                 'winnerId': winner_id,
                 'awardChoice': award_choice,
                 'upgradeFrom': upgrade_from,
@@ -528,19 +671,18 @@ async def handle_battle_action(websocket, room_id, player_id, rooms, manager, pa
                 'gameState': game_state
             })
 
-    await manager.send_to_room(room_id, 'battleAction', {
+    await manager.send_to_room(room_id, ServerEvents.BATTLE_ACTION, {
         'actionType': action_type,
         'battleData': battle_data,
         'senderId': sender_id
     })
 
 
+@require_playing
 async def handle_lobster_selected(websocket, room_id, player_id, rooms, manager, payload):
     lobster_data = payload.get('lobster')
 
-    print(f"[lobsterSelected] Player {player_id} selected lobster in room {room_id}")
-
-    await manager.send_to_room(room_id, 'lobsterSelected', {
+    await manager.send_to_room(room_id, ServerEvents.LOBSTER_SELECTED, {
         'playerId': player_id,
         'lobster': lobster_data
     })
@@ -569,7 +711,7 @@ async def handle_lobster_selected(websocket, room_id, player_id, rooms, manager,
 
         if state['challengerLobster'] and state['defenderLobster'] and not state['started']:
             state['started'] = True
-            await manager.send_to_room(room_id, 'arenaBettingStart', {
+            await manager.send_to_room(room_id, ServerEvents.ARENA_BETTING_START, {
                 'battleId': battle_id,
                 'challengerId': state['challengerId'],
                 'defenderId': state['defenderId'],
@@ -577,16 +719,16 @@ async def handle_lobster_selected(websocket, room_id, player_id, rooms, manager,
                 'defenderLobster': state['defenderLobster'],
                 'spectators': state['spectators']
             })
-            print(f"[arenaBettingStart] Battle {battle_id} betting started")
 
             if len(state['spectators']) == 0:
-                await manager.send_to_room(room_id, 'arenaBettingComplete', {
+                await manager.send_to_room(room_id, ServerEvents.ARENA_BETTING_COMPLETE, {
                     'battleId': battle_id,
                     'bets': {}
                 })
                 state['completed'] = True
 
 
+@require_playing
 async def handle_spectator_bet(websocket, room_id, player_id, rooms, manager, payload):
     battle_id = payload.get('battleId')
     bet_amount = payload.get('betAmount', 0)
@@ -616,35 +758,69 @@ async def handle_spectator_bet(websocket, room_id, player_id, rooms, manager, pa
         if game_state:
             player = get_player(game_state, player_id)
             if player and player.get('coins', 0) >= bet_amount:
-                await update_resources(player, {'coins': bet_amount}, sign=-1, broadcast_fn=_make_bf(manager, room_id))
+                await update_resources(player, {'coins': -bet_amount}, broadcast_fn=_make_bf(manager, room_id))
 
     if len(state['bets']) >= len(state['spectators']):
-        await manager.send_to_room(room_id, 'arenaBettingComplete', {
+        await manager.send_to_room(room_id, ServerEvents.ARENA_BETTING_COMPLETE, {
             'battleId': battle_id,
             'bets': state['bets']
         })
         state['completed'] = True
 
 
+@require_playing
+async def handle_no_lobster_forfeit(websocket, room_id, player_id, rooms, manager, payload):
+    """处理因无可用龙虾导致的自动判负（defender 无龙虾时 challenger 获胜并交换 slot）"""
+    game_state = rooms.get(room_id)
+    if not game_state:
+        return
+
+    challenge_slot = payload.get('challengeSlot')
+    if swap_challenge_slot(game_state, challenge_slot):
+        print(f"[noLobsterForfeit] Slot swapped: challenger wins at slot {challenge_slot}")
+
+    await manager.send_to_room(room_id, ServerEvents.BATTLE_ACTION, {
+        'actionType': 'skipped',
+        'battleData': {
+            'challengeSlot': challenge_slot,
+            'reason': 'no_available_lobsters',
+            'winner': 'challenger'
+        },
+        'senderId': player_id
+    })
+
+
 # =============================================================================
-# 事件分发表
+# 事件分发表 (精简版)
+#
+# 已合并到 gameAction 的事件 (由 game_action_handler.py 路由):
+#   placeHeadman, nextPlayer, nextArea, exchangeSignals,
+#   buyItem, sellItem, cultivateLobster, submitTribute,
+#   executeDowntownAction, useSeaweed
+#
+# 保留的顶级事件: 房间管理 + 战斗相关
 # =============================================================================
+
+_last_action_ts: dict = {}
+
+def _check_idempotency(player_id: int, event: str, payload: dict) -> bool:
+    """检查操作是否重复（500ms 窗口），返回 True 表示是重复请求"""
+    import time
+    key = f"{player_id}:{event}"
+    now = time.time()
+    last = _last_action_ts.get(key)
+    if last is not None and now - last < 0.5:
+        return True
+    _last_action_ts[key] = now
+    return False
+
 GAME_EVENT_HANDLERS = {
     'leaveRoom': handle_leave_room,
     'setReady': handle_set_ready,
-    'placeHeadman': handle_place_headman,
-    'nextPlayer': handle_next_player,
-    'nextArea': handle_next_area,
-    'nextRound': handle_next_round,
-    'exchangeSignals': handle_exchange_signals,
-    'buyItem': handle_buy_item,
-    'sellItem': handle_sell_item,
-    'cultivateLobster': handle_cultivate_lobster,
-    'submitTribute': handle_submit_tribute,
-    'executeDowntownAction': handle_downtown_action,
     'battleStart': handle_battle_start,
     'battleAction': handle_battle_action,
     'lobsterSelected': handle_lobster_selected,
     'spectatorBet': handle_spectator_bet,
-    'useSeaweed': handle_use_seaweed,
+    'noLobsterForfeit': handle_no_lobster_forfeit,
+    'areaAction': handle_area_action,
 }

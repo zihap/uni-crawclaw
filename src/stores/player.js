@@ -64,7 +64,8 @@ export const usePlayerStore = defineStore('player', () => {
      * @returns {Object|null} 玩家对象或null
      */
     const getPlayerById = (playerId) => {
-        return players.value.find((player) => player.id === playerId) || null
+        const numericId = Number(playerId)
+        return players.value.find((player) => Number(player.id) === numericId) || null
     }
 
     /**
@@ -79,13 +80,7 @@ export const usePlayerStore = defineStore('player', () => {
 
         Object.entries(resources).forEach(([key, value]) => {
             if (key in player) {
-                if (Array.isArray(player[key])) {
-                    // 对于数组类型的资源（如lobsters），直接替换
-                    player[key] = value
-                } else {
-                    // 对于数值类型的资源，进行增减操作
-                    player[key] += value
-                }
+                player[key] = value
             }
         })
 

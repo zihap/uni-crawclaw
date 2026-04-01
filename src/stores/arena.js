@@ -21,41 +21,66 @@ export const useBattleStore = defineStore('battle', () => {
         return battleData.value?.currentPlayer === myPlayerIndex.value && battleData.value?.phase === 'rolling'
     })
 
+    // ============ 技能方法统一 ============
+
+    const applySkillMethod = (playerIndex, methodName, fallback, ...args) => {
+        const player = battleData.value?.players[playerIndex]
+        if (!player) return fallback
+        const skill = getSkill(player.lobsterId)
+        return skill?.[methodName] ? skill[methodName](...args) : fallback
+    }
+
     function getDiceValue(playerIndex) {
         const player = battleData.value?.players[playerIndex]
         if (!player) return Math.floor(Math.random() * 6) + 1
-
         const skill = getSkill(player.lobsterId)
-        if (skill?.getDiceValue) {
-            return skill.getDiceValue()
-        }
-
-        const diceSides = getDiceSides(playerIndex)
-        return Math.floor(Math.random() * diceSides) + 1
+        if (skill?.getDiceValue) return skill.getDiceValue()
+        return Math.floor(Math.random() * getDiceSides(playerIndex)) + 1
     }
 
     function getDiceSides(playerIndex) {
-        const player = battleData.value?.players[playerIndex]
-        if (!player) return 6
-
-        const skill = getSkill(player.lobsterId)
-        if (skill?.getDiceSides) {
-            return skill.getDiceSides()
-        }
-
-        return 6
+        return applySkillMethod(playerIndex, 'getDiceSides', 6)
     }
 
     function modifyDiceValue(playerIndex, value) {
-        const player = battleData.value?.players[playerIndex]
-        if (!player) return value
+        return applySkillMethod(playerIndex, 'modifyDice', value)
+    }
 
-        const skill = getSkill(player.lobsterId)
-        if (skill?.modifyDice) {
-            return skill.modifyDice(value)
+    // ============ 战斗数据构建 ============
+
+    const createPlayerData = (data, startPosition, defaultColor) => ({
+        id: data.id ?? 1,
+        name: data.name || '玩家1',
+        color: data.color || defaultColor,
+        lobsterName: data.lobsterName,
+        lobsterId: data.lobsterId,
+        lobsterDesc: data.lobsterDesc,
+        position: startPosition,
+        started: getSkill(data.lobsterId)?.startStarted || false
+    })
+
+    const buildInitialBattleLog = (p1Data, p2Data) => {
+        const p1Skill = getSkill(p1Data.lobsterId)
+        const p2Skill = getSkill(p2Data.lobsterId)
+        const formatLobsterInfo = (data, skill) =>
+            `${data.name || '玩家1'} 的 ${data.lobsterName}${skill?.description ? '[' + skill.description + ']' : ''}`
+
+        const logs = [
+            { timestamp: Date.now(), message: '🦞 斗龙虾争锋开始！' },
+            {
+                timestamp: Date.now(),
+                message: `${formatLobsterInfo(p1Data, p1Skill)} vs ${formatLobsterInfo(p2Data, p2Skill)}`
+            },
+            { timestamp: Date.now(), message: '🎲 投掷先手骰子决定行动顺序...' }
+        ]
+
+        if (p1Skill?.startStarted) {
+            logs.push({ timestamp: Date.now(), message: `${p1Data.name} 的龙虾为急先锋，出场即可移动！` })
         }
-
-        return value
+        if (p2Skill?.startStarted) {
+            logs.push({ timestamp: Date.now(), message: `${p2Data.name} 的龙虾为急先锋，出场即可移动！` })
+        }
+        return logs
     }
 
     function createBattleData(p1Data, p2Data, initialCurrentPlayer = 0, challengeSlotIndex = null) {
@@ -65,28 +90,7 @@ export const useBattleStore = defineStore('battle', () => {
             currentPlayer: initialCurrentPlayer,
             totalCells: BATTLE_CELLS,
             challengeSlotIndex,
-            players: [
-                {
-                    id: p1Data.id ?? 1,
-                    name: p1Data.name || '玩家1',
-                    color: p1Data.color || '#FF6B6B',
-                    lobsterName: p1Data.lobsterName,
-                    lobsterId: p1Data.lobsterId,
-                    lobsterDesc: p1Data.lobsterDesc,
-                    position: -1,
-                    started: getSkill(p1Data.lobsterId)?.startStarted || false
-                },
-                {
-                    id: p2Data.id ?? 2,
-                    name: p2Data.name || '玩家2',
-                    color: p2Data.color || '#4ECDC4',
-                    lobsterName: p2Data.lobsterName,
-                    lobsterId: p2Data.lobsterId,
-                    lobsterDesc: p2Data.lobsterDesc,
-                    position: BATTLE_CELLS,
-                    started: getSkill(p2Data.lobsterId)?.startStarted || false
-                }
-            ],
+            players: [createPlayerData(p1Data, -1, '#FF6B6B'), createPlayerData(p2Data, BATTLE_CELLS, '#4ECDC4')],
             diceValue: null,
             diceRoller: null,
             rollDiceTimestamp: null,
@@ -116,46 +120,20 @@ export const useBattleStore = defineStore('battle', () => {
         hasRerolled.value = false
         initiativeDice.value = { p1: null, p2: null }
 
-        const p1Skill = getSkill(p1Data.lobsterId)
-        const p2Skill = getSkill(p2Data.lobsterId)
-
-        battleData.value.battleLog = [
-            { timestamp: Date.now(), message: '🦞 斗龙虾争锋开始！' },
-            {
-                timestamp: Date.now(),
-                message: `${p1Data.name || '玩家1'} 的 ${p1Data.lobsterName}${p1Skill?.description ? '[' + p1Skill.description + ']' : ''} vs ${p2Data.name || '玩家2'} 的 ${p2Data.lobsterName}${p2Skill?.description ? '[' + p2Skill.description + ']' : ''}`
-            },
-            { timestamp: Date.now(), message: '🎲 投掷先手骰子决定行动顺序...' }
-        ]
-
-        if (p1Skill?.startStarted) {
-            battleData.value.battleLog.push({
-                timestamp: Date.now(),
-                message: `${p1Data.name} 的龙虾为急先锋，出场即可移动！`
-            })
-        }
-        if (p2Skill?.startStarted) {
-            battleData.value.battleLog.push({
-                timestamp: Date.now(),
-                message: `${p2Data.name} 的龙虾为急先锋，出场即可移动！`
-            })
-        }
-
+        battleData.value.battleLog = buildInitialBattleLog(p1Data, p2Data)
         battleData.value.isInitialized = true
         broadcastBattleUpdate('battleStart')
     }
 
-    function rollInitiativeDice() {
-        if (battleData.value.phase !== 'initiative') return
-        if (battleData.value.initiative.p1 !== null) return
+    // ============ 先手骰子 ============
 
-        const p1DiceSides = getDiceSides(0)
-        const p2DiceSides = getDiceSides(1)
-        const p1Roll = Math.floor(Math.random() * p1DiceSides) + 1
-        const p2Roll = Math.floor(Math.random() * p2DiceSides) + 1
+    function rollInitiativeDice() {
+        if (battleData.value.phase !== 'initiative' || battleData.value.initiative.p1 !== null) return
+
+        const p1Roll = Math.floor(Math.random() * getDiceSides(0)) + 1
+        const p2Roll = Math.floor(Math.random() * getDiceSides(1)) + 1
 
         initiativeDice.value = { p1: p1Roll, p2: p2Roll }
-
         battleData.value.initiative = { p1: p1Roll, p2: p2Roll, timestamp: Date.now() }
         battleData.value.lastAction = 'initiativeRolled'
         battleData.value = { ...battleData.value }
@@ -164,18 +142,22 @@ export const useBattleStore = defineStore('battle', () => {
         return { p1: p1Roll, p2: p2Roll }
     }
 
+    const determineFirstPlayer = (p1, p2, p1Name, p2Name) => {
+        if (p1 > p2) return { first: 0, log: `${p1Name} 点数更大，获得先手！` }
+        if (p2 > p1) return { first: 1, log: `${p2Name} 点数更大，获得先手！` }
+        return { first: 1, log: `双方点数一致，${p2Name} 获得先手！` }
+    }
+
     function applyInitiative() {
         if (battleData.value.phase !== 'initiative') return
-
         const { p1, p2 } = battleData.value.initiative
         if (p1 === null || p2 === null) return
 
         const p1Data = battleData.value.players[0]
         const p2Data = battleData.value.players[1]
-        const p1DiceSides = getDiceSides(0)
-        const p2DiceSides = getDiceSides(1)
-        const p1DiceDesc = p1DiceSides !== 6 ? `(${p1DiceSides}面骰)` : ''
-        const p2DiceDesc = p2DiceSides !== 6 ? `(${p2DiceSides}面骰)` : ''
+
+        const p1DiceDesc = getDiceSides(0) !== 6 ? `(${getDiceSides(0)}面骰)` : ''
+        const p2DiceDesc = getDiceSides(1) !== 6 ? `(${getDiceSides(1)}面骰)` : ''
 
         addLog(`${p1Data.name} 掷出 ${p1} 点${p1DiceDesc}`)
         addLog(`${p2Data.name} 掷出 ${p2} 点${p2DiceDesc}`)
@@ -189,17 +171,8 @@ export const useBattleStore = defineStore('battle', () => {
             addLog(`${p2Data.name} 掷出>=6点，龙虾标记为可移动状态！`)
         }
 
-        let firstPlayer
-        if (p1 > p2) {
-            firstPlayer = 0
-            addLog(`${p1Data.name} 点数更大，获得先手！`)
-        } else if (p2 > p1) {
-            firstPlayer = 1
-            addLog(`${p2Data.name} 点数更大，获得先手！`)
-        } else {
-            firstPlayer = 1
-            addLog(`双方点数一致，${p2Data.name} 获得先手！`)
-        }
+        const { first: firstPlayer, log } = determineFirstPlayer(p1, p2, p1Data.name, p2Data.name)
+        addLog(log)
 
         battleData.value.currentPlayer = firstPlayer
         battleData.value.initiative.firstPlayer = firstPlayer
@@ -219,20 +192,19 @@ export const useBattleStore = defineStore('battle', () => {
         broadcastBattleUpdate('battleUpdate')
     }
 
+    // ============ 掷骰子 ============
+
     function rollDice(diceValue, seaweedBonus = 0) {
         const roller = battleData.value.currentPlayer
         const player = battleData.value.players[roller]
         const skill = getSkill(player.lobsterId)
 
-        // 处理可以重掷的技能
         if (skill?.canReroll) {
             if (pendingDiceValue.value === null) {
-                // 第一次掷骰
                 pendingDiceValue.value = diceValue
                 canReroll.value = true
                 hasRerolled.value = false
             } else if (!hasRerolled.value) {
-                // 重掷
                 hasRerolled.value = true
                 canReroll.value = false
             } else {
@@ -242,7 +214,6 @@ export const useBattleStore = defineStore('battle', () => {
             pendingDiceValue.value = null
         }
 
-        // 更新掷骰数据并广播
         battleData.value.diceValue = diceValue
         battleData.value.diceRoller = roller
         battleData.value.rollDiceTimestamp = Date.now()
@@ -253,9 +224,7 @@ export const useBattleStore = defineStore('battle', () => {
     }
 
     function confirmDice() {
-        if (!canReroll.value || pendingDiceValue.value === null) {
-            return
-        }
+        if (!canReroll.value || pendingDiceValue.value === null) return
         const roller = battleData.value.currentPlayer
         const diceValue = pendingDiceValue.value
         pendingDiceValue.value = null
@@ -269,23 +238,54 @@ export const useBattleStore = defineStore('battle', () => {
         broadcastBattleUpdate('battleUpdate')
     }
 
-    function applyDiceResult() {
-        if (battleData.value.phase === 'ended') {
-            return
+    // ============ 应用骰子结果 ============
+
+    const calculateSteps = (diceValue) => {
+        if (diceValue <= 2) return 0
+        if (diceValue <= 5) return 1
+        if (diceValue <= 8) return 2
+        if (diceValue <= 11) return 3
+        return 4
+    }
+
+    const applySkillBonus = (skill) => {
+        if (!skill?.apply) return { bonusSteps: 0, skillDesc: '' }
+        const context = { bonusSteps: 0 }
+        skill.apply(context)
+        const bonusSteps = context.bonusSteps || 0
+        const skillDesc =
+            bonusSteps > 0 && skill?.description ? ` [${skill.description}触发，额外+${bonusSteps}步]` : ''
+        return { bonusSteps, skillDesc }
+    }
+
+    const applyMovement = (player, roller, steps) => {
+        if (steps > 0) {
+            player.position = roller === 0 ? player.position + steps : player.position - steps
         }
+    }
+
+    const checkMidlineCrossing = (roller, player) => {
+        const crossedField = roller === 0 ? 'p1CrossedMidline' : 'p2CrossedMidline'
+        const midline = BATTLE_CELLS / 2
+        const crossed = roller === 0 ? player.position >= midline : player.position < midline
+
+        if (!battleData.value[crossedField] && crossed) {
+            battleData.value[crossedField] = true
+            addLog(`🎯 ${player.name} 越过中线，获得1望！`)
+        }
+    }
+
+    function applyDiceResult() {
+        if (battleData.value.phase === 'ended') return
         const diceValue = battleData.value.diceValue
         const roller = battleData.value.diceRoller
-
-        if (diceValue === null || diceValue === undefined) {
-            return
-        }
+        if (diceValue == null) return
 
         const player = battleData.value.players[roller]
-
         const diceSides = getDiceSides(roller)
+        const skill = getSkill(player.lobsterId)
         let finalDiceValue = modifyDiceValue(roller, diceValue)
 
-        const skill = getSkill(player.lobsterId)
         const diceSidesDesc = diceSides !== 6 ? `(${diceSides}面骰)` : ''
         let skillDesc =
             finalDiceValue !== diceValue && skill?.description
@@ -299,7 +299,6 @@ export const useBattleStore = defineStore('battle', () => {
         let steps = 0
 
         if (!player.started) {
-            // 未开始状态
             if (finalDiceValue >= 6) {
                 player.started = true
                 logMessage = `${player.name} 掷出 ${finalDiceValue} 点${seaweedDesc}${diceSidesDesc}${skillDesc}，触发移动条件！龙虾标记为可移动状态`
@@ -307,61 +306,25 @@ export const useBattleStore = defineStore('battle', () => {
                 logMessage = `${player.name} 掷出 ${finalDiceValue} 点${seaweedDesc}${skillDesc}，不足6点，龙虾不可移动`
             }
         } else {
-            // 已开始状态，根据点数计算步数
-            if (finalDiceValue <= 2) steps = 0
-            else if (finalDiceValue <= 5) steps = 1
-            else if (finalDiceValue <= 8) steps = 2
-            else if (finalDiceValue <= 11) steps = 3
-            else steps = 4
-
-            // 应用技能效果
-            if (skill?.apply) {
-                const context = { bonusSteps: 0 }
-                skill.apply(context)
-                const bonusSteps = context.bonusSteps || 0
-                if (bonusSteps > 0) {
-                    if (skill?.description) {
-                        skillDesc = ` [${skill.description}触发，额外+${bonusSteps}步]`
-                    }
-                    steps += bonusSteps
-                }
-            }
+            steps = calculateSteps(finalDiceValue)
+            const { bonusSteps, skillDesc: bonusDesc } = applySkillBonus(skill)
+            if (bonusDesc) skillDesc = bonusDesc
+            steps += bonusSteps
 
             const stepsDesc = steps > 0 ? `，前进 ${steps} 步` : '，原地不动'
             logMessage = `${player.name} 掷出 ${finalDiceValue} 点${seaweedDesc}${diceSidesDesc}${skillDesc}${stepsDesc}`
-
-            if (steps > 0) {
-                player.position = roller === 0 ? player.position + steps : player.position - steps
-            }
+            applyMovement(player, roller, steps)
         }
 
         battleData.value = { ...battleData.value }
         addLog(logMessage)
-        // 检查是否首次穿过中线
-        if (roller === 0) {
-            if (!battleData.value.p1CrossedMidline && player.position >= BATTLE_CELLS / 2) {
-                player.wang = (player.wang || 0) + 1
-                battleData.value.p1CrossedMidline = true
-                addLog(`🎯 ${player.name} 越过中线，获得1望！`)
-            }
-        } else {
-            if (!battleData.value.p2CrossedMidline && player.position < BATTLE_CELLS / 2) {
-                player.wang = (player.wang || 0) + 1
-                battleData.value.p2CrossedMidline = true
-                addLog(`🎯 ${player.name} 越过中线，获得1望！`)
-            }
-        }
+        checkMidlineCrossing(roller, player)
         battleData.value.seaweedBonus = 0
 
-        if (checkWinCondition(roller)) {
-            return
-        }
+        if (checkWinCondition(roller)) return
 
-        // 切换到下一个玩家
         const nextPlayer = roller === 0 ? 1 : 0
-        const nextPlayerObj = battleData.value.players[nextPlayer]
-
-        addLog(`轮到 ${nextPlayerObj.name} 掷骰子`)
+        addLog(`轮到 ${battleData.value.players[nextPlayer].name} 掷骰子`)
 
         battleData.value.currentPlayer = nextPlayer
         if (nextPlayer === battleData.value.initiative?.firstPlayer) {
@@ -378,6 +341,16 @@ export const useBattleStore = defineStore('battle', () => {
         broadcastBattleUpdate('battleUpdate')
     }
 
+    // ============ 胜负判定 ============
+
+    const endBattle = (winner, logMessage) => {
+        battleData.value.winner = winner
+        battleData.value.phase = 'ended'
+        addLog(logMessage)
+        broadcastBattleUpdate('battleAction')
+        return true
+    }
+
     function checkWinCondition(roller) {
         const p1 = battleData.value.players[0]
         const p2 = battleData.value.players[1]
@@ -386,18 +359,7 @@ export const useBattleStore = defineStore('battle', () => {
         const rollerSkill = getSkill(rollerPlayer.lobsterId)
         const opponentSkill = getSkill(opponentPlayer.lobsterId)
 
-        // 设置胜利者并结束游戏
-        const endBattle = (winner, logMessage) => {
-            battleData.value.winner = winner
-            battleData.value.phase = 'ended'
-            addLog(logMessage)
-            // 立即广播战斗结束，让所有玩家知道战斗结果
-            broadcastBattleUpdate('battleAction')
-            return true
-        }
-
         const isCovered = p1.position === p2.position
-
         if (isCovered) {
             if (opponentSkill?.onCovered) {
                 const desc = opponentSkill?.description ? ` 的 [${opponentSkill.description}]` : ''
@@ -407,15 +369,12 @@ export const useBattleStore = defineStore('battle', () => {
         }
 
         const absPositionDiff = Math.abs(p1.position - p2.position)
-        const isAdjacent = absPositionDiff === 1
         const rollerWon = roller === 0 ? p1.position > p2.position : p2.position < p1.position
-        const rollerPassedOpponent = absPositionDiff === 0 || rollerWon
-
-        if (rollerPassedOpponent) {
+        if (absPositionDiff === 0 || rollerWon) {
             return endBattle(rollerPlayer, `🏆 ${rollerPlayer.name} 的 [${rollerPlayer.lobsterName}] 获胜！`)
         }
 
-        if (isAdjacent) {
+        if (absPositionDiff === 1) {
             if (rollerSkill?.nearWinOnAdjacent) {
                 const desc = rollerSkill?.description ? ` [${rollerSkill.description}]` : ''
                 return endBattle(
@@ -435,6 +394,8 @@ export const useBattleStore = defineStore('battle', () => {
         return false
     }
 
+    // ============ 奖励 & 杂项 ============
+
     function applyWinnerAward(choice) {
         const winner = battleData.value?.winner
         if (!winner) return
@@ -443,8 +404,7 @@ export const useBattleStore = defineStore('battle', () => {
             winner.coins = (winner.coins || 0) + 2
             addLog(`💰 ${winner.name} 获得2金币奖励！`)
         } else if (choice === 'gradeUpgrade') {
-            const oldGrade = winner.lobsterId
-            const newGrade = getNextLobsterGrade(oldGrade)
+            const newGrade = getNextLobsterGrade(winner.lobsterId)
             winner.lobsterId = newGrade
             winner.lobsterName = getLobsterGradeName(newGrade)
             addLog(`⭐ ${winner.name} 的${winner.lobsterName}升级成功！`)
@@ -456,10 +416,7 @@ export const useBattleStore = defineStore('battle', () => {
     }
 
     function addLog(message) {
-        battleData.value.battleLog.push({
-            timestamp: Date.now(),
-            message
-        })
+        battleData.value.battleLog.push({ timestamp: Date.now(), message })
     }
 
     function quitBattle() {
@@ -478,7 +435,6 @@ export const useBattleStore = defineStore('battle', () => {
 
     function broadcastBattleUpdate(eventType) {
         if (!battleRoomId.value || !battleData.value) return
-
         socketService.sendBattleAction(
             eventType,
             {
@@ -495,60 +451,56 @@ export const useBattleStore = defineStore('battle', () => {
         broadcastBattleUpdate('battleAction')
     }
 
-    function updateFromSync(syncedData) {
-        if (!syncedData || !battleData.value) {
-            return
-        }
+    // ============ 数据同步 ============
 
-        // 批量更新简单字段
-        const simpleFields = ['phase', 'currentRound', 'currentPlayer', 'diceValue', 'diceRoller', 'lastAction']
-        simpleFields.forEach((field) => {
+    const syncBattleFields = (syncedData) => {
+        const fields = ['phase', 'currentRound', 'currentPlayer', 'diceValue', 'diceRoller', 'lastAction']
+        fields.forEach((field) => {
             if (syncedData[field] !== undefined) {
                 battleData.value[field] = syncedData[field]
             }
         })
-
-        // rollDiceTimestamp 需要特殊检查是否变化
         if (
             syncedData.rollDiceTimestamp !== undefined &&
             syncedData.rollDiceTimestamp !== battleData.value.rollDiceTimestamp
         ) {
             battleData.value.rollDiceTimestamp = syncedData.rollDiceTimestamp
         }
+    }
 
-        // 更新玩家数据
-        if (syncedData.players?.length === 2) {
-            const playerFields = ['position', 'started', 'skill']
-            syncedData.players.forEach((p, i) => {
-                if (battleData.value.players[i]) {
-                    playerFields.forEach((field) => {
-                        if (p[field] !== undefined) {
-                            battleData.value.players[i][field] = p[field]
-                        }
-                    })
-                }
-            })
+    const syncPlayerFields = (syncedData) => {
+        if (syncedData.players?.length !== 2) return
+        const fields = ['position', 'started', 'skill']
+        syncedData.players.forEach((p, i) => {
+            if (battleData.value.players[i]) {
+                fields.forEach((field) => {
+                    if (p[field] !== undefined) battleData.value.players[i][field] = p[field]
+                })
+            }
+        })
+    }
+
+    const syncBattleLog = (syncedData) => {
+        if (!syncedData.battleLog?.length) return
+        const currentLen = battleData.value.battleLog?.length || 0
+        if (!battleData.value.isInitialized) {
+            battleData.value.battleLog = [...syncedData.battleLog]
+        } else if (syncedData.battleLog.length > currentLen) {
+            battleData.value.battleLog.push(...syncedData.battleLog.slice(currentLen))
         }
+    }
 
-        // 更新先手骰子数据
+    function updateFromSync(syncedData) {
+        if (!syncedData || !battleData.value) return
+        syncBattleFields(syncedData)
+        syncPlayerFields(syncedData)
         if (syncedData.initiative) {
             battleData.value.initiative = { ...battleData.value.initiative, ...syncedData.initiative }
         }
-
-        // 更新胜利者
         if (syncedData.winner) {
             battleData.value.winner = battleData.value.players.find((p) => p.id === syncedData.winner.id)
         }
-
-        // 同步战斗日志
-        if (syncedData.battleLog?.length > 0) {
-            const currentLogLen = battleData.value.battleLog?.length || 0
-            if (!battleData.value.isInitialized) {
-                battleData.value.battleLog = [...syncedData.battleLog]
-            } else if (syncedData.battleLog.length > currentLogLen) {
-                battleData.value.battleLog.push(...syncedData.battleLog.slice(currentLogLen))
-            }
-        }
+        syncBattleLog(syncedData)
     }
 
     function resetBattle() {
@@ -564,31 +516,19 @@ export const useBattleStore = defineStore('battle', () => {
     // ============ battleAction 事件处理 ============
     let _onRewardSelected = null
 
-    function handleBattleAction(data) {
-        if (!data.battleData) return
-
-        // 跳过自己发送的消息回显
-        if (data.senderId !== myPlayerIndex.value) {
-            updateFromSync(data.battleData)
-        }
-
-        // 监听奖励选择完成，通过回调通知外部
-        if (data.battleData.lastAction === 'rewardSelected') {
-            const winnerId = data.battleData.winner?.id
-            const myPlayerId = battleData.value?.players?.[myPlayerIndex.value]?.id
-            if (winnerId === myPlayerId && _onRewardSelected) {
-                _onRewardSelected()
-            }
-        }
-    }
-
     function setupBattleActionListener(onRewardSelected) {
         _onRewardSelected = onRewardSelected || null
-        socketService.on('battleAction', handleBattleAction)
+        const battleHandlers = createBattleSyncHandlers({
+            updateFromSync,
+            onRewardSelected: _onRewardSelected,
+            myPlayerIndex: () => myPlayerIndex.value,
+            getBattleData: () => battleData.value
+        })
+        wsManager.onBattle(battleHandlers)
     }
 
     function cleanupBattleActionListener() {
-        socketService.off('battleAction')
+        wsManager.cleanupCategory('battle')
         _onRewardSelected = null
     }
 

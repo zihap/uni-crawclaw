@@ -15,7 +15,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from utils.connection import ConnectionManager
 from utils.constants import AREAS
-from services.game import broadcast_room_state
 from controllers.websocket import handle_lobby_websocket, handle_game_websocket
 
 app = FastAPI(

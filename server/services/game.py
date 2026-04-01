@@ -5,6 +5,7 @@
 
 from typing import Dict
 from utils.constants import AREAS, MARKET_PRICES
+from utils.events import ServerEvents
 from utils.game_state import draw_tribute_tasks, draw_downtown_cards
 
 
@@ -46,28 +47,21 @@ def prepare_phase(game_state: dict):
 
 
 def cleanup_phase(game_state: dict):
-    """清理阶段处理"""
-    fishing_area = game_state['areas']['shrimp_catching']
+    """清理阶段处理（对齐单机 executeCleanupPhase）"""
     market_area = game_state['areas']['seafood_market']
 
-    # 将野生龙虾池的龙虾转移到市场
-    market_area['marketLobsterCount'] += fishing_area['wildLobsterPool']
-    fishing_area['wildLobsterPool'] = 0
+    if market_area['marketLobsterCount'] > 0:
+        market_area['marketLobsterCount'] = 0
 
-    # 重置玩家里长数量（基础3个 + 额外雇佣的）
     for player in game_state['players']:
         base_headmen = 3
         hired_count = len(player.get('hiredLaborersBonus', []))
         player['liZhang'] = base_headmen + hired_count
 
-    # 发放回合收入
     for player in game_state['players']:
-        player['coins'] += player.get('bonusGold', 0)
+        player['coins'] += 2 + player.get('bonusGold', 0)
 
-    # 更新市场价格
     update_market_prices(game_state)
-
-    game_state['currentRound'] += 1
 
 
 def cleanup_room(room_id: str, rooms: dict, manager):
@@ -82,6 +76,11 @@ def cleanup_room(room_id: str, rooms: dict, manager):
 
         if room_id in manager.active_connections:
             del manager.active_connections[room_id]
+
+        from utils.game_state import arena_betting_state
+        for key in list(arena_betting_state.keys()):
+            if key.startswith(f"{room_id}_"):
+                del arena_betting_state[key]
 
         print(f"Room {room_id} deleted")
 
@@ -134,30 +133,42 @@ async def handle_player_disconnect(room_id: str, player_id: int, player_name: st
         cleanup_room(room_id, rooms, manager)
         return
 
-    await manager.broadcast_to_room_members(room_id, 'playerOffline', {
+    await manager.broadcast_to_room_members(room_id, ServerEvents.PLAYER_STATUS_CHANGE, {
         'playerId': player_id,
         'playerName': player_name,
+        'status': 'offline',
         'players': game_state['players']
     })
 
 
 async def broadcast_room_state(room_id: str, rooms: dict, manager):
-    """广播房间状态到所有相关客户端"""
+    """广播房间级状态 (players, status) - 不含游戏运行时数据"""
     game_state = rooms.get(room_id)
     if game_state:
         data = {
-            'players': game_state['players'],
-            'gameStarted': game_state['status'] == 'playing',
+            'players': game_state.get('players', []),
             'status': game_state['status'],
+            'maxPlayers': game_state.get('maxPlayers', 4)
+        }
+        await manager.send_to_room(room_id, ServerEvents.ROOM_STATE_UPDATE, data)
+
+
+async def broadcast_game_state(room_id: str, rooms: dict, manager):
+    """广播游戏运行时状态 (phase, round, currentPlayer, areas)"""
+    game_state = rooms.get(room_id)
+    if game_state:
+        data = {
             'phase': game_state.get('phase', 'waiting'),
             'currentRound': game_state.get('currentRound', 1),
-            'currentPlayerIndex': game_state.get('currentPlayerIndex', 0)
+            'currentPlayerIndex': game_state.get('currentPlayerIndex', 0),
+            'currentArea': game_state.get('currentArea', 0),
+            'areas': game_state.get('areas', {}),
+            'status': game_state['status']
         }
-        print(f"broadcast_room_state to room {room_id}: status={data['status']}, phase={data['phase']}, currentPlayerIndex={data['currentPlayerIndex']}")
-        await manager.send_to_room(room_id, 'roomStateUpdate', data)
+        await manager.send_to_room(room_id, ServerEvents.GAME_STATE_UPDATE, data)
 
 
-async def start_game(room_id: str, rooms: dict, manager, broadcast_func):
+async def start_game(room_id: str, rooms: dict, manager):
     """开始游戏"""
     game_state = rooms.get(room_id)
     if not game_state:
@@ -194,12 +205,12 @@ async def start_game(room_id: str, rooms: dict, manager, broadcast_func):
     print(f"  players in room: {len(game_state['players'])}")
     print(f"  active_connections: {list(manager.active_connections.get(room_id, {}).keys())}")
 
-    await manager.send_to_room(room_id, 'gameStarted', game_state)
-    await broadcast_func(room_id)
+    await manager.send_to_room(room_id, ServerEvents.GAME_STARTED, game_state)
+    await broadcast_game_state(room_id, rooms, manager)
     print(f"Game started in room {room_id}")
 
 
-async def next_round(room_id: str, rooms: dict, manager, broadcast_func):
+async def next_round(room_id: str, rooms: dict, manager):
     """处理下一回合"""
     from services.area import resolve_area
 
@@ -216,7 +227,7 @@ async def next_round(room_id: str, rooms: dict, manager, broadcast_func):
             reverse=True
         )[0]
 
-        await manager.send_to_room(room_id, 'gameEnded', {'winner': winner, 'gameState': game_state})
+        await manager.send_to_room(room_id, ServerEvents.GAME_ENDED, {'winner': winner, 'gameState': game_state})
         return
 
     game_state['currentRound'] += 1
@@ -236,5 +247,5 @@ async def next_round(room_id: str, rooms: dict, manager, broadcast_func):
     draw_tribute_tasks(game_state)
     draw_downtown_cards(game_state)
 
-    await manager.send_to_room(room_id, 'roundStarted', {'round': game_state['currentRound'], 'gameState': game_state})
-    await broadcast_func(room_id)
+    await manager.send_to_room(room_id, ServerEvents.ROUND_STARTED, {'round': game_state['currentRound'], 'gameState': game_state})
+    await broadcast_game_state(room_id, rooms, manager)

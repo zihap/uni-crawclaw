@@ -31,8 +31,44 @@ def draw_from_bag() -> str:
     return FISHING_BAG_ITEMS[0]['type']
 
 
-def resolve_fishing_area(game_state: dict):
-    """结算捕虾区"""
+# =============================================================================
+# 异步逐步结算系统（新）
+# =============================================================================
+
+async def resolve_area_step(game_state: dict, area_index: int, manager, room_id):
+    """
+    根据区域索引结算对应区域（异步版本，支持UI交互）
+    
+    返回:
+        'auto_next' - 自动进入下一区域（无需UI交互）
+        'waiting_ui' - 等待前端UI交互
+    """
+    from utils.constants import AREAS
+    from utils.events import ServerEvents
+
+    area_name = AREAS[area_index]
+    area_data = game_state['areas'].get(area_name)
+    if not area_data:
+        return 'auto_next'
+
+    if area_name == 'shrimp_catching':
+        return await _resolve_shrimp_catching_step(game_state, manager, room_id)
+    elif area_name == 'seafood_market':
+        return await _resolve_seafood_market_step(game_state, manager, room_id)
+    elif area_name == 'breeding':
+        return await _resolve_breeding_step(game_state, manager, room_id)
+    elif area_name == 'tribute':
+        return await _resolve_tribute_step(game_state, manager, room_id)
+    elif area_name == 'marketplace':
+        return await _resolve_marketplace_step(game_state, manager, room_id)
+    
+    return 'auto_next'
+
+
+async def _resolve_shrimp_catching_step(game_state: dict, manager, room_id):
+    """结算捕虾区（无需UI交互，自动执行）"""
+    from utils.events import ServerEvents
+
     area_data = game_state['areas']['shrimp_catching']
     slots = area_data['slots']
     templates = SLOT_TEMPLATES['shrimp_catching']
@@ -77,33 +113,121 @@ def resolve_fishing_area(game_state: dict):
 
                 reward_given = True
 
+    remaining_lobsters = area_data.get('wildLobsterPool', 0)
+    if remaining_lobsters > 0:
+        market_area = game_state['areas']['seafood_market']
+        market_area['marketLobsterCount'] += remaining_lobsters
+        if market_area['marketLobsterCount'] > 8:
+            market_area['marketLobsterCount'] = 8
+        area_data['wildLobsterPool'] = 0
 
-def resolve_market_area(game_state: dict):
-    """结算海鲜市场"""
+    return 'auto_next'
+
+
+async def _resolve_seafood_market_step(game_state: dict, manager, room_id):
+    """
+    结算海鲜市场（需要UI交互）
+    遍历有玩家的slot，对每个玩家发送AREA_WAITING_UI事件等待交互
+    """
+    from utils.events import ServerEvents
+
     area_data = game_state['areas']['seafood_market']
     slots = area_data['slots']
     templates = SLOT_TEMPLATES['seafood_market']
 
-    for slot_idx, player_id in enumerate(slots):
-        if player_id is None:
-            continue
+    settlement_state = game_state.get('settlementState', {})
+    current_slot_index = settlement_state.get('currentSlotIndex', -1)
 
-        player = game_state['players'][player_id]
-        template = templates[slot_idx]
-        reward = template['reward']
+    if current_slot_index == -1:
+        current_slot_index = 0
 
-        if reward.get('coins'):
-            player['coins'] += reward['coins']
+    while current_slot_index < len(slots):
+        player_id = slots[current_slot_index]
+        if player_id is not None:
+            player = game_state['players'][player_id]
+            template = templates[current_slot_index]
+            action_count = template['actionCount']
+            reward = template['reward']
+
+            if reward.get('coins'):
+                player['coins'] += reward['coins']
+
+            if action_count > 0:
+                prices = _get_market_prices(area_data['marketLobsterCount'])
+
+                game_state['settlementState'] = {
+                    'currentSlotIndex': current_slot_index,
+                    'remainingActions': action_count,
+                    'waitingForPlayer': player_id,
+                    'areaType': 'seafood_market'
+                }
+
+                await manager.send_to_room(room_id, ServerEvents.AREA_WAITING_UI, {
+                    'areaType': 'seafood_market',
+                    'playerId': player_id,
+                    'actionCount': action_count,
+                    'prices': prices,
+                    'player': _serialize_player(player),
+                    'marketLobsterCount': area_data['marketLobsterCount']
+                })
+
+                return 'waiting_ui'
+
+        current_slot_index += 1
+
+    return 'auto_next'
 
 
-def resolve_breeding_area(game_state: dict):
-    """结算养殖区"""
-    # TODO: 养殖区结算逻辑待定
-    pass
+async def _resolve_breeding_step(game_state: dict, manager, room_id):
+    """
+    结算养蛊区（需要UI交互）
+    """
+    from utils.events import ServerEvents
+
+    area_data = game_state['areas']['breeding']
+    slots = area_data['slots']
+    templates = SLOT_TEMPLATES['breeding']
+
+    settlement_state = game_state.get('settlementState', {})
+    current_slot_index = settlement_state.get('currentSlotIndex', -1)
+
+    if current_slot_index == -1:
+        current_slot_index = 0
+
+    while current_slot_index < len(slots):
+        player_id = slots[current_slot_index]
+        if player_id is not None:
+            player = game_state['players'][player_id]
+
+            if len(player['lobsters']) == 0:
+                current_slot_index += 1
+                continue
+
+            action_count = 1
+
+            game_state['settlementState'] = {
+                'currentSlotIndex': current_slot_index,
+                'remainingActions': action_count,
+                'waitingForPlayer': player_id,
+                'areaType': 'breeding'
+            }
+
+            await manager.send_to_room(room_id, ServerEvents.AREA_WAITING_UI, {
+                'areaType': 'breeding',
+                'playerId': player_id,
+                'actionCount': action_count,
+                'player': _serialize_player(player),
+            })
+
+            return 'waiting_ui'
+
+        current_slot_index += 1
+
+    return 'auto_next'
 
 
-def resolve_tribute_area(game_state: dict):
-    """结算上供区：检查挑战位与防守位配对，生成战斗候选列表"""
+async def _resolve_tribute_step(game_state: dict, manager, room_id):
+    """结算上供区（无需UI交互，自动执行）"""
     area_data = game_state['areas']['tribute']
     slots = area_data['slots']
 
@@ -124,31 +248,416 @@ def resolve_tribute_area(game_state: dict):
             })
             print(f"[tribute] Battle queued: player {challenger_id} (slot {challenge_idx}) vs player {defender_id} (slot {defender_idx})")
 
-    # 普通位(6-7)和未被挑战的防守位(0-2)的结算由玩家主动提交上供任务处理
+    return 'auto_next'
 
 
-def resolve_marketplace_area(game_state: dict):
-    """结算闹市区"""
-    # TODO: 闹市区结算逻辑待定
-    pass
+async def _resolve_marketplace_step(game_state: dict, manager, room_id):
+    """
+    结算闹市区（需要UI交互）
+    """
+    from utils.events import ServerEvents
+
+    area_data = game_state['areas']['marketplace']
+    slots = area_data['slots']
+    templates = SLOT_TEMPLATES['marketplace']
+    current_round = game_state.get('currentRound', 1)
+
+    settlement_state = game_state.get('settlementState', {})
+    current_slot_index = settlement_state.get('currentSlotIndex', -1)
+
+    if current_slot_index == -1:
+        current_slot_index = 0
+
+    while current_slot_index < len(slots):
+        player_id = slots[current_slot_index]
+        if player_id is not None:
+            player = game_state['players'][player_id]
+
+            available_cards = [
+                card for card in game_state.get('downtownCards', [])
+                if not card.get('usedThisRound', False)
+            ]
+
+            if len(available_cards) == 0:
+                current_slot_index += 1
+                continue
+
+            game_state['settlementState'] = {
+                'currentSlotIndex': current_slot_index,
+                'remainingActions': 1,
+                'waitingForPlayer': player_id,
+                'areaType': 'marketplace'
+            }
+
+            await manager.send_to_room(room_id, ServerEvents.AREA_WAITING_UI, {
+                'areaType': 'marketplace',
+                'playerId': player_id,
+                'actionCount': 1,
+                'availableCards': available_cards,
+                'player': _serialize_player(player),
+            })
+
+            return 'waiting_ui'
+
+        current_slot_index += 1
+
+    return 'auto_next'
 
 
-def resolve_area(game_state: dict, area_index: int, areas_list: list):
-    """根据区域索引结算对应区域"""
-    from utils.constants import AREAS
+async def process_area_action(game_state: dict, action_type: str, action_payload: dict, manager, room_id, websocket):
+    """
+    处理结算阶段的前端交互操作
+    
+    返回:
+        'action_complete' - 当前区域所有行动完成
+        'continue_ui' - 继续等待UI交互（同一玩家还有行动）
+        'error' - 操作失败
+    """
+    from utils.helpers import send_error
 
-    area_name = AREAS[area_index]
-    area_data = game_state['areas'].get(area_name)
-    if not area_data:
-        return
+    settlement_state = game_state.get('settlementState', {})
+    area_type = settlement_state.get('areaType')
+    player_id = settlement_state.get('waitingForPlayer')
+    remaining_actions = settlement_state.get('remainingActions', 0)
 
-    if area_name == 'shrimp_catching':
-        resolve_fishing_area(game_state)
-    elif area_name == 'seafood_market':
-        resolve_market_area(game_state)
-    elif area_name == 'breeding':
-        resolve_breeding_area(game_state)
-    elif area_name == 'tribute':
-        resolve_tribute_area(game_state)
-    elif area_name == 'marketplace':
-        resolve_marketplace_area(game_state)
+    if player_id is None:
+        return 'error'
+
+    player = game_state['players'].get(player_id)
+    if not player:
+        return 'error'
+
+    if area_type == 'seafood_market':
+        return await _process_seafood_market_action(game_state, action_type, action_payload, player, manager, room_id, websocket)
+    elif area_type == 'breeding':
+        return await _process_breeding_action(game_state, action_type, action_payload, player, manager, room_id, websocket)
+    elif area_type == 'marketplace':
+        return await _process_marketplace_action(game_state, action_type, action_payload, player, manager, room_id, websocket)
+    
+    return 'error'
+
+
+async def _process_seafood_market_action(game_state: dict, action_type: str, action_payload: dict, player: dict, manager, room_id, websocket):
+    """处理海鲜市场单次交易行动"""
+    from utils.helpers import send_error
+    from utils.events import ServerEvents
+
+    settlement_state = game_state.get('settlementState', {})
+    remaining_actions = settlement_state.get('remainingActions', 0)
+
+    if remaining_actions <= 0:
+        await send_error(websocket, '没有剩余行动次数')
+        return 'error'
+
+    area_data = game_state['areas']['seafood_market']
+    prices = _get_market_prices(area_data['marketLobsterCount'])
+
+    success = False
+
+    if action_type == 'buy_lobster':
+        if player['coins'] >= prices['buyLobster'] and area_data['marketLobsterCount'] > 0:
+            player['coins'] -= prices['buyLobster']
+            area_data['marketLobsterCount'] -= 1
+            player['lobsters'].append(_create_lobster('normal'))
+            success = True
+        else:
+            await send_error(websocket, '金币不足或市场无龙虾')
+    elif action_type == 'sell_lobster':
+        if len(player['lobsters']) > 0:
+            player['lobsters'].pop(0)
+            player['coins'] += prices['sellLobster']
+            area_data['marketLobsterCount'] += 1
+            if area_data['marketLobsterCount'] > 8:
+                area_data['marketLobsterCount'] = 8
+            success = True
+        else:
+            await send_error(websocket, '没有龙虾可卖')
+    elif action_type == 'buy_cage':
+        if player['coins'] >= prices['buyCage']:
+            player['coins'] -= prices['buyCage']
+            player['cages'] += 1
+            success = True
+        else:
+            await send_error(websocket, '金币不足')
+    elif action_type == 'sell_cage':
+        if player['cages'] > 0:
+            player['cages'] -= 1
+            player['coins'] += prices['sellCage']
+            success = True
+        else:
+            await send_error(websocket, '没有虾笼可卖')
+    elif action_type == 'buy_seaweed':
+        if player['coins'] >= prices['buySeaweed']:
+            player['coins'] -= prices['buySeaweed']
+            player['seaweed'] += 1
+            success = True
+        else:
+            await send_error(websocket, '金币不足')
+    elif action_type == 'sell_seaweed':
+        if player['seaweed'] > 0:
+            player['seaweed'] -= 1
+            player['coins'] += prices['sellSeaweed']
+            success = True
+        else:
+            await send_error(websocket, '没有海草可卖')
+    elif action_type == 'hire':
+        if player['coins'] >= prices['hireHeadman']:
+            player['coins'] -= prices['hireHeadman']
+            if 'hiredLaborersBonus' not in player:
+                player['hiredLaborersBonus'] = []
+            player['hiredLaborersBonus'].append(settlement_state.get('currentSlotIndex'))
+            success = True
+        else:
+            await send_error(websocket, '金币不足')
+    elif action_type == 'skip':
+        success = True
+    else:
+        await send_error(websocket, '未知操作类型')
+        return 'error'
+
+    if not success:
+        return 'error'
+
+    remaining_actions -= 1
+    game_state['settlementState']['remainingActions'] = remaining_actions
+
+    if remaining_actions <= 0:
+        game_state['settlementState']['waitingForPlayer'] = None
+        return 'action_complete'
+    else:
+        await manager.send_to_room(room_id, ServerEvents.AREA_WAITING_UI, {
+            'areaType': 'seafood_market',
+            'playerId': settlement_state.get('waitingForPlayer'),
+            'actionCount': remaining_actions,
+            'prices': _get_market_prices(area_data['marketLobsterCount']),
+            'player': _serialize_player(player),
+            'marketLobsterCount': area_data['marketLobsterCount']
+        })
+        return 'continue_ui'
+
+
+async def _process_breeding_action(game_state: dict, action_type: str, action_payload: dict, player: dict, manager, room_id, websocket):
+    """处理养蛊区单次培养行动"""
+    from utils.helpers import send_error
+    from utils.events import ServerEvents
+
+    settlement_state = game_state.get('settlementState', {})
+    remaining_actions = settlement_state.get('remainingActions', 0)
+
+    if remaining_actions <= 0:
+        await send_error(websocket, '没有剩余行动次数')
+        return 'error'
+
+    if action_type == 'cultivate':
+        lobster_index = action_payload.get('lobsterIndex')
+        if lobster_index is None or lobster_index >= len(player['lobsters']):
+            await send_error(websocket, '无效的龙虾选择')
+            return 'error'
+
+        lobster = player['lobsters'][lobster_index]
+        old_grade = lobster['grade']
+
+        if old_grade == 'normal':
+            lobster['grade'] = 'grade3'
+        elif old_grade == 'grade3':
+            lobster['grade'] = 'grade2'
+        elif old_grade == 'grade2':
+            if player['cages'] > 0:
+                player['cages'] -= 1
+                lobster['grade'] = 'grade1'
+            elif player['coins'] >= 3:
+                player['coins'] -= 3
+                lobster['grade'] = 'grade1'
+            else:
+                await send_error(websocket, '需要虾笼或3金币')
+                return 'error'
+        elif old_grade == 'grade1':
+            if player['cages'] > 0:
+                player['cages'] -= 1
+                lobster['grade'] = 'royal'
+            elif player['coins'] >= 3:
+                player['coins'] -= 3
+                lobster['grade'] = 'royal'
+            else:
+                await send_error(websocket, '需要虾笼或3金币')
+                return 'error'
+
+        remaining_actions -= 1
+        game_state['settlementState']['remainingActions'] = remaining_actions
+
+        if remaining_actions <= 0:
+            game_state['settlementState']['waitingForPlayer'] = None
+            return 'action_complete'
+        else:
+            await manager.send_to_room(room_id, ServerEvents.AREA_WAITING_UI, {
+                'areaType': 'breeding',
+                'playerId': settlement_state.get('waitingForPlayer'),
+                'actionCount': remaining_actions,
+                'player': _serialize_player(player),
+            })
+            return 'continue_ui'
+    elif action_type == 'skip':
+        game_state['settlementState']['waitingForPlayer'] = None
+        return 'action_complete'
+    else:
+        await send_error(websocket, '未知操作类型')
+        return 'error'
+
+
+async def _process_marketplace_action(game_state: dict, action_type: str, action_payload: dict, player: dict, manager, room_id, websocket):
+    """处理闹市区单次闹市卡行动"""
+    from utils.helpers import send_error
+    from utils.events import ServerEvents
+
+    settlement_state = game_state.get('settlementState', {})
+
+    if action_type == 'select_card':
+        card_index = action_payload.get('cardIndex')
+        option_index = action_payload.get('optionIndex', 0)
+
+        available_cards = [
+            card for card in game_state.get('downtownCards', [])
+            if not card.get('usedThisRound', False)
+        ]
+
+        if card_index is None or card_index >= len(available_cards):
+            await send_error(websocket, '无效的卡牌选择')
+            return 'error'
+
+        card = available_cards[card_index]
+        card['usedThisRound'] = True
+
+        action = card.get('action', {})
+        action_type_inner = action.get('type')
+
+        if action_type_inner == 'exchange':
+            options = action.get('options', [])
+            if option_index >= len(options):
+                await send_error(websocket, '无效的选项')
+                return 'error'
+
+            option = options[option_index]
+            cost = option.get('cost', {})
+            reward = option.get('reward', {})
+
+            for res_type, res_amount in cost.items():
+                if res_type == 'lobsters':
+                    if len(player['lobsters']) < res_amount:
+                        await send_error(websocket, '龙虾不足')
+                        return 'error'
+                    for _ in range(res_amount):
+                        player['lobsters'].pop(0)
+                elif res_type == 'de':
+                    if player['de'] < res_amount:
+                        await send_error(websocket, '德不足')
+                        return 'error'
+                    player['de'] -= res_amount
+                elif res_type == 'wang':
+                    if player['wang'] < res_amount:
+                        await send_error(websocket, '望不足')
+                        return 'error'
+                    player['wang'] -= res_amount
+                elif res_type == 'coins':
+                    if player['coins'] < res_amount:
+                        await send_error(websocket, '金币不足')
+                        return 'error'
+                    player['coins'] -= res_amount
+                elif res_type == 'seaweed':
+                    if player['seaweed'] < res_amount:
+                        await send_error(websocket, '海草不足')
+                        return 'error'
+                    player['seaweed'] -= res_amount
+                elif res_type == 'cages':
+                    if player['cages'] < res_amount:
+                        await send_error(websocket, '虾笼不足')
+                        return 'error'
+                    player['cages'] -= res_amount
+
+            for res_type, res_amount in reward.items():
+                if res_type == 'lobsters':
+                    for _ in range(res_amount):
+                        player['lobsters'].append(_create_lobster('normal'))
+                elif res_type == 'de':
+                    player['de'] += res_amount
+                elif res_type == 'wang':
+                    player['wang'] += res_amount
+                elif res_type == 'coins':
+                    player['coins'] += res_amount
+                elif res_type == 'seaweed':
+                    player['seaweed'] += res_amount
+                elif res_type == 'cages':
+                    player['cages'] += res_amount
+
+        elif action_type_inner == 'academy':
+            if player['de'] < player['wang']:
+                player['de'] += 1
+            else:
+                player['wang'] += 1
+
+        elif action_type_inner == 'charity':
+            min_de = min(p['de'] for p in game_state['players'])
+            min_wang = min(p['wang'] for p in game_state['players'])
+
+            for p in game_state['players']:
+                if p['de'] == min_de:
+                    lost = min(2, len(p['lobsters']))
+                    for _ in range(lost):
+                        p['lobsters'].pop(0)
+                if p['wang'] == min_wang:
+                    lost = min(2, len(p['lobsters']))
+                    for _ in range(lost):
+                        p['lobsters'].pop(0)
+
+        game_state['settlementState']['waitingForPlayer'] = None
+        return 'action_complete'
+    elif action_type == 'skip':
+        game_state['settlementState']['waitingForPlayer'] = None
+        return 'action_complete'
+    else:
+        await send_error(websocket, '未知操作类型')
+        return 'error'
+
+
+def _get_market_prices(lobster_count: int) -> dict:
+    """根据市场龙虾数量计算动态价格"""
+    from utils.constants import MARKET_PRICES
+
+    if lobster_count > 5:
+        return {
+            **MARKET_PRICES,
+            'buyLobster': 1,
+            'sellLobster': 1,
+            'buyCage': 4,
+            'sellCage': 3
+        }
+    elif lobster_count > 3:
+        return {
+            **MARKET_PRICES,
+            'buyLobster': 2,
+            'sellLobster': 2,
+            'buyCage': 3,
+            'sellCage': 2
+        }
+    else:
+        return {
+            **MARKET_PRICES,
+            'buyLobster': 3,
+            'sellLobster': 3,
+            'buyCage': 2,
+            'sellCage': 1
+        }
+
+
+def _serialize_player(player: dict) -> dict:
+    """序列化玩家数据用于前端传输"""
+    return {
+        'id': player['id'],
+        'name': player['name'],
+        'coins': player['coins'],
+        'seaweed': player['seaweed'],
+        'cages': player['cages'],
+        'de': player['de'],
+        'wang': player['wang'],
+        'lobsters': player['lobsters'],
+        'tempBubbles': player.get('tempBubbles', 0),
+    }
