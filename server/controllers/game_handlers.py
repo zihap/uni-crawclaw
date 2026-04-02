@@ -677,6 +677,10 @@ async def handle_battle_action(websocket, room_id, player_id, rooms, manager, pa
                 game_state['tributeBattlesCompleted'] = 0
             game_state['tributeBattlesCompleted'] += 1
 
+            # 清理 battleStart 去重标记
+            if '_lastBattleStartSent' in game_state:
+                del game_state['_lastBattleStartSent']
+
             total_battles = len(game_state.get('battleQueue', []))
             if game_state['tributeBattlesCompleted'] >= total_battles:
                 current_area = game_state.get('currentArea', 0)

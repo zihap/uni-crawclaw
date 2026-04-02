@@ -1,5 +1,12 @@
 <template>
     <view class="battle-container">
+        <!-- #ifdef H5 -->
+        <!-- H5 使用 CSS background -->
+        <!-- #endif -->
+        <!-- #ifndef H5 -->
+        <image class="bg-image" src="@/static/images/battle_bg.png" mode="aspectFill" />
+        <!-- #endif -->
+
         <view class="back-btn" @click="exitBattle" />
 
         <view class="round-badge">
@@ -728,7 +735,12 @@ function navigateBackToGame() {
         uni.setStorageSync(`arenaBattleQueue_${savedRoomId.value}`, battleQueue)
     }
     resetBattleState()
-    uni.reLaunch({ url: buildReturnUrl() })
+    const pages = getCurrentPages()
+    if (pages.length > 1) {
+        uni.navigateBack()
+    } else {
+        uni.reLaunch({ url: buildReturnUrl() })
+    }
 }
 
 // ============ 监听器 ============
@@ -805,11 +817,6 @@ watch(
 watch(
     () => battleData.value?.phase,
     (phase) => {
-        if (phase === 'initiative' && !showInitiativeOverlay.value) {
-            nextTick(() => {
-                setTimeout(triggerInitiativeRoll, 500)
-            })
-        }
         if (phase === 'ended' && battleData.value?.winner) {
             setTimeout(showResult, 500)
         }
@@ -868,6 +875,16 @@ onMounted(() => {
                 ? parseInt(options.challengeSlot)
                 : (battleDataFromParams?.challengeSlotIndex ?? null)
         })
+
+        if (battleStore.battleData?.phase === 'initiative') {
+            nextTick(() => {
+                setTimeout(() => {
+                    if (!showInitiativeOverlay.value) {
+                        triggerInitiativeRoll()
+                    }
+                }, 100)
+            })
+        }
     }
 
     initBoard()
