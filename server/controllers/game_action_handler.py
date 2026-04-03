@@ -174,6 +174,25 @@ async def _complete_settlement(room_id, game_state, rooms, manager):
 
     cleanup_phase(game_state)
 
+    if game_state['currentRound'] >= game_state['maxRounds']:
+        game_state['status'] = 'ended'
+        
+        winner = sorted(
+            game_state['players'],
+            key=lambda x: (x['de'] * x['wang'] + x['bonusPoints'], x['coins']),
+            reverse=True
+        )[0]
+        
+        await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
+            _sra(ServerAreaActionTypes.SETTLEMENT_COMPLETE, {
+                'gameState': game_state
+            }))
+        await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
+            _sra(ServerGameActionTypes.GAME_ENDED, {'winner': winner, 'gameState': game_state}))
+        await broadcast_game_state(room_id, rooms, manager)
+        return
+
+    game_state['currentRound'] += 1
     game_state['phase'] = 'placement'
     game_state['currentPlayerIndex'] = game_state.get('startingPlayerIndex', 0)
     game_state['currentArea'] = 0
