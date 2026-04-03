@@ -277,17 +277,56 @@ async def handle_area_action(websocket, room_id, player_id, rooms, manager, payl
     action_payload = payload.get('payload', {})
 
     result = await process_area_action(game_state, action_type, action_payload, manager, room_id, websocket)
+    print(f"[handle_settlement_action] actionType={action_type}, result={result}")
 
     if result == 'action_complete':
         await broadcast_game_state(room_id, rooms, manager)
 
         current_area = game_state.get('currentArea', 0)
-        if current_area + 1 >= len(AREAS):
+        area_name = AREAS[current_area]
+        
+        # 检查当前区域是否还有未处理的玩家/slot
+        more_players_in_area = False
+        if area_name in game_state['areas']:
+            area_data = game_state['areas'][area_name]
+            slots = area_data.get('slots', [])
+            settlement_state = game_state.get('settlementState', {})
+            current_slot_index = settlement_state.get('currentSlotIndex', -1)
+            print(f"[handle_settlement_action] area={area_name}, slots={slots}, currentSlotIndex={current_slot_index}")
+            
+            # 检查是否有更多slot需要处理
+            # currentSlotIndex 是下一个要处理的slot索引，从这里开始向后检查
+            if current_slot_index >= 0 and current_slot_index < len(slots):
+                for idx in range(current_slot_index, len(slots)):
+                    print(f"[handle_settlement_action] checking slot {idx}, value={slots[idx]}")
+                    if slots[idx] is not None:
+                        more_players_in_area = True
+                        break
+        
+        print(f"[handle_settlement_action] more_players_in_area={more_players_in_area}")
+        
+        if more_players_in_area:
+            # 当前区域还有更多玩家，继续结算
+            await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
+                _sra(ServerAreaActionTypes.AREA_SETTLEMENT_START, {
+                    'areaType': area_name,
+                    'gameState': game_state
+                }))
+            await _start_area_settlement(websocket, room_id, game_state, rooms, manager)
+        elif current_area + 1 >= len(AREAS):
             await _complete_settlement(room_id, game_state, rooms, manager)
         else:
+            # 跳转到下一个区域前，重置settlementState
             next_area = current_area + 1
-            game_state['currentArea'] = next_area
             next_area_name = AREAS[next_area]
+            print(f"[handle_settlement_action] Jumping to next area: {next_area_name}")
+            game_state['settlementState'] = {
+                'currentSlotIndex': -1,
+                'remainingActions': -1,
+                'waitingForPlayer': None,
+                'areaType': next_area_name
+            }
+            game_state['currentArea'] = next_area
             await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
                 _sra(ServerAreaActionTypes.AREA_SETTLEMENT_START, {
                     'areaType': next_area_name,

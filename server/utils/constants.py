@@ -39,8 +39,22 @@ SLOT_TEMPLATES = {
         {'actionCount': 3, 'reward': {'coins': 1}},
         {'actionCount': 3, 'reward': {'coins': 2}}
     ],
-    'breeding': [None, None, None, None],
-    'tribute': [None] * 8,
+    'breeding': [
+        {'actionCount': 1, 'reward': {'seaweed': 1}},
+        {'actionCount': 2, 'reward': {}},
+        {'actionCount': 2, 'reward': {'coins': 1}},
+        {'actionCount': 3, 'reward': {}}
+    ],
+    'tribute': [
+        {'actionCount': 1},
+        {'actionCount': 1},
+        {'actionCount': 1},
+        {'actionCount': 1},
+        {'actionCount': 1},
+        {'actionCount': 1},
+        {'actionCount': 1},
+        {'actionCount': 1}
+    ],
     'marketplace': [None, None, None]
 }
 
