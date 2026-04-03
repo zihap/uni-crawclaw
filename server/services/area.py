@@ -277,6 +277,22 @@ async def _resolve_tribute_step(game_state: dict, manager, room_id):
             print(f"[tribute] Battle queued: player {challenger_id} (slot {challenge_idx}) vs player {defender_id} (slot {defender_idx})")
 
     if len(game_state['battleQueue']) > 0:
+        import json
+        current_battle_key = json.dumps(game_state['battleQueue'], sort_keys=True)
+        last_battle_start = game_state.get('_lastBattleStartSent')
+
+        if last_battle_start == current_battle_key:
+            print("[_resolve_tribute_step] 跳过重复的 battleStart 消息")
+            game_state['settlementState'] = {
+                'currentSlotIndex': -1,
+                'remainingActions': 0,
+                'waitingForPlayer': None,
+                'areaType': 'tribute'
+            }
+            return 'waiting_ui'
+
+        game_state['_lastBattleStartSent'] = current_battle_key
+
         game_state['settlementState'] = {
             'currentSlotIndex': -1,
             'remainingActions': 0,
