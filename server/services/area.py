@@ -251,7 +251,7 @@ async def _resolve_breeding_step(game_state: dict, manager, room_id):
 
 
 async def _resolve_tribute_step(game_state: dict, manager, room_id):
-    """结算上供区（需要UI交互进行战斗）"""
+    """结算上供区（需要UI交互进行战斗和上供）"""
     from utils.events import ServerEvents
 
     area_data = game_state['areas']['tribute']
@@ -306,6 +306,46 @@ async def _resolve_tribute_step(game_state: dict, manager, room_id):
             }))
 
         return 'waiting_ui'
+
+    return await _resolve_tribute_actions(game_state, manager, room_id)
+
+
+async def _resolve_tribute_actions(game_state: dict, manager, room_id):
+    """处理上供区上供行动（8个slot，依次上供）"""
+    from utils.events import ServerEvents
+
+    area_data = game_state['areas']['tribute']
+    slots = area_data['slots']
+
+    settlement_state = game_state.get('settlementState', {})
+    current_slot_index = settlement_state.get('currentSlotIndex', 0)
+
+    while current_slot_index < len(slots):
+        player_id = slots[current_slot_index]
+        if player_id is not None:
+            player = game_state['players'][player_id]
+
+            game_state['settlementState'] = {
+                'currentSlotIndex': current_slot_index,
+                'remainingActions': 1,
+                'waitingForPlayer': player_id,
+                'areaType': 'tribute'
+            }
+
+            await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
+                _sra(ServerAreaActionTypes.AREA_WAITING_UI, {
+                    'areaType': 'tribute',
+                    'playerId': player_id,
+                    'actionCount': 1,
+                    'slotIndex': current_slot_index,
+                    'player': _serialize_player(player),
+                    'taverns': game_state.get('taverns', []),
+                    'tributeTasks': game_state.get('tributeTasks', [])
+                }))
+
+            return 'waiting_ui'
+
+        current_slot_index += 1
 
     return 'auto_next'
 
@@ -373,12 +413,10 @@ async def process_area_action(game_state: dict, action_type: str, action_payload
         'continue_ui' - 继续等待UI交互（同一玩家还有行动）
         'error' - 操作失败
     """
-    from utils.helpers import send_error
 
     settlement_state = game_state.get('settlementState', {})
     area_type = settlement_state.get('areaType')
     player_id = settlement_state.get('waitingForPlayer')
-    remaining_actions = settlement_state.get('remainingActions', 0)
 
     if player_id is None:
         return 'error'
@@ -393,6 +431,8 @@ async def process_area_action(game_state: dict, action_type: str, action_payload
         return await _process_seafood_market_action(game_state, action_type, action_payload, player, manager, room_id, websocket)
     elif area_type == 'breeding':
         return await _process_breeding_action(game_state, action_type, action_payload, player, manager, room_id, websocket)
+    elif area_type == 'tribute':
+        return await _process_tribute_action(game_state, action_type, action_payload, player, manager, room_id, websocket)
     elif area_type == 'marketplace':
         return await _process_marketplace_action(game_state, action_type, action_payload, player, manager, room_id, websocket)
     
@@ -400,7 +440,7 @@ async def process_area_action(game_state: dict, action_type: str, action_payload
 
 
 async def _process_shrimp_catching_action(game_state: dict, action_type: str, action_payload: dict, player: dict, manager, room_id, websocket):
-    """处理捕虾区玩家选择行动（方案A：每步暂停）"""
+    """处理捕虾区玩家选择行动"""
     from utils.helpers import send_error
     from utils.events import ServerEvents
 
@@ -465,7 +505,6 @@ async def _process_shrimp_catching_action(game_state: dict, action_type: str, ac
             if reward.get('gold'):
                 player['gold'] += reward['gold']
             if reward.get('stealStart'):
-                old_starting_idx = game_state['startingPlayerIndex']
                 game_state['startingPlayerIndex'] = settlement_state.get('waitingForPlayer')
                 for p in game_state['players']:
                     p['isStartingPlayer'] = False
@@ -524,7 +563,6 @@ async def _process_shrimp_catching_action(game_state: dict, action_type: str, ac
             if reward.get('gold'):
                 player['gold'] += reward['gold']
             if reward.get('stealStart'):
-                old_starting_idx = game_state['startingPlayerIndex']
                 game_state['startingPlayerIndex'] = settlement_state.get('waitingForPlayer')
                 for p in game_state['players']:
                     p['isStartingPlayer'] = False
@@ -688,6 +726,7 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
 
     if action_type == 'cultivateLobster':
         lobster_index = action_payload.get('lobsterIndex')
+        use_seaweed = action_payload.get('useSeaweed', False)
         if lobster_index is None or lobster_index >= len(player['lobsters']):
             await send_error(websocket, '无效的龙虾选择')
             return 'error'
@@ -695,30 +734,53 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
         lobster = player['lobsters'][lobster_index]
         old_grade = lobster['grade']
 
-        if old_grade == 'normal':
-            lobster['grade'] = 'grade3'
-        elif old_grade == 'grade3':
-            lobster['grade'] = 'grade2'
-        elif old_grade == 'grade2':
-            if player['cages'] > 0:
-                player['cages'] -= 1
+        if use_seaweed and player.get('seaweed', 0) >= 1:
+            player['seaweed'] -= 1
+            if old_grade == 'normal':
+                lobster['grade'] = 'grade2'
+            elif old_grade == 'grade3':
                 lobster['grade'] = 'grade1'
-            elif player['coins'] >= 3:
-                player['coins'] -= 3
-                lobster['grade'] = 'grade1'
+            elif old_grade == 'grade2':
+                if player['cages'] > 0:
+                    player['cages'] -= 1
+                    lobster['grade'] = 'royal'
+                elif player['coins'] >= 3:
+                    player['coins'] -= 3
+                    lobster['grade'] = 'royal'
+                else:
+                    await send_error(websocket, '需要虾笼或3金币')
+                    return 'error'
             else:
-                await send_error(websocket, '需要虾笼或3金币')
+                await send_error(websocket, '当前品级无法使用海草升级')
                 return 'error'
-        elif old_grade == 'grade1':
-            if player['cages'] > 0:
-                player['cages'] -= 1
-                lobster['grade'] = 'royal'
-            elif player['coins'] >= 3:
-                player['coins'] -= 3
-                lobster['grade'] = 'royal'
-            else:
-                await send_error(websocket, '需要虾笼或3金币')
-                return 'error'
+        elif use_seaweed:
+            await send_error(websocket, '海草数量不足')
+            return 'error'
+        else:
+            if old_grade == 'normal':
+                lobster['grade'] = 'grade3'
+            elif old_grade == 'grade3':
+                lobster['grade'] = 'grade2'
+            elif old_grade == 'grade2':
+                if player['cages'] > 0:
+                    player['cages'] -= 1
+                    lobster['grade'] = 'grade1'
+                elif player['coins'] >= 3:
+                    player['coins'] -= 3
+                    lobster['grade'] = 'grade1'
+                else:
+                    await send_error(websocket, '需要虾笼或3金币')
+                    return 'error'
+            elif old_grade == 'grade1':
+                if player['cages'] > 0:
+                    player['cages'] -= 1
+                    lobster['grade'] = 'royal'
+                elif player['coins'] >= 3:
+                    player['coins'] -= 3
+                    lobster['grade'] = 'royal'
+                else:
+                    await send_error(websocket, '需要虾笼或3金币')
+                    return 'error'
 
         remaining_actions -= 1
         game_state['settlementState']['remainingActions'] = remaining_actions
@@ -885,6 +947,120 @@ def _get_market_prices(lobster_count: int) -> dict:
             'buyCage': 2,
             'sellCage': 1
         }
+
+
+async def _process_tribute_action(game_state: dict, action_type: str, action_payload: dict, player: dict, manager, room_id, websocket):
+    """处理上供区上供行动"""
+    from utils.helpers import send_error
+    from utils.events import ServerEvents
+
+    settlement_state = game_state.get('settlementState', {})
+    current_slot_index = settlement_state.get('currentSlotIndex', 0)
+
+    if action_type == 'submitTribute':
+        is_naked = action_payload.get('isNaked', False)
+        tavern_id = action_payload.get('tavernId')
+        card_id = action_payload.get('cardId')
+        naked_lobster_index = action_payload.get('nakedLobsterIndex', -1)
+        naked_reward_type = action_payload.get('nakedRewardType', 'de')
+
+        taverns = game_state.get('taverns', [])
+        if tavern_id >= len(taverns):
+            await send_error(websocket, '无效的酒楼选择')
+            return 'error'
+
+        tavern = taverns[tavern_id]
+
+        if is_naked:
+            if naked_lobster_index < 0 or naked_lobster_index >= len(player['lobsters']):
+                await send_error(websocket, '无效的龙虾选择')
+                return 'error'
+
+            lobster = player['lobsters'][naked_lobster_index]
+            grade_values = {'normal': 0, 'grade3': 1, 'grade2': 2, 'grade1': 3, 'royal': 4}
+            if grade_values.get(lobster.get('grade', 'normal'), 0) < 1:
+                await send_error(websocket, '裸交需要献祭3品及以上的龙虾')
+                return 'error'
+
+            del player['lobsters'][naked_lobster_index]
+
+            if naked_reward_type == 'de':
+                player['de'] += 1
+                if lobster.get('title'):
+                    player['de'] += 1
+            else:
+                player['wang'] += 1
+                if lobster.get('title'):
+                    player['wang'] += 1
+
+            if player['id'] not in tavern['occupants']:
+                tavern['occupants'].append(player['id'])
+
+        else:
+            if not card_id:
+                await send_error(websocket, '请选择上供卡牌')
+                return 'error'
+
+            card = None
+            card_index = -1
+            for idx, c in enumerate(tavern['cards']):
+                if c.get('id') == card_id:
+                    card = c
+                    card_index = idx
+                    break
+
+            if not card:
+                await send_error(websocket, '无效的卡牌选择')
+                return 'error'
+
+            requirements = card.get('requirements', {})
+            if requirements.get('coins', 0) > player.get('coins', 0):
+                await send_error(websocket, '金币不足')
+                return 'error'
+            if requirements.get('seaweed', 0) > player.get('seaweed', 0):
+                await send_error(websocket, '海草不足')
+                return 'error'
+            if requirements.get('cages', 0) > player.get('cages', 0):
+                await send_error(websocket, '虾笼不足')
+                return 'error'
+
+            player['coins'] = player.get('coins', 0) - requirements.get('coins', 0)
+            player['seaweed'] = player.get('seaweed', 0) - requirements.get('seaweed', 0)
+            player['cages'] = player.get('cages', 0) - requirements.get('cages', 0)
+
+            del tavern['cards'][card_index]
+
+            reward = card.get('reward', {})
+            player['de'] = player.get('de', 0) + reward.get('de', 0)
+            player['wang'] = player.get('wang', 0) + reward.get('wang', 0)
+
+            effect_type = card.get('effectType')
+            if effect_type == 'instant_upgrade_all':
+                for l in player.get('lobsters', []):
+                    if l.get('grade') != 'royal':
+                        if l.get('grade') == 'normal':
+                            l['grade'] = 'grade3'
+                        elif l.get('grade') == 'grade3':
+                            l['grade'] = 'grade2'
+                        elif l.get('grade') == 'grade2':
+                            l['grade'] = 'grade1'
+                        elif l.get('grade') == 'grade1':
+                            l['grade'] = 'royal'
+            elif effect_type == 'instant_gain_cages':
+                player['cages'] = player.get('cages', 0) + 2
+
+            if player['id'] not in tavern['occupants'] and len(tavern['occupants']) < 4:
+                tavern['occupants'].append(player['id'])
+
+        game_state['settlementState']['waitingForPlayer'] = None
+        return 'action_complete'
+
+    elif action_type == 'skip':
+        game_state['settlementState']['waitingForPlayer'] = None
+        return 'action_complete'
+    else:
+        await send_error(websocket, '未知操作类型')
+        return 'error'
 
 
 def _serialize_player(player: dict) -> dict:

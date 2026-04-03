@@ -40,16 +40,19 @@ class ClientRoomActionTypes:
 class ClientBattleActionTypes:
     """clientBattleAction 事件中的 action_type 取值"""
     BATTLE_START = 'battleStart'
+    BATTLE_UPDATE = 'battleUpdate'
+    BATTLE_END = 'battleEnd'
     LOBSTER_SELECTED = 'lobsterSelected'
     SPECTATOR_BET = 'spectatorBet'
     NO_LOBSTER_FORFEIT = 'noLobsterForfeit'
 
 
-class GameActionTypes:
+class ClientGameActionTypes:
     """clientGameAction 事件中的 actionType 取值"""
 
     USE_SEAWEED = 'useSeaweed'
     PLACE_HEADMAN = 'placeHeadman'
+    CANCEL_HEADMAN = 'cancelHeadman'
     NEXT_PLAYER = 'nextPlayer'
     NEXT_AREA = 'nextArea'
     EXCHANGE_SIGNALS = 'exchangeSignals'
@@ -118,7 +121,7 @@ class ServerGameActionTypes:
 class ServerBattleActionTypes:
     """serverBattleAction 事件中的 actionType 取值"""
     BATTLE_START = 'battleStart'
-    BATTLE_ACTION = 'battleAction'
+    BATTLE_UPDATE = 'battleUpdate'
     BATTLE_ENDED = 'battleEnded'
     LOBSTER_SELECTED = 'lobsterSelected'
     ARENA_BETTING_START = 'arenaBettingStart'

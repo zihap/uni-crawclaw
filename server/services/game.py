@@ -71,6 +71,11 @@ def cleanup_phase(game_state: dict):
     for player in game_state['players']:
         player['coins'] += 2 + player.get('bonusGold', 0)
 
+    if 'taverns' in game_state:
+        for tavern in game_state['taverns']:
+            tavern['cards'] = []
+            tavern['occupants'] = []
+
     update_market_prices(game_state)
 
 
@@ -190,6 +195,7 @@ async def start_game(room_id: str, rooms: dict, manager):
     game_state['status'] = 'playing'
     game_state['phase'] = 'placement'
     game_state['currentRound'] = 1
+    game_state['lastPlacement'] = None
 
     starting_player_idx = 0
     for idx, player in enumerate(game_state['players']):
@@ -249,6 +255,7 @@ async def next_round(room_id: str, rooms: dict, manager):
     game_state['phase'] = 'placement'
     game_state['currentPlayerIndex'] = 0
     game_state['currentArea'] = 0
+    game_state['lastPlacement'] = None
 
     for p in game_state['players']:
         p['royalCountThisRound'] = 0

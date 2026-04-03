@@ -6,7 +6,7 @@
                 <text class="room-code">{{ roomId }}</text>
             </view>
             <view class="player-count">
-                <text class="count">{{ players.length }}/{{ maxPlayers }}</text>
+                <text class="count">{{ playerStore.players.length }}/{{ maxPlayers }}</text>
                 <text class="label">玩家</text>
             </view>
         </view>
@@ -15,7 +15,7 @@
             <text class="section-title">玩家列表</text>
             <view class="players-list">
                 <view
-                    v-for="(player, index) in players"
+                    v-for="(player, index) in playerStore.players"
                     :key="player.id"
                     :class="[
                         'player-card',
@@ -57,7 +57,11 @@
                     </view>
                 </view>
 
-                <view v-for="i in maxPlayers - players.length" :key="'empty-' + i" class="player-card empty">
+                <view
+                    v-for="i in maxPlayers - playerStore.players.length"
+                    :key="'empty-' + i"
+                    class="player-card empty"
+                >
                     <view class="player-avatar empty-avatar">
                         <text class="avatar-text">?</text>
                     </view>
@@ -82,7 +86,7 @@
             </button>
 
             <button
-                v-if="isHost && !allPlayersReady && players.length >= 1"
+                v-if="isHost && !allPlayersReady && playerStore.players.length >= 1"
                 class="btn-force-start"
                 @click="forceStart"
                 :disabled="!isConnected"
@@ -99,23 +103,24 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { usePlayerStore } from '@stores/player.js'
 import socketModule from '@utils/socket.js'
 const socketService = socketModule.socketService || socketModule
+const playerStore = usePlayerStore()
 
 const roomId = ref('')
 const playerId = ref(null)
-const players = ref([])
 const maxPlayers = ref(4)
 const isReady = ref(false)
 const isConnected = ref(false)
 
 const isHost = computed(() => {
-    const me = players.value.find((p) => String(p.id) === String(playerId.value))
+    const me = playerStore.players.find((p) => String(p.id) === String(playerId.value))
     return me?.isHost || false
 })
 
 const allPlayersReady = computed(() => {
-    return players.value.length >= 1 && players.value.every((p) => p.ready)
+    return playerStore.players.length >= 1 && playerStore.players.every((p) => p.ready)
 })
 
 function getPlayerEmoji(index) {
@@ -124,11 +129,11 @@ function getPlayerEmoji(index) {
 }
 
 function getWaitingTips() {
-    if (players.value.length < 1) {
+    if (playerStore.players.length < 1) {
         return '等待玩家加入...'
     }
     if (!allPlayersReady.value) {
-        const unreadyCount = players.value.filter((p) => !p.ready).length
+        const unreadyCount = playerStore.players.filter((p) => !p.ready).length
         return `等待 ${unreadyCount} 位玩家准备...`
     }
     if (isHost.value) {
@@ -199,7 +204,7 @@ function setupSocketListeners() {
 
     socketService.onAction('serverRoomAction', 'roomStateUpdate', (data) => {
         if (data && data.players) {
-            players.value = data.players
+            playerStore.syncPlayers(data.players)
             const me = data.players.find((p) => String(p.id) === String(playerId.value))
             if (me) {
                 isReady.value = me.ready
@@ -217,7 +222,7 @@ function setupSocketListeners() {
             duration: 1500
         })
         if (data.players) {
-            players.value = data.players
+            playerStore.syncPlayers(data.players)
         }
     })
 
@@ -228,21 +233,19 @@ function setupSocketListeners() {
             duration: 1500
         })
         if (data.players) {
-            players.value = data.players
+            playerStore.syncPlayers(data.players)
         }
     })
 
     socketService.onAction('serverRoomAction', 'playerStatusChange', (data) => {
-        if (data.status === 'online' && data.players) {
-            players.value = data.players
-        } else if (data.status === 'offline' && data.players) {
-            players.value = data.players
+        if (data.players) {
+            playerStore.syncPlayers(data.players)
         }
     })
 
     socketService.onAction('serverRoomAction', 'playerReady', (data) => {
         if (data.players) {
-            players.value = data.players
+            playerStore.syncPlayers(data.players)
             const me = data.players.find((p) => String(p.id) === String(playerId.value))
             if (me) {
                 isReady.value = me.ready
@@ -257,7 +260,7 @@ function setupSocketListeners() {
             duration: 1500
         })
         if (data.players) {
-            players.value = data.players
+            playerStore.syncPlayers(data.players)
         }
     })
 
@@ -319,16 +322,6 @@ onMounted(async () => {
         socketService.setRoomContext(roomId.value, playerId.value)
     }
 
-    const savedPlayers = uni.getStorageSync('roomPlayers')
-    if (savedPlayers) {
-        players.value = JSON.parse(savedPlayers)
-        const me = players.value.find((p) => String(p.id) === String(playerId.value))
-        if (me) {
-            isReady.value = me.ready
-        }
-        uni.removeStorageSync('roomPlayers')
-    }
-
     const savedMaxPlayers = uni.getStorageSync('maxPlayers')
     if (savedMaxPlayers) {
         maxPlayers.value = savedMaxPlayers
@@ -338,6 +331,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
     cleanupListeners()
+    playerStore.resetPlayers()
 })
 </script>
 

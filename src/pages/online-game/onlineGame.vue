@@ -72,7 +72,8 @@
                             'slot',
                             {
                                 occupied: isSlotOccupied('shrimp_catching', i - 1),
-                                disabled: !canPlaceOnSlot('shrimp_catching', i - 1)
+                                disabled: !canPlaceOnSlot('shrimp_catching', i - 1),
+                                'is-mine': isMySlot('shrimp_catching', i - 1)
                             }
                         ]"
                         :style="getSlotStyle('shrimp_catching', i - 1)"
@@ -101,7 +102,8 @@
                             'slot',
                             {
                                 occupied: isSlotOccupied('seafood_market', i - 1),
-                                disabled: !canPlaceOnSlot('seafood_market', i - 1)
+                                disabled: !canPlaceOnSlot('seafood_market', i - 1),
+                                'is-mine': isMySlot('seafood_market', i - 1)
                             }
                         ]"
                         :style="getSlotStyle('seafood_market', i - 1)"
@@ -130,7 +132,8 @@
                             'slot',
                             {
                                 occupied: isSlotOccupied('breeding', i - 1),
-                                disabled: !canPlaceOnSlot('breeding', i - 1)
+                                disabled: !canPlaceOnSlot('breeding', i - 1),
+                                'is-mine': isMySlot('breeding', i - 1)
                             }
                         ]"
                         :style="getSlotStyle('breeding', i - 1)"
@@ -159,8 +162,9 @@
                             'slot',
                             {
                                 occupied: isSlotOccupied('tribute', i - 1),
-                                disabled: !canPlaceOnSlot('tribute', i - 1),
-                                'challenge-slot': i > 3 && i <= 6
+                                disabled: !canPlaceOnSlot('tribute', i - 1) || !isTributeSlotAvailable(i - 1),
+                                'challenge-slot': i > 3 && i <= 6,
+                                'is-mine': isMySlot('tribute', i - 1)
                             }
                         ]"
                         :style="getSlotStyle('tribute', i - 1)"
@@ -189,7 +193,8 @@
                             'slot',
                             {
                                 occupied: isSlotOccupied('marketplace', i - 1),
-                                disabled: !canPlaceOnSlot('marketplace', i - 1) || !isMarketplaceAvailable(i)
+                                disabled: !canPlaceOnSlot('marketplace', i - 1) || !isMarketplaceAvailable(i),
+                                'is-mine': isMySlot('marketplace', i - 1)
                             }
                         ]"
                         :style="getSlotStyle('marketplace', i - 1)"
@@ -567,16 +572,156 @@
         <view v-if="showArenaReopen" class="arena-reopen-btn" @click="showArenaModal = true">
             <text>竞技场</text>
         </view>
+
+        <!-- 上供区结算弹窗 -->
+        <view class="modal-overlay" v-if="pendingSettlement?.areaType === 'tribute'">
+            <view class="modal-content tribute-modal">
+                <view class="modal-header">
+                    <view class="modal-title-group">
+                        <text class="modal-title">{{ pendingSettlement?.player?.name }} 的上供行动</text>
+                        <text class="modal-subtitle">请选择一家酒楼并支付资源，或者选择裸交</text>
+                    </view>
+                </view>
+
+                <view class="modal-body" v-if="!tributeState.isNakedMode">
+                    <view class="taverns-list">
+                        <view v-for="tavern in pendingSettlement?.taverns" :key="tavern.id" class="tavern-box">
+                            <view class="tavern-header">
+                                <text class="tavern-name">🏮 {{ tavern.name }}</text>
+                                <text
+                                    class="tavern-status"
+                                    v-if="tavern.occupants.includes(pendingSettlement?.player?.id)"
+                                    >已占席位
+                                </text>
+                            </view>
+
+                            <view v-if="tavern.cards.length === 0" class="empty-hint">上供卡已被抢空</view>
+
+                            <view class="tribute-cards">
+                                <view v-for="card in tavern.cards" :key="card.id" class="tribute-card">
+                                    <text class="tc-name">{{ card.name }}</text>
+                                    <text class="tc-desc">{{ card.effectDesc }}</text>
+                                    <view class="tc-req">需求：{{ formatTributeReq(card.requirements) }}</view>
+                                    <view class="tc-rew">奖励：{{ formatTributeRew(card.reward) }}</view>
+
+                                    <button
+                                        class="btn btn-primary btn-sm mt-2"
+                                        :disabled="
+                                            !checkTributeReq(card.requirements, pendingSettlement?.player) ||
+                                            tavern.occupants.includes(pendingSettlement?.player?.id)
+                                        "
+                                        @click="confirmTributeCard(tavern.id, card.id)"
+                                    >
+                                        缴纳上供
+                                    </button>
+                                </view>
+                            </view>
+                        </view>
+                    </view>
+                </view>
+
+                <view class="modal-body naked-mode-panel" v-else>
+                    <view class="naked-intro">
+                        <text class="warn-text">🔥 裸交模式 🔥</text>
+                        <text class="sub-text">
+                            如果你无法满足任何酒楼的卡牌要求，你可以选择献祭一只【三品及以上】的龙虾强行上供并抢夺一家酒楼的席位！
+                        </text>
+                    </view>
+
+                    <view class="section-label">1. 请选择要强行献祭的龙虾：</view>
+                    <view class="lobster-grid">
+                        <view
+                            v-for="(lobster, index) in getValidNakedLobsters(pendingSettlement?.player)"
+                            :key="lobster.id"
+                            class="lobster-card"
+                            :class="{ selected: tributeState.nakedLobsterIndex === index }"
+                            @click="tributeState.nakedLobsterIndex = index"
+                        >
+                            <text class="lobster-icon">🦞</text>
+                            <text class="lobster-grade">{{ getLobsterGradeName(lobster.grade) }}</text>
+                            <text class="lobster-title" v-if="lobster.title">{{ lobster.title.name }}</text>
+                        </view>
+                    </view>
+                    <view v-if="getValidNakedLobsters(pendingSettlement?.player).length === 0" class="error-hint mt-2">
+                        你连一只三品以上的龙虾都没有，怎么好意思裸交？
+                    </view>
+
+                    <view class="section-label mt-4">2. 请选择你要抢占席位的酒楼：</view>
+                    <view class="tavern-select-grid">
+                        <view
+                            v-for="t in pendingSettlement?.taverns"
+                            :key="t.id"
+                            class="tavern-select-btn"
+                            :class="{
+                                active: tributeState.nakedTavernId === t.id,
+                                disabled: t.occupants.includes(pendingSettlement?.player?.id)
+                            }"
+                            @click="
+                                !t.occupants.includes(pendingSettlement?.player?.id) &&
+                                (tributeState.nakedTavernId = t.id)
+                            "
+                        >
+                            <text class="ts-name">{{ t.name }}</text>
+                            <text class="ts-status">席位: {{ t.occupants.length }}/4</text>
+                            <text v-if="t.occupants.includes(pendingSettlement?.player?.id)" class="ts-lock">已占</text>
+                        </view>
+                    </view>
+
+                    <view class="section-label mt-4">3. 请选择保底奖励：</view>
+                    <view class="reward-options">
+                        <view
+                            class="custom-radio-wrap"
+                            :class="{ active: tributeState.nakedRewardType === 'de' }"
+                            @click="tributeState.nakedRewardType = 'de'"
+                        >
+                            <view
+                                class="custom-radio"
+                                :class="{ checked: tributeState.nakedRewardType === 'de' }"
+                            ></view>
+                            获得 1 德
+                        </view>
+                        <view
+                            class="custom-radio-wrap"
+                            :class="{ active: tributeState.nakedRewardType === 'wang' }"
+                            @click="tributeState.nakedRewardType = 'wang'"
+                        >
+                            <view
+                                class="custom-radio"
+                                :class="{ checked: tributeState.nakedRewardType === 'wang' }"
+                            ></view>
+                            获得 1 望
+                        </view>
+                    </view>
+                </view>
+
+                <view class="modal-footer">
+                    <view class="modal-actions" v-if="!tributeState.isNakedMode">
+                        <button class="btn btn-ghost" @click="tributeState.isNakedMode = true">强行裸交</button>
+                        <button class="btn btn-secondary" @click="skipTributeAction">放弃上供</button>
+                    </view>
+                    <view class="modal-actions" v-else>
+                        <button class="btn btn-ghost" @click="tributeState.isNakedMode = false">返回卡牌列表</button>
+                        <button
+                            class="btn btn-warning"
+                            :disabled="tributeState.nakedLobsterIndex === -1 || tributeState.nakedTavernId === ''"
+                            @click="confirmNakedTribute"
+                        >
+                            确认献祭并抢席位
+                        </button>
+                    </view>
+                </view>
+            </view>
+        </view>
     </view>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, reactive } from 'vue'
 import { useOnlineGameStore, LOBSTER_GRADES } from '@stores/online-game.js'
 import { usePlayerStore } from '@stores/player.js'
 import { DEFAULT_SLOT_STYLE, getOccupiedSlotStyle, PLAYER_COLORS } from '@utils/slotConstants.js'
 import { getLobsterGradeName, getNextLobsterGrade } from '@utils/gameUtils.js'
-import LobsterSelect from './LobsterSelect.vue'
+import LobsterSelect from './lobsterSelect.vue'
 import socketModule from '@utils/socket.js'
 
 const socketService = socketModule.socketService || socketModule
@@ -607,6 +752,15 @@ const breedingState = ref({
 const marketplaceState = ref({
     selectedCard: null,
     selectedOptionIndex: 0
+})
+
+watch(pendingSettlement, (newVal) => {
+    if (!newVal || newVal.areaType !== 'breeding') {
+        breedingState.value = { lobsterIndex: -1, useSeaweed: false, royalCostType: '', selectedTitleId: '' }
+    }
+    if (!newVal || newVal.areaType !== 'marketplace') {
+        marketplaceState.value = { selectedCard: null, selectedOptionIndex: 0 }
+    }
 })
 
 // ============ 海鲜市场价格计算 ============
@@ -682,8 +836,24 @@ const isSeaweedUseful = computed(() => {
 const projectedGrade = computed(() => {
     if (!targetLobster.value) return null
     let grade = getNextLobsterGrade(targetLobster.value.grade)
+    console.log(
+        '[Seaweed] base grade:',
+        grade,
+        'target:',
+        targetLobster.value.grade,
+        'useSeaweed:',
+        breedingState.value.useSeaweed
+    )
     if (breedingState.value.useSeaweed) {
-        grade = getNextLobsterGrade(grade)
+        // 海草额外+1品
+        const seaweedGrades = {
+            [LOBSTER_GRADES.GRADE3]: LOBSTER_GRADES.GRADE2,
+            [LOBSTER_GRADES.GRADE2]: LOBSTER_GRADES.GRADE1
+        }
+        console.log('[Seaweed] seaweedGrades map:', JSON.stringify(seaweedGrades))
+        console.log('[Seaweed] looking up grade:', grade, 'result:', seaweedGrades[grade])
+        grade = seaweedGrades[grade] || getNextLobsterGrade(grade)
+        console.log('[Seaweed] final grade:', grade)
     }
     return grade
 })
@@ -788,12 +958,31 @@ const canPlaceOnSlot = (area, slotIndex) => {
     if (!isPlacementPhase.value) return false
     if (!onlineGameStore.isMyTurn) return false
     if (isSlotOccupied(area, slotIndex)) return false
+    if (
+        onlineGameStore.lastPlacement &&
+        String(onlineGameStore.lastPlacement.playerId) === String(onlineGameStore.playerId)
+    )
+        return false
     return true
+}
+
+const isMySlot = (area, slotIndex) => {
+    if (!isPlacementPhase.value) return false
+    if (!onlineGameStore.isMyTurn) return false
+    const occupant = onlineGameStore.getSlotOccupant(area, slotIndex)
+    return occupant !== null && String(occupant) === String(onlineGameStore.playerId)
 }
 
 const isCurrentPlacementPlayer = (playerId) => isPlacementPhase.value && onlineGameStore.currentPlayerIndex === playerId
 
 const isMarketplaceAvailable = (slotIndex) => onlineGameStore.currentRound >= slotIndex + 1
+
+const isTributeSlotAvailable = (slotIndex) => {
+    if (slotIndex === 2) {
+        return onlineGameStore.currentRound >= 4
+    }
+    return true
+}
 
 // ============ 行动格描述 ============
 
@@ -844,8 +1033,24 @@ const handleSlotClick = (area, slotIndex) => {
     }
     if (isSlotOccupied(area, slotIndex)) {
         const occupant = onlineGameStore.getSlotOccupant(area, slotIndex)
-        const occupantPlayer = playerStore.players.find((p) => p.id === occupant)
-        showToast(`该行动格已被${occupantPlayer?.name || '未知玩家'}占用`)
+        if (String(occupant) === String(onlineGameStore.playerId)) {
+            onlineGameStore.cancelHeadmanAction()
+        } else {
+            const occupantPlayer = playerStore.players.find((p) => p.id === occupant)
+            showToast(`该行动格已被${occupantPlayer?.name || '未知玩家'}占用`)
+        }
+        return
+    }
+    if (area === 'marketplace' && !isMarketplaceAvailable(slotIndex + 1)) {
+        showToast(`第${slotIndex + 1}号格子需第${slotIndex + 2}回合才可用`)
+        return
+    }
+    if (area === 'tribute' && !isTributeSlotAvailable(slotIndex)) {
+        showToast('第3号格子需第4回合才可用')
+        return
+    }
+    if (!canPlaceOnSlot(area, slotIndex)) {
+        showToast('请先点击"下一阶段"结束当前回合')
         return
     }
     onlineGameStore.sendGameAction('placeHeadman', { areaIndex: area, slotIndex })
@@ -889,6 +1094,12 @@ const selectLobsterForBreeding = (index) => {
 }
 
 const toggleSeaweed = () => {
+    console.log(
+        '[toggleSeaweed] before:',
+        breedingState.value.useSeaweed,
+        'seaweed:',
+        pendingSettlement.value?.player?.seaweed
+    )
     if (!isSeaweedUseful.value) {
         showToast('已达满级，无需消耗海草')
         return
@@ -896,6 +1107,7 @@ const toggleSeaweed = () => {
     const player = pendingSettlement.value?.player
     if ((player?.seaweed ?? 0) >= 1 || breedingState.value.useSeaweed) {
         breedingState.value.useSeaweed = !breedingState.value.useSeaweed
+        console.log('[toggleSeaweed] after:', breedingState.value.useSeaweed)
     } else {
         showToast('海草数量不足')
     }
@@ -951,6 +1163,89 @@ const confirmMarketplaceAction = () => {
 
     marketplaceState.value.selectedCard = null
     marketplaceState.value.selectedOptionIndex = 0
+}
+
+// ============ 上供区逻辑 ============
+
+const tributeState = reactive({
+    isNakedMode: false,
+    nakedLobsterIndex: -1,
+    nakedTavernId: '',
+    nakedRewardType: 'de'
+})
+
+watch(
+    pendingSettlement,
+    (newVal) => {
+        if (!newVal || newVal.areaType !== 'tribute') {
+            tributeState.isNakedMode = false
+            tributeState.nakedLobsterIndex = -1
+            tributeState.nakedTavernId = ''
+            tributeState.nakedRewardType = 'de'
+        }
+    },
+    { immediate: true }
+)
+
+const formatTributeReq = (req) => {
+    if (!req) return '无'
+    const parts = []
+    if (req.coins) parts.push(`${req.coins}金币`)
+    if (req.seaweed) parts.push(`${req.seaweed}海草`)
+    if (req.cages) parts.push(`${req.cages}虾笼`)
+    if (req.lobsters) {
+        for (const [grade, count] of Object.entries(req.lobsters)) {
+            parts.push(`${count}只${grade}龙虾`)
+        }
+    }
+    return parts.length > 0 ? parts.join(' + ') : '无'
+}
+
+const formatTributeRew = (rew) => {
+    if (!rew) return '无'
+    const parts = []
+    if (rew.de) parts.push(`${rew.de}德`)
+    if (rew.wang) parts.push(`${rew.wang}望`)
+    return parts.length > 0 ? parts.join(' + ') : '无'
+}
+
+const checkTributeReq = (req, player) => {
+    if (!player || !req) return false
+    if ((player.coins ?? 0) < (req.coins ?? 0)) return false
+    if ((player.seaweed ?? 0) < (req.seaweed ?? 0)) return false
+    if ((player.cages ?? 0) < (req.cages ?? 0)) return false
+    return true
+}
+
+const getValidNakedLobsters = (player) => {
+    if (!player || !player.lobsters) return []
+    const gradeValues = { normal: 0, grade3: 1, grade2: 2, grade1: 3, royal: 4 }
+    return player.lobsters.filter((l) => (gradeValues[l.grade] ?? 0) >= 1)
+}
+
+const confirmTributeCard = (tavernId, cardId) => {
+    onlineGameStore.sendSettlementAction('submitTribute', {
+        isNaked: false,
+        tavernId,
+        cardId
+    })
+    onlineGameStore.clearPendingSettlement()
+}
+
+const confirmNakedTribute = () => {
+    if (tributeState.nakedLobsterIndex === -1 || tributeState.nakedTavernId === '') return
+    onlineGameStore.sendSettlementAction('submitTribute', {
+        isNaked: true,
+        tavernId: tributeState.nakedTavernId,
+        nakedLobsterIndex: tributeState.nakedLobsterIndex,
+        nakedRewardType: tributeState.nakedRewardType
+    })
+    onlineGameStore.clearPendingSettlement()
+}
+
+const skipTributeAction = () => {
+    onlineGameStore.sendSettlementAction('skip')
+    onlineGameStore.clearPendingSettlement()
 }
 
 // ============ 竞技场逻辑 ============
@@ -1078,16 +1373,30 @@ const restoreArenaQueue = (roomId) => {
     return false
 }
 
+const prepareNextArenaBattle = () => {
+    if (onlineGameStore.arenaBattleQueue.length === 0) return
+
+    const nextBattle = onlineGameStore.arenaBattleQueue[0]
+    const challenger = playerStore.getPlayerById(nextBattle.challengerId)
+    const defender = playerStore.getPlayerById(nextBattle.defenderId)
+
+    if (!challenger || !defender) return
+
+    onlineGameStore.setArenaPhase('idle')
+    onlineGameStore.resetArenaBattleState()
+
+    showArenaModal.value = true
+}
+
 const autoContinueAfterBattles = () => {
-    if (onlineGameStore.currentPhase === 'settlement' && onlineGameStore.arenaBattleQueue.length === 0) {
-        const lastArea = onlineGameStore.gameState?.areas
-        if (lastArea) {
-            const tributeSlots = lastArea.tribute?.slots || []
-            const hasBattles = tributeSlots.some((slot) => slot !== null)
-            if (hasBattles) {
-                onlineGameStore.sendGameAction('nextArea', {})
-            }
-        }
+    const tributeSlots = onlineGameStore.gameState?.areas?.tribute?.slots || []
+    const hasBattles = tributeSlots.some((slot) => slot !== null)
+    console.log('[autoContinueAfterBattles] currentPhase:', onlineGameStore.currentPhase)
+    console.log('[autoContinueAfterBattles] tributeSlots:', tributeSlots, 'hasBattles:', hasBattles)
+
+    if (hasBattles) {
+        console.log('[autoContinueAfterBattles] sending nextArea')
+        onlineGameStore.sendGameAction('nextArea', {})
     }
 }
 
@@ -1120,14 +1429,27 @@ onMounted(() => {
         return
     }
 
+    // 先恢复队列，再初始化（避免 initOnlineMode 清空队列）
     const hadQueue = restoreArenaQueue(roomId)
-    initGameState(options)
-    onlineGameStore.initOnlineMode(roomId, playerId)
-    initSocket(roomId, playerId)
+    console.log('[onMounted] roomId:', roomId, 'hadQueue:', hadQueue)
+    console.log('[onMounted] queue after restore:', onlineGameStore.arenaBattleQueue.length)
 
-    if (hadQueue && onlineGameStore.arenaBattleQueue.length === 0) {
-        setTimeout(() => autoContinueAfterBattles(), 1000)
-    }
+    initGameState(options)
+    console.log('[onMounted] gameState after initGameState:', onlineGameStore.gameState?.areas?.tribute?.slots)
+    onlineGameStore.initOnlineMode(roomId, playerId)
+    console.log('[onMounted] gameState after initOnlineMode:', onlineGameStore.gameState?.areas?.tribute?.slots)
+
+    setTimeout(() => {
+        const tributeSlots = onlineGameStore.gameState?.areas?.tribute?.slots || []
+        const hasBattles = tributeSlots.some((slot) => slot !== null)
+        console.log('[onMounted] tributeSlots:', tributeSlots, 'hasBattles:', hasBattles)
+
+        if (hasBattles && onlineGameStore.currentPhase === 'settlement') {
+            autoContinueAfterBattles()
+        } else if (onlineGameStore.arenaBattleQueue.length > 0) {
+            prepareNextArenaBattle()
+        }
+    }, 500)
 })
 
 onUnmounted(() => {
@@ -1678,5 +2000,296 @@ onUnmounted(() => {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/* ============ 上供区弹窗样式 ============ */
+.tribute-modal {
+    background: #1a1a2e;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+.tribute-modal .modal-header {
+    padding: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tribute-modal .modal-title-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.tribute-modal .modal-title {
+    color: #fff;
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.tribute-modal .modal-subtitle {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
+    text-align: center;
+}
+
+.tribute-modal .modal-body {
+    padding: 16px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.tribute-modal .taverns-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.tribute-modal .tavern-box {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 12px;
+}
+
+.tribute-modal .tavern-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.tribute-modal .tavern-name {
+    color: #ffd700;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.tribute-modal .tavern-status {
+    color: #4ecdc4;
+    font-size: 12px;
+}
+
+.tribute-modal .empty-hint {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 13px;
+    text-align: center;
+    padding: 10px;
+}
+
+.tribute-modal .tribute-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tribute-modal .tribute-card {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.tribute-modal .tc-name {
+    color: #fff;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.tribute-modal .tc-desc {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    display: block;
+    margin: 4px 0;
+}
+
+.tribute-modal .tc-req,
+.tribute-modal .tc-rew {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 11px;
+}
+
+.tribute-modal .btn-sm {
+    padding: 8px 16px;
+    font-size: 12px;
+}
+
+.tribute-modal .mt-2 {
+    margin-top: 8px;
+}
+
+.tribute-modal .naked-intro {
+    background: rgba(233, 69, 96, 0.1);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+.tribute-modal .warn-text {
+    color: #e94560;
+    font-size: 16px;
+    font-weight: bold;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.tribute-modal .sub-text {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.tribute-modal .section-label {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 13px;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.tribute-modal .mt-4 {
+    margin-top: 16px;
+}
+
+.tribute-modal .lobster-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.tribute-modal .lobster-card {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+    border: 2px solid transparent;
+    min-width: 70px;
+}
+
+.tribute-modal .lobster-card.selected {
+    border-color: #4ecdc4;
+    background: rgba(78, 205, 196, 0.1);
+}
+
+.tribute-modal .lobster-icon {
+    font-size: 24px;
+    display: block;
+}
+
+.tribute-modal .lobster-grade {
+    color: #fff;
+    font-size: 12px;
+    display: block;
+}
+
+.tribute-modal .lobster-title {
+    color: #ffd700;
+    font-size: 10px;
+    display: block;
+}
+
+.tribute-modal .tavern-select-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.tribute-modal .tavern-select-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+    border: 2px solid transparent;
+    min-width: 80px;
+}
+
+.tribute-modal .tavern-select-btn.active {
+    border-color: #4ecdc4;
+    background: rgba(78, 205, 196, 0.1);
+}
+
+.tribute-modal .tavern-select-btn.disabled {
+    opacity: 0.4;
+}
+
+.tribute-modal .ts-name {
+    color: #fff;
+    font-size: 13px;
+    display: block;
+}
+
+.tribute-modal .ts-status {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 11px;
+    display: block;
+}
+
+.tribute-modal .ts-lock {
+    color: #e94560;
+    font-size: 10px;
+    display: block;
+}
+
+.tribute-modal .reward-options {
+    display: flex;
+    gap: 12px;
+}
+
+.tribute-modal .custom-radio-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    border: 2px solid transparent;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+}
+
+.tribute-modal .custom-radio-wrap.active {
+    border-color: #4ecdc4;
+    background: rgba(78, 205, 196, 0.1);
+    color: #4ecdc4;
+}
+
+.tribute-modal .custom-radio {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    margin-right: 8px;
+}
+
+.tribute-modal .custom-radio.checked {
+    background: #4ecdc4;
+    border-color: #4ecdc4;
+}
+
+.tribute-modal .modal-footer {
+    padding: 16px 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tribute-modal .modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+}
+
+.tribute-modal .btn-warning {
+    background: #e94560;
+    color: #fff;
+    font-weight: bold;
+}
+
+.tribute-modal .btn-warning:disabled {
+    opacity: 0.5;
+}
+
+.tribute-modal .error-hint {
+    color: #e94560;
+    font-size: 12px;
 }
 </style>

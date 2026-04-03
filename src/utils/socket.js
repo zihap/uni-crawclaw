@@ -601,20 +601,7 @@ class WebSocketService {
         }
     }
 
-    // ===========================================================================
-    // 斗龙虾相关方法
-    // ===========================================================================
-
-    /**
-     * 发送战斗行动
-     *
-     * @param {string} actionType - 行动类型
-     * @param {object} battleData - 战斗数据
-     * @param {number} senderId - 发送者ID
-     *
-     * 发送事件: battleAction
-     */
-    sendBattleAction(actionType, battleData, senderId) {
+    clientBattleAction(actionType, battleData, senderId) {
         if (this.currentRoomId && this.currentPlayerId !== null) {
             this._send('clientBattleAction', {
                 action_type: actionType,
@@ -635,10 +622,6 @@ class WebSocketService {
                 payload: payload || {}
             })
         }
-    }
-
-    gameAction(actionType, payload) {
-        this.clientGameAction(actionType, payload)
     }
 }
 

@@ -48,8 +48,11 @@ export const usePlayerStore = defineStore('player', () => {
             titleCards: [],
             bonusGold: 0,
             tavernCompletions: {},
-            // 玩家颜色配置
-            color: PLAYER_COLORS[i]
+            color: PLAYER_COLORS[i],
+            isHost: false,
+            ready: false,
+            isOnline: true,
+            userId: null
         }))
 
         currentPlayerIndex.value = 0
@@ -172,6 +175,24 @@ export const usePlayerStore = defineStore('player', () => {
     }
 
     /**
+     * 同步服务端玩家数据（联机模式专用）
+     * @param {Array} serverPlayers - 服务端发送的玩家数组
+     */
+    const syncPlayers = (serverPlayers) => {
+        if (!Array.isArray(serverPlayers)) return
+        players.value = serverPlayers
+    }
+
+    /**
+     * 重置玩家状态
+     */
+    const resetPlayers = () => {
+        players.value = []
+        currentPlayerIndex.value = 0
+        startingPlayerIndex.value = 0
+    }
+
+    /**
      * 导出
      */
     return {
@@ -191,6 +212,8 @@ export const usePlayerStore = defineStore('player', () => {
         calculateTotalScore,
         getSortedPlayers,
         resetPlayerLiZhang,
-        addCoinsToAllPlayers
+        addCoinsToAllPlayers,
+        syncPlayers,
+        resetPlayers
     }
 })

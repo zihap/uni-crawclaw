@@ -56,7 +56,12 @@ def create_game_state() -> dict:
 
         'tributeTasks': [],
         'downtownCards': [],
-        'status': 'waiting'
+        'taverns': [
+            {'id': i, 'name': f'酒楼{i+1}', 'cards': [], 'occupants': []}
+            for i in range(6)
+        ],
+        'status': 'waiting',
+        'lastPlacement': None
     }
 
 
@@ -119,6 +124,15 @@ def draw_tribute_tasks(game_state: dict):
     shuffled = TRIBUTE_TASKS.copy()
     random.shuffle(shuffled)
     game_state['tributeTasks'] = shuffled[:3]
+    game_state['downtownCards'] = shuffled[3:6]
+
+    if 'taverns' in game_state:
+        tavern_cards = shuffled[6:]
+        card_idx = 0
+        for tavern in game_state['taverns']:
+            while len(tavern['cards']) < 2 and card_idx < len(tavern_cards):
+                tavern['cards'].append(tavern_cards[card_idx])
+                card_idx += 1
 
 
 def draw_downtown_cards(game_state: dict):

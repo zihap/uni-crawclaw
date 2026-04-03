@@ -32,7 +32,7 @@
                             @click="selectLobster(index)"
                         >
                             <view class="lobster-icon">🦞</view>
-                            <text class="lobster-name">{{ lobster.name }}</text>
+                            <text class="lobster-name">{{ lobster.name || getLobsterGradeName(lobster.grade) }}</text>
                         </view>
                         <view v-if="myLobsters.length === 0" class="no-lobster">
                             <text>没有可用的龙虾</text>
@@ -126,6 +126,7 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 import { useOnlineGameStore } from '@stores/online-game.js'
 import { usePlayerStore } from '@stores/player.js'
 import { socketService } from '@utils/socket.js'
+import { getLobsterGradeName } from '@utils/gameUtils.js'
 
 const store = useOnlineGameStore()
 const playerStore = usePlayerStore()
@@ -166,7 +167,13 @@ const myLobsters = computed(() => {
     if (!isFighter.value) return []
     const player = isChallenger.value ? props.challenger : props.defender
     const usedIds = new Set(store.getUsedLobsterIds(player.id))
-    const validLobsters = player?.lobsters?.filter((l) => l?.id && l.id !== 'normal' && !usedIds.has(l.id)) || []
+    const validLobsters =
+        player?.lobsters?.filter((l) => {
+            if (!l?.id || l.id === 'normal') return false
+            if (usedIds.has(l.id)) return false
+            if (l.grade === 'normal' || !l.grade) return false
+            return true
+        }) || []
     const titleCards = player?.titleCards?.filter((t) => t?.id && !usedIds.has(t.id)) || []
     return [...validLobsters, ...titleCards]
 })
@@ -262,6 +269,8 @@ const handleConfirm = () => {
     const context = buildBattleContext()
     if (!context) return
 
+    const actualPlayerId = isChallenger.value ? context.battle.challengerId : context.battle.defenderId
+
     socketService._send('clientBattleAction', {
         action_type: 'lobsterSelected',
         lobster: selectedLobster,
@@ -271,7 +280,7 @@ const handleConfirm = () => {
         spectators: context.spectators
     })
 
-    store.markLobsterUsed(props.playerId, selectedLobster.id)
+    store.markLobsterUsed(actualPlayerId, selectedLobster.id)
 
     if (isChallenger.value) {
         store.challengerReady = true

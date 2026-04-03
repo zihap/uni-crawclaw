@@ -55,6 +55,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
     const tributeTasks = ref([])
     const downtownCards = ref([])
     const gameState = ref(null)
+    const lastPlacement = ref(null)
 
     // 玩家store
     const playerStore = usePlayerStore()
@@ -88,6 +89,9 @@ export const useOnlineGameStore = defineStore('online-game', () => {
 
     // ============ 结算阶段UI状态 ============
     const pendingSettlement = ref(null) // { areaType, playerId, actionCount, player, prices, availableCards, marketLobsterCount }
+
+    // ============ 上供区UI状态 ============
+    const pendingTribute = ref(null) // { player, slotIndex, taverns, tributeTasks, resolve }
 
     // ============ 同回合龙虾出战记录 ============
     const usedLobstersThisRound = ref({}) // { playerId: [lobsterId, ...] }
@@ -182,11 +186,12 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         currentRound.value = data.currentRound || 1
         currentPlayerIndex.value = data.currentPlayerIndex || 0
         if (data.players) {
-            playerStore.players = data.players
+            playerStore.syncPlayers(data.players)
         }
         if (data.areas) areas.value = data.areas
         if (data.tributeTasks) tributeTasks.value = data.tributeTasks
         if (data.downtownCards) downtownCards.value = data.downtownCards
+        if (data.lastPlacement !== undefined) lastPlacement.value = data.lastPlacement
         gameState.value = data
     }
 
@@ -227,7 +232,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
     }
 
     function handleGameStateUpdate(data) {
-        if (data.players) playerStore.players = data.players
+        if (data.players) playerStore.syncPlayers(data.players)
         if (data.areas) areas.value = data.areas
         if (data.phase) currentPhase.value = data.phase
         if (data.currentRound) currentRound.value = data.currentRound
@@ -239,6 +244,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         if (data.status) status.value = data.status
         if (data.tributeTasks) tributeTasks.value = data.tributeTasks
         if (data.downtownCards) downtownCards.value = data.downtownCards
+        if (data.lastPlacement !== undefined) lastPlacement.value = data.lastPlacement
     }
 
     function handleSettlementComplete(data) {
@@ -250,7 +256,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         if (data.areaType) {
             currentPhase.value = 'settlement'
             currentArea.value = data.areaType
-            // 新区域结算开始时清空竞技场队列，防止旧数据干扰
+            pendingSettlement.value = null
             arenaBattleQueue.value = []
             currentArenaBattle.value = null
         }
@@ -283,13 +289,30 @@ export const useOnlineGameStore = defineStore('online-game', () => {
                 marketLobsterCount: data.marketLobsterCount,
                 indicatorType: data.indicatorType,
                 reward: data.reward,
-                rewardGiven: data.rewardGiven
+                rewardGiven: data.rewardGiven,
+                slotIndex: data.slotIndex,
+                taverns: data.taverns,
+                tributeTasks: data.tributeTasks
+            }
+            if (data.areaType === 'tribute') {
+                pendingTribute.value = {
+                    player: data.player,
+                    slotIndex: data.slotIndex,
+                    taverns: data.taverns || [],
+                    tributeTasks: data.tributeTasks || []
+                }
             }
         }
     }
 
     function handleBattleStart(data) {
         if (data.battleData) {
+            const pages = getCurrentPages()
+            const currentPage = pages[pages.length - 1]
+            if (currentPage?.route === 'pages/arena/arena') {
+                return
+            }
+
             const battleDataStr = encodeURIComponent(JSON.stringify(data.battleData))
             const player1 = data.battleData.players?.[0]
             const player2 = data.battleData.players?.[1]
@@ -405,7 +428,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
     }
 
     function updateGameState(data) {
-        if (data.players) playerStore.players = data.players
+        if (data.players) playerStore.syncPlayers(data.players)
         if (data.areas) areas.value = data.areas
         if (data.phase) currentPhase.value = data.phase
         if (data.currentRound) currentRound.value = data.currentRound
@@ -413,6 +436,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         if (data.status) status.value = data.status
         if (data.tributeTasks) tributeTasks.value = data.tributeTasks
         if (data.downtownCards) downtownCards.value = data.downtownCards
+        if (data.lastPlacement !== undefined) lastPlacement.value = data.lastPlacement
         gameState.value = data
     }
 
@@ -443,8 +467,21 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         })
     }
 
+    function cancelHeadmanAction() {
+        if (!isMyTurn.value) {
+            uni.showToast({ title: '不是你的回合', icon: 'none' })
+            return false
+        }
+        socketService.clientGameAction('cancelHeadman', {})
+        return true
+    }
+
     function clearPendingSettlement() {
         pendingSettlement.value = null
+    }
+
+    function clearPendingTribute() {
+        pendingTribute.value = null
     }
 
     // ============ 龙虾出战管理 ============
@@ -501,7 +538,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         isConnected.value = false
         isOnlineMode.value = false
         gameState.value = null
-        playerStore.players = []
+        playerStore.resetPlayers()
         currentPlayerIndex.value = 0
         currentRound.value = 1
         currentPhase.value = 'waiting'
@@ -536,6 +573,17 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         usedLobstersThisRound.value = {}
         pendingSettlement.value = null
         cleanupListeners()
+    }
+
+    function resetArenaBattleState() {
+        arenaPhase.value = 'idle'
+        challengerLobster.value = null
+        defenderLobster.value = null
+        challengerReady.value = false
+        defenderReady.value = false
+        challengerSelectedLobster.value = null
+        defenderSelectedLobster.value = null
+        spectatorBets.value = {}
     }
 
     // ============ 工具方法（复刻game.js） ============
@@ -618,6 +666,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         tributeTasks,
         downtownCards,
         gameState,
+        lastPlacement,
 
         // 游戏资源状态
         wildLobsterPool,
@@ -677,9 +726,15 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         getUsedLobsterIds,
         getAvailableLobstersForBattle,
         resetUsedLobsters,
+        resetArenaBattleState,
 
         // 结算阶段
         sendSettlementAction,
-        clearPendingSettlement
+        clearPendingSettlement,
+        clearPendingTribute,
+        pendingTribute,
+
+        // 放置阶段
+        cancelHeadmanAction
     }
 })

@@ -300,9 +300,32 @@
     cursor: not-allowed;
 }
 
-.slot.disabled {
-    opacity: 0.5;
+.slot.is-mine {
+    cursor: pointer;
+    animation: cancelPulse 2s infinite;
+    border-color: #ffd700 !important;
+}
+
+.slot.is-mine:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 16px rgba(255, 215, 0, 0.4);
+}
+
+@keyframes cancelPulse {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 12px 4px rgba(255, 215, 0, 0.2);
+    }
+}
+
+.slot.disabled:not(.occupied) {
+    background: #ccc !important;
+    border-color: #bbb !important;
     cursor: not-allowed;
+    opacity: 1;
 }
 
 .slot.challenge-slot {
@@ -1366,79 +1389,79 @@
     .game-container {
         padding-bottom: 10rem;
     }
-    
+
     .game-header {
         padding: 0.75rem 1rem;
     }
-    
+
     .round-number {
         font-size: 1.125rem;
     }
-    
+
     .phase-label {
         font-size: 1rem;
     }
-    
+
     .next-btn {
         padding: 0.5rem 1rem;
         font-size: 0.75rem;
     }
-    
+
     .players-bar {
         padding: 0.75rem;
     }
-    
+
     .player-item {
         min-width: 6.25rem;
         padding: 0.75rem;
     }
-    
+
     .main-board {
         padding: 0.75rem;
         max-height: calc(100vh - 20rem);
     }
-    
+
     .board-section {
         padding: 1rem;
         margin-bottom: 0.75rem;
     }
-    
+
     .slot {
         min-width: 6rem;
         padding: 0.75rem 0.5rem;
     }
-    
+
     .current-player-panel {
         bottom: 5.5rem;
         left: 0.75rem;
         right: 0.75rem;
         padding: 0.75rem;
     }
-    
+
     .panel-resources {
         gap: 0.5rem;
     }
-    
+
     .resource-item {
         padding: 0.5rem;
     }
-    
+
     .log-header {
         padding: 0.625rem 1rem;
     }
-    
+
     .log-content.expanded {
         height: 12rem;
     }
-    
+
     .log-item {
         padding: 0.5rem 1rem;
     }
-    
+
     .lobster-grid {
         grid-template-columns: repeat(2, 1fr);
     }
-    
+
     .slots-container {
         grid-template-columns: repeat(4, 1fr);
     }

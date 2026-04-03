@@ -226,7 +226,7 @@
             </view>
         </view>
 
-        <view v-if="showVictory" class="victory-overlay" @click="closeResult">
+        <view v-if="showVictory" class="victory-overlay">
             <view class="victory-content">
                 <view class="victory-icon-container">
                     <text class="victory-icon">🏆</text>
@@ -252,7 +252,7 @@
             </view>
         </view>
 
-        <view v-if="showDefeat" class="defeat-overlay" @click="closeResult">
+        <view v-if="showDefeat" class="defeat-overlay">
             <view class="defeat-content">
                 <template v-if="battleStore.myPlayerIndex < 0">
                     <view class="defeat-icon-container">
@@ -598,62 +598,74 @@ function onConfirmDice() {
 const getInitiativeDiceImage = (playerIndex) =>
     DICE_IMAGE_MAP[battleStore.getDiceSides(playerIndex)] || DICE_IMAGE_MAP[6]
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-async function playInitiativeAnimation(result, isFromSync) {
+function playInitiativeAnimation(result, isFromSync) {
     if (initiativeRolling.value) return
     initiativeRolling.value = true
     initiativeDisplayP1.value = null
     initiativeDisplayP2.value = null
     initiativeResult.value = ''
 
+    const animationDuration = 1500
+    const interval = 80
+    const steps = animationDuration / interval
+    let step = 0
+
     const p1Sides = battleStore.getDiceSides(0)
     const p2Sides = battleStore.getDiceSides(1)
-    const steps = 1500 / 80
 
-    for (let step = 0; step < steps; step++) {
+    const rollInterval = setInterval(() => {
+        step++
         initiativeDisplayP1.value = Math.floor(Math.random() * p1Sides) + 1
         initiativeDisplayP2.value = Math.floor(Math.random() * p2Sides) + 1
-        await sleep(80)
-    }
 
-    initiativeRolling.value = false
-    initiativeDisplayP1.value = result.p1
-    initiativeDisplayP2.value = result.p2
+        if (step >= steps) {
+            clearInterval(rollInterval)
+            initiativeRolling.value = false
+            initiativeDisplayP1.value = result.p1
+            initiativeDisplayP2.value = result.p2
 
-    await sleep(500)
+            setTimeout(() => {
+                const p1Name = battleData.value?.players[0]?.name || '玩家1'
+                const p2Name = battleData.value?.players[1]?.name || '玩家2'
 
-    const p1Name = battleData.value?.players[0]?.name || '玩家1'
-    const p2Name = battleData.value?.players[1]?.name || '玩家2'
-    if (result.p1 > result.p2) initiativeResult.value = `${p1Name} 获得先手！`
-    else if (result.p2 > result.p1) initiativeResult.value = `${p2Name} 获得先手！`
-    else initiativeResult.value = `点数一致，${p2Name} 获得先手！`
+                if (result.p1 > result.p2) {
+                    initiativeResult.value = `${p1Name} 获得先手！`
+                } else if (result.p2 > result.p1) {
+                    initiativeResult.value = `${p2Name} 获得先手！`
+                } else {
+                    initiativeResult.value = `点数一致，${p2Name} 获得先手！`
+                }
 
-    await sleep(2000)
-
-    if (!isFromSync) battleStore.applyInitiative()
-    showInitiativeOverlay.value = false
-    initiativeDisplayP1.value = null
-    initiativeDisplayP2.value = null
-    initiativeResult.value = ''
+                setTimeout(() => {
+                    if (!isFromSync) {
+                        battleStore.applyInitiative()
+                    }
+                    showInitiativeOverlay.value = false
+                    initiativeDisplayP1.value = null
+                    initiativeDisplayP2.value = null
+                    initiativeResult.value = ''
+                }, 2000)
+            }, 500)
+        }
+    }, interval)
 }
 
 function triggerInitiativeRoll() {
     if (showInitiativeOverlay.value) return
+
     const initiative = battleData.value?.initiative
-    const isFromSync = initiative?.p1 !== null && initiative?.p2 !== null
+    const isFromSync = initiative && initiative.p1 !== null && initiative.p2 !== null
     const isHost = battleStore.myPlayerIndex === 0 || battleStore.myPlayerIndex < 0
 
     showInitiativeOverlay.value = true
 
-    let result
-    if (isFromSync) result = { p1: initiative.p1, p2: initiative.p2 }
-    else if (isHost) {
-        result = battleStore.rollInitiativeDice()
-        if (!result) return
-    } else return
-
-    playInitiativeAnimation(result, isFromSync)
+    if (isFromSync) {
+        return
+    } else if (isHost) {
+        battleStore.rollInitiativeDice()
+    } else {
+        return
+    }
 }
 
 // ============ 龙虾信息弹窗 ============
@@ -678,6 +690,7 @@ function closeLobsterPopup() {
 
 function showResult() {
     if (resultShown.value || !battleData.value?.winner) return
+    if (battleData.value.winnerAwardChoice) return
     resultShown.value = true
     const winnerIndex = battleData.value.winner.id === battleData.value.players[0].id ? 0 : 1
     loser.value = battleData.value.players[1 - winnerIndex]
@@ -688,21 +701,14 @@ function showResult() {
 
 function selectReward(choice) {
     battleStore.applyWinnerAward(choice)
-    battleStore.broadcastRewardSelected()
     showVictory.value = false
     showDefeat.value = false
-    navigateBackToGame()
-}
-
-function closeResult() {
-    showVictory.value = false
-    showDefeat.value = false
-    navigateBackToGame()
 }
 
 function exitBattle() {
     showExitPopup.value = true
 }
+
 function cancelExit() {
     showExitPopup.value = false
 }
@@ -731,16 +737,17 @@ const buildReturnUrl = () => {
 
 function navigateBackToGame() {
     const battleQueue = onlineGameStore.arenaBattleQueue
+    let roomId = savedRoomId.value
     if (battleQueue?.length > 0) {
-        uni.setStorageSync(`arenaBattleQueue_${savedRoomId.value}`, battleQueue)
+        const pages = getCurrentPages()
+        const currentOptions = pages[pages.length - 1].options || {}
+        roomId = currentOptions.roomId || savedRoomId.value
+        uni.setStorageSync(`arenaBattleQueue_${roomId}`, battleQueue)
     }
     resetBattleState()
-    const pages = getCurrentPages()
-    if (pages.length > 1) {
-        uni.navigateBack()
-    } else {
-        uni.reLaunch({ url: buildReturnUrl() })
-    }
+
+    // 强制使用 reLaunch 确保页面重新加载
+    uni.reLaunch({ url: `/pages/online-game/onlineGame?roomId=${roomId}&playerId=${savedPlayerId.value}` })
 }
 
 // ============ 监听器 ============
@@ -818,7 +825,18 @@ watch(
     () => battleData.value?.phase,
     (phase) => {
         if (phase === 'ended' && battleData.value?.winner) {
-            setTimeout(showResult, 500)
+            if (!battleData.value.winnerAwardChoice) {
+                setTimeout(showResult, 500)
+            }
+        }
+    }
+)
+
+watch(
+    () => battleData.value?.winnerAwardChoice,
+    (choice) => {
+        if (choice) {
+            navigateBackToGame()
         }
     }
 )
@@ -827,7 +845,9 @@ watch(
     () => battleData.value?.initiative,
     (newInitiative) => {
         if (showInitiativeOverlay.value && newInitiative?.p1 !== null && newInitiative?.p2 !== null) {
-            playInitiativeAnimation({ p1: newInitiative.p1, p2: newInitiative.p2 }, true)
+            setTimeout(() => {
+                playInitiativeAnimation({ p1: newInitiative.p1, p2: newInitiative.p2 }, false)
+            }, 200)
         }
     },
     { deep: true }
@@ -877,13 +897,7 @@ onMounted(() => {
         })
 
         if (battleStore.battleData?.phase === 'initiative') {
-            nextTick(() => {
-                setTimeout(() => {
-                    if (!showInitiativeOverlay.value) {
-                        triggerInitiativeRoll()
-                    }
-                }, 100)
-            })
+            triggerInitiativeRoll()
         }
     }
 
@@ -891,7 +905,6 @@ onMounted(() => {
     battleStore.setupBattleActionListener(() => {
         showVictory.value = false
         showDefeat.value = false
-        navigateBackToGame()
     })
 })
 

@@ -5,13 +5,11 @@
     background-size: 100% 100%;
     /* #endif */
     /* #ifndef H5 */
-    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-    background-size: 100% 100%;
+    /* 依赖 image 标签作为背景 */
     /* #endif */
     display: flex;
     flex-direction: column;
     position: relative;
-    overflow: hidden;
 }
 
 .bg-image {

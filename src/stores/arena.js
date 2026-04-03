@@ -27,7 +27,7 @@ export const useBattleStore = defineStore('battle', () => {
         const player = battleData.value?.players[playerIndex]
         if (!player) return fallback
         const skill = getSkill(player.lobsterId)
-        return skill?.[methodName] ? skill[methodName](...args) : fallback
+        return skill?.[methodName] ? skill[methodName](fallback, ...args) : fallback
     }
 
     function getDiceValue(playerIndex) {
@@ -122,7 +122,6 @@ export const useBattleStore = defineStore('battle', () => {
 
         battleData.value.battleLog = buildInitialBattleLog(p1Data, p2Data)
         battleData.value.isInitialized = true
-        broadcastBattleUpdate('battleStart')
     }
 
     // ============ 先手骰子 ============
@@ -347,7 +346,7 @@ export const useBattleStore = defineStore('battle', () => {
         battleData.value.winner = winner
         battleData.value.phase = 'ended'
         addLog(logMessage)
-        broadcastBattleUpdate('battleAction')
+        broadcastBattleUpdate('battleUpdate')
         return true
     }
 
@@ -411,8 +410,9 @@ export const useBattleStore = defineStore('battle', () => {
         }
 
         battleData.value.winnerAwardChoice = choice
+        battleData.value.lastAction = 'rewardSelected'
         battleData.value = { ...battleData.value }
-        broadcastBattleUpdate('battleEnd')
+        broadcastBattleUpdate('battleUpdate')
     }
 
     function addLog(message) {
@@ -430,12 +430,12 @@ export const useBattleStore = defineStore('battle', () => {
             addLog(`🏆 ${battleData.value.winner.name} 获得胜利！`)
         }
 
-        broadcastBattleUpdate('playerQuit')
+        broadcastBattleUpdate('battleEnd')
     }
 
     function broadcastBattleUpdate(eventType) {
         if (!battleRoomId.value || !battleData.value) return
-        socketService.sendBattleAction(
+        socketService.clientBattleAction(
             eventType,
             {
                 ...battleData.value,
@@ -448,13 +448,21 @@ export const useBattleStore = defineStore('battle', () => {
     function broadcastRewardSelected() {
         battleData.value.lastAction = 'rewardSelected'
         battleData.value = { ...battleData.value }
-        broadcastBattleUpdate('battleAction')
+        broadcastBattleUpdate('battleUpdate')
     }
 
     // ============ 数据同步 ============
 
     const syncBattleFields = (syncedData) => {
-        const fields = ['phase', 'currentRound', 'currentPlayer', 'diceValue', 'diceRoller', 'lastAction']
+        const fields = [
+            'phase',
+            'currentRound',
+            'currentPlayer',
+            'diceValue',
+            'diceRoller',
+            'lastAction',
+            'winnerAwardChoice'
+        ]
         fields.forEach((field) => {
             if (syncedData[field] !== undefined) {
                 battleData.value[field] = syncedData[field]
@@ -526,9 +534,7 @@ export const useBattleStore = defineStore('battle', () => {
 
         // 监听奖励选择完成，通过回调通知外部
         if (data.battleData.lastAction === 'rewardSelected') {
-            const winnerId = data.battleData.winner?.id
-            const myPlayerId = battleData.value?.players?.[myPlayerIndex.value]?.id
-            if (winnerId === myPlayerId && _onRewardSelected) {
+            if (_onRewardSelected) {
                 _onRewardSelected()
             }
         }
@@ -536,11 +542,11 @@ export const useBattleStore = defineStore('battle', () => {
 
     function setupBattleActionListener(onRewardSelected) {
         _onRewardSelected = onRewardSelected || null
-        socketService.onAction('serverBattleAction', 'battleAction', handleBattleAction)
+        socketService.onAction('serverBattleAction', 'battleUpdate', handleBattleAction)
     }
 
     function cleanupBattleActionListener() {
-        socketService.offAction('serverBattleAction', 'battleAction')
+        socketService.offAction('serverBattleAction', 'battleUpdate')
         _onRewardSelected = null
     }
 
