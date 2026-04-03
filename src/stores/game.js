@@ -81,6 +81,7 @@ export const useGameStore = defineStore('game', () => {
     const pendingMarketplace = ref(null) // 闹市区交互挂起状态
     const pendingSeafoodMarket = ref(null) // 海鲜市场交互挂起状态
     const pendingTribute = ref(null) // 上供区交互挂起状态
+    const pendingBattle = ref(null)  // 【新增：斗龙虾决斗交互挂起状态】
 
     // ============ 放置机制核心状态 ============
     /*
@@ -211,6 +212,7 @@ export const useGameStore = defineStore('game', () => {
         pendingMarketplace.value = null
         pendingSeafoodMarket.value = null
         pendingTribute.value = null
+        pendingBattle.value = null // 【新增初始化】
 
         // 重置放置机制状态
         slotOccupancy.value = {}
@@ -625,51 +627,70 @@ export const useGameStore = defineStore('game', () => {
      * 2. 然后依次结算0、1、2号位的上供
      */
     const executeTributeSettlement = async () => {
-        addLog('执行上供区结算', 'info')
+        addLog('执行上供区结算与席位挑战', 'info');
 
-        // 第一步：处理挑战位 (槽位 3, 4, 5 分别挑战 0, 1, 2)
-        for (let i = 3; i <= 5; i++) {
-            const challengerId = getSlotStatus('tribute', i).playerId;
-            if (challengerId === null) continue;
+        const challengePairs = [
+            {challengerIdx: 3, defenderIdx: 0},
+            {challengerIdx: 4, defenderIdx: 1},
+            {challengerIdx: 5, defenderIdx: 2}
+        ];
 
-            const targetSlotIndex = TRIBUTE_SLOTS[i].targetSlot;
-            const defenderId = getSlotStatus('tribute', targetSlotIndex).playerId;
+        for (let pair of challengePairs) {
+            const challengerKey = `tribute_${pair.challengerIdx}`;
+            const defenderKey = `tribute_${pair.defenderIdx}`;
 
-            const challenger = playerStore.getPlayerById(challengerId);
+            const challengerId = getSlotStatus('tribute', pair.challengerIdx).playerId;
+            const defenderId = getSlotStatus('tribute', pair.defenderIdx).playerId;
 
-            if (defenderId !== null && defenderId !== challengerId) {
+            if (challengerId !== null && defenderId !== null && challengerId !== defenderId) {
+                const challenger = playerStore.getPlayerById(challengerId);
                 const defender = playerStore.getPlayerById(defenderId);
-                addLog(`${challenger.name} 向 ${defender.name} 发起龙虾斗场挑战！(接口暂留空)`, 'warning');
 
-                // --- 斗龙虾挑战接口暂留 ---
-                // 此处默认挑战者获胜，互换 slotOccupancy 位置
-                addLog(`挑战暂未实装，默认挑战者 ${challenger.name} 获胜并夺得席位！`, 'success');
+                addLog(`⚔️ 席位争夺爆发！[${challenger.name}] 向上位席位的 [${defender.name}] 发起生死挑战！`, 'warning');
 
-                const challengerKey = `tribute_${i}`;
-                const defenderKey = `tribute_${targetSlotIndex}`;
+                const winnerId = await new Promise(resolve => {
+                    pendingBattle.value = {
+                        challenger,
+                        defender,
+                        challengerSlotIndex: pair.challengerIdx,
+                        defenderSlotIndex: pair.defenderIdx,
+                        resolve
+                    };
+                });
 
-                const tempOccupancy = {...slotOccupancy.value[challengerKey]};
-                slotOccupancy.value[challengerKey] = {...slotOccupancy.value[defenderKey], slotIndex: i};
-                slotOccupancy.value[defenderKey] = {...tempOccupancy, slotIndex: targetSlotIndex};
-            } else {
-                addLog(`${challenger.name} 所在的挑战位目标为空，直接将里长滑入目标格`, 'info');
-                // 目标为空，直接滑入
-                const challengerKey = `tribute_${i}`;
-                const defenderKey = `tribute_${targetSlotIndex}`;
-                slotOccupancy.value[defenderKey] = {...slotOccupancy.value[challengerKey], slotIndex: targetSlotIndex};
+                pendingBattle.value = null;
+
+                if (winnerId === challengerId) {
+                    addLog(`🏆 [${challenger.name}] 决斗胜利，成功夺得上位席位！`, 'success');
+                    const temp = {...slotOccupancy.value[challengerKey]};
+                    slotOccupancy.value[challengerKey] = {
+                        ...slotOccupancy.value[defenderKey],
+                        slotIndex: pair.challengerIdx
+                    };
+                    slotOccupancy.value[defenderKey] = {...temp, slotIndex: pair.defenderIdx};
+                } else if (winnerId === defenderId) {
+                    addLog(`🛡️ [${defender.name}] 决斗胜利，击退了挑战者，保住席位！`, 'info');
+                } else {
+                    addLog(`🤝 双方决斗异常或平局收场，席位保持不变。`, 'info');
+                }
+            } else if (challengerId !== null && defenderId === null) {
+                const challenger = playerStore.getPlayerById(challengerId);
+                addLog(`${challenger.name} 所在的挑战位目标为空，不战而胜，直接占领上位格！`, 'info');
+                const challengerKey = `tribute_${pair.challengerIdx}`;
+                const defenderKey = `tribute_${pair.defenderIdx}`;
+                slotOccupancy.value[defenderKey] = {...slotOccupancy.value[challengerKey], slotIndex: pair.defenderIdx};
                 delete slotOccupancy.value[challengerKey];
             }
         }
 
-        // 第二步：结算上供行动 (槽位 0, 1, 2)
-        for (let i = 0; i <= 2; i++) {
+        for (let i = 0; i <= 5; i++) {
             const playerId = getSlotStatus('tribute', i).playerId;
             if (playerId === null) continue;
 
             const player = playerStore.getPlayerById(playerId);
             if (!player) continue;
 
-            addLog(`${player.name} 准备执行上供行动`, 'info');
+            addLog(`${player.name} 开始执行上供行动 (行动格：${i + 1}号位)`, 'info');
 
             await new Promise((resolve) => {
                 pendingTribute.value = {
@@ -686,7 +707,7 @@ export const useGameStore = defineStore('game', () => {
                 }
             });
         }
-        addLog('上供区结算完成', 'success')
+        addLog('上供区结算完成', 'success');
     }
 
     /**
@@ -842,7 +863,7 @@ export const useGameStore = defineStore('game', () => {
         card.usedThisRound = true; // 标记本回合已使用
         let logMsg = `${player.name}执行了【${card.name}】闹市卡：`;
 
-        // 通用的资源兑换逻辑 (修复 Cannot read property '0' of undefined 问题，增加可选链和空数组兜底)
+        // 通用的资源兑换逻辑
         if (card.action?.type === 'exchange') {
             const options = card.action?.options || []; // 兜底空数组防报错
             const opt = options[optionIndex];
@@ -986,6 +1007,11 @@ export const useGameStore = defineStore('game', () => {
             addLog('闹市区：已重置闹市卡使用状态', 'info')
         }
 
+        // 【规则重构】：准备阶段清空所有玩家龙虾的出战记录，保证每回合能出战一次
+        players.value.forEach(p => {
+            p.lobsters.forEach(l => l.hasFought = false);
+        });
+
         // 重置放置顺序
         initPlacementOrder()
     }
@@ -1102,7 +1128,7 @@ export const useGameStore = defineStore('game', () => {
             }
         });
 
-        // 修复：确保返回纯数字给 result.vue 渲染，防止出现展示 JSON 代码的 Bug
+        // 确保返回纯数字给 result.vue 渲染，防止出现展示 JSON 代码的 Bug
         if (typeof baseScore === 'object' && baseScore !== null) {
             return (baseScore.total || baseScore.score || 0) + tavernPoints;
         }
@@ -1142,6 +1168,7 @@ export const useGameStore = defineStore('game', () => {
         pendingMarketplace,
         pendingSeafoodMarket, // 导出市场挂起状态
         pendingTribute, // 导出上供区挂起状态
+        pendingBattle, // 【导出】斗龙虾战场挂起状态
 
         // 放置机制状态
         slotOccupancy,

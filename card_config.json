@@ -4,25 +4,25 @@
             "id": "title_1",
             "name": "红头紫",
             "skill": null,
-            "description": "留空，随龙虾斗场一起稍后完善"
+            "description": "骰子改为12面骰"
         },
         {
             "id": "title_2",
             "name": "铁甲将军",
             "skill": null,
-            "description": "留空，随龙虾斗场一起稍后完善"
+            "description": "对方不能用草"
         },
         {
             "id": "title_3",
             "name": "黄金鳌",
             "skill": null,
-            "description": "留空，随龙虾斗场一起稍后完善"
+            "description": "上贡时可以多加1德或者多加1望"
         },
         {
             "id": "title_4",
             "name": "闪电钳",
             "skill": null,
-            "description": "留空，随龙虾斗场一起稍后完善"
+            "description": "吃草可以点数多加1点"
         },
         {
             "id": "doubleRoll",
