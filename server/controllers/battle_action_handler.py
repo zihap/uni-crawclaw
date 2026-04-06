@@ -10,26 +10,52 @@
   - NO_LOBSTER_FORFEIT: 无龙虾判负
 """
 
-from utils.constants import AREAS, GRADE_UPGRADE
+from utils.constants import AREAS, GRADE_UPGRADE, CHALLENGE_SLOT_DONE, CHALLENGE_TO_DEFENDER_SLOT_MAP
 from utils.events import ClientBattleActionTypes, ServerEvents, ServerBattleActionTypes, ServerAreaActionTypes
-from utils.helpers import send_error, get_player, update_resources
+from utils.helpers import send_error, get_player, update_resources, make_action_message, make_broadcast_fn, make_settlement_state
+from utils.logger import log_info, log_debug
 from utils.game_state import arena_betting_state
-from controllers.game_action_handler import _start_area_settlement, _complete_settlement
-from services.game import broadcast_game_state
+from services.game import broadcast_game_state, start_area_settlement, complete_settlement
 
 
-def _sra(action_type, data):
-    """构造 serverBattleAction / serverAreaAction 消息体"""
-    return {'actionType': action_type, **data}
+async def _check_tribute_battles_complete(game_state, websocket, room_id, rooms, manager):
+    """检查上供区所有战斗是否完成，若是则触发上供阶段"""
+    tribute = game_state['areas'].get('tribute')
+    if not tribute:
+        return False
 
+    challenge_slots = tribute.get('challengeSlots', [])
+    completed_battles = sum(1 for s in challenge_slots if s == CHALLENGE_SLOT_DONE)
+    total_battles = len(game_state.get('battleQueue', []))
 
-def _make_bf(manager, room_id):
-    """创建资源广播闭包"""
-    async def bf(player_id, resources):
-        await manager.send_to_room(room_id, ServerEvents.PLAYER_RESOURCE_UPDATE, {
-            'playerId': player_id, 'resources': resources
-        })
-    return bf
+    log_info(f"[tribute] Battles completed: {completed_battles}/{total_battles}")
+
+    if completed_battles >= total_battles:
+        if '_lastBattleStartSent' in game_state:
+            del game_state['_lastBattleStartSent']
+
+        game_state['battleQueue'] = []
+        game_state['settlementState'] = make_settlement_state('tribute', 0, -1)
+
+        from services.area import _resolve_tribute_actions
+        result = await _resolve_tribute_actions(game_state, manager, room_id)
+
+        if result == 'waiting_ui':
+            await broadcast_game_state(room_id, rooms, manager)
+        else:
+            current_area = game_state.get('currentArea', 0)
+            if current_area + 1 >= len(AREAS):
+                await complete_settlement(room_id, game_state, rooms, manager)
+            else:
+                next_area_name = AREAS[current_area + 1]
+                await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
+                    make_action_message(ServerAreaActionTypes.AREA_SETTLEMENT_START, {
+                        'areaType': next_area_name,
+                        'gameState': game_state
+                    }))
+                await start_area_settlement(websocket, room_id, game_state, rooms, manager)
+        return True
+    return False
 
 
 def swap_challenge_slot(game_state, challenge_slot):
@@ -38,11 +64,11 @@ def swap_challenge_slot(game_state, challenge_slot):
     if not tribute:
         return False
     slots = tribute.get('slots', [])
-    challenge_slots = tribute.get('challengeSlots', [])
-    slot_map = {3: 0, 4: 1, 5: 2}
+    slot_map = CHALLENGE_TO_DEFENDER_SLOT_MAP
     idx = slot_map.get(challenge_slot)
-    if idx is not None and idx < len(slots) and idx < len(challenge_slots):
-        slots[idx], challenge_slots[idx] = challenge_slots[idx], slots[idx]
+    log_debug(f"[swap_challenge_slot] challenge_slot={challenge_slot}, idx={idx}")
+    if idx is not None and idx < len(slots):
+        slots[challenge_slot], slots[idx] = slots[idx], slots[challenge_slot]
         return True
     return False
 
@@ -58,7 +84,7 @@ async def handle_battle_start(websocket, room_id, player_id, rooms, manager, pay
         game_state['_lastBattleStartSent'] = True
 
     await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
-        _sra(ServerBattleActionTypes.BATTLE_START, {
+        make_action_message(ServerBattleActionTypes.BATTLE_START, {
             'battleData': battle_data,
             'initiatorId': player_id
         }))
@@ -69,7 +95,7 @@ async def handle_battle_update(websocket, room_id, player_id, rooms, manager, pa
     sender_id = payload.get('senderId')
 
     await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
-        _sra(ServerBattleActionTypes.BATTLE_UPDATE, {
+        make_action_message(ServerBattleActionTypes.BATTLE_UPDATE, {
             'battleData': battle_data,
             'senderId': sender_id
         }))
@@ -81,7 +107,7 @@ async def handle_battle_end(websocket, room_id, player_id, rooms, manager, paylo
     game_state = rooms.get(room_id)
     if game_state:
         winner_id = battle_data.get('winner', {}).get('id')
-        challenge_slot = battle_data.get('challengeSlotIndex')
+        challenge_slot = battle_data.get('challengeSlotIndex') or battle_data.get('challengeSlot')
 
         players_data = battle_data.get('players', [])
         challenger_id = None
@@ -89,10 +115,11 @@ async def handle_battle_end(websocket, room_id, player_id, rooms, manager, paylo
             challenger_id = players_data[0]['id']
 
         if winner_id == challenger_id and challenge_slot:
-            if swap_challenge_slot(game_state, challenge_slot):
-                print(f"[battleEnd] Slot swapped: challenger wins at slot {challenge_slot}")
+            swap_challenge_slot(game_state, challenge_slot)
 
-        bf = _make_bf(manager, room_id)
+        game_state['areas'].get('tribute')['challengeSlots'][challenge_slot-3] = CHALLENGE_SLOT_DONE
+
+        bf = make_broadcast_fn(manager.send_to_room, room_id)
 
         for key in list(arena_betting_state.keys()):
             bs = arena_betting_state[key]
@@ -110,7 +137,7 @@ async def handle_battle_end(websocket, room_id, player_id, rooms, manager, paylo
                         bet_results[str(pid)] = {'won': False, 'reward': 0}
 
                 await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
-                    _sra(ServerBattleActionTypes.BET_RESULT, {
+                    make_action_message(ServerBattleActionTypes.BET_RESULT, {
                         'winnerId': winner_id,
                         'betResults': bet_results
                     }))
@@ -137,67 +164,33 @@ async def handle_battle_end(websocket, room_id, player_id, rooms, manager, paylo
                 for pi, field in [(0, 'p1CrossedMidline'), (1, 'p2CrossedMidline')]:
                     if battle_data.get(field):
                         p = players_data[pi] if pi < len(players_data) else None
-                        if p and p.get('id') == winner_id:
-                            deltas['wang'] = deltas.get('wang', 0) + 1
+                        if p:
+                            game_player = get_player(game_state, p['id'])
+                            if game_player:
+                                await update_resources(game_player, {'wang': 1}, broadcast_fn=bf)
 
                 if deltas:
                     await update_resources(winner, deltas, broadcast_fn=bf)
 
         await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
-            _sra(ServerBattleActionTypes.BATTLE_ENDED, {
+            make_action_message(ServerBattleActionTypes.BATTLE_ENDED, {
                 'winnerId': winner_id,
                 'awardChoice': award_choice,
                 'upgradeFrom': upgrade_from,
                 'upgradeTo': upgrade_to,
+                'battleData': battle_data,
                 'gameState': game_state
             }))
 
-        if 'tributeBattlesCompleted' not in game_state:
-            game_state['tributeBattlesCompleted'] = 0
-        game_state['tributeBattlesCompleted'] += 1
-
-        if '_lastBattleStartSent' in game_state:
-            del game_state['_lastBattleStartSent']
-
-        total_battles = len(game_state.get('battleQueue', []))
-        if game_state['tributeBattlesCompleted'] >= total_battles:
-            game_state['settlementState'] = {
-                'currentSlotIndex': 0,
-                'remainingActions': -1,
-                'waitingForPlayer': None,
-                'areaType': 'tribute'
-            }
-
-            from services.area import _resolve_tribute_actions
-            result = await _resolve_tribute_actions(game_state, manager, room_id)
-
-            if result == 'waiting_ui':
-                await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
-                    _sra(ServerAreaActionTypes.AREA_SETTLEMENT_START, {
-                        'areaType': 'tribute',
-                        'gameState': game_state
-                    }))
-                await broadcast_game_state(room_id, rooms, manager)
-            else:
-                current_area = game_state.get('currentArea', 0)
-                if current_area + 1 >= len(AREAS):
-                    await _complete_settlement(room_id, game_state, rooms, manager)
-                else:
-                    next_area_name = AREAS[current_area + 1]
-                    await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
-                        _sra(ServerAreaActionTypes.AREA_SETTLEMENT_START, {
-                            'areaType': next_area_name,
-                            'gameState': game_state
-                        }))
-                    await _start_area_settlement(websocket, room_id, game_state, rooms, manager)
-            return
+        await _check_tribute_battles_complete(game_state, websocket, room_id, rooms, manager)
+        return
 
 async def handle_lobster_selected(websocket, room_id, player_id, rooms, manager, payload):
     """龙虾选择"""
     lobster_data = payload.get('lobster')
 
     await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
-        _sra(ServerBattleActionTypes.LOBSTER_SELECTED, {
+        make_action_message(ServerBattleActionTypes.LOBSTER_SELECTED, {
             'playerId': player_id,
             'lobster': lobster_data
         }))
@@ -227,7 +220,7 @@ async def handle_lobster_selected(websocket, room_id, player_id, rooms, manager,
         if state['challengerLobster'] and state['defenderLobster'] and not state['started']:
             state['started'] = True
             await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
-                _sra(ServerBattleActionTypes.ARENA_BETTING_START, {
+                make_action_message(ServerBattleActionTypes.ARENA_BETTING_START, {
                     'battleId': battle_id,
                     'challengerId': state['challengerId'],
                     'defenderId': state['defenderId'],
@@ -238,7 +231,7 @@ async def handle_lobster_selected(websocket, room_id, player_id, rooms, manager,
 
             if len(state['spectators']) == 0:
                 await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
-                    _sra(ServerBattleActionTypes.ARENA_BETTING_COMPLETE, {
+                    make_action_message(ServerBattleActionTypes.ARENA_BETTING_COMPLETE, {
                         'battleId': battle_id,
                         'bets': {}
                     }))
@@ -275,11 +268,11 @@ async def handle_spectator_bet(websocket, room_id, player_id, rooms, manager, pa
         if game_state:
             player = get_player(game_state, player_id)
             if player and player.get('coins', 0) >= bet_amount:
-                await update_resources(player, {'coins': -bet_amount}, broadcast_fn=_make_bf(manager, room_id))
+                await update_resources(player, {'coins': -bet_amount}, broadcast_fn=make_broadcast_fn(manager.send_to_room, room_id))
 
     if len(state['bets']) >= len(state['spectators']):
         await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
-            _sra(ServerBattleActionTypes.ARENA_BETTING_COMPLETE, {
+            make_action_message(ServerBattleActionTypes.ARENA_BETTING_COMPLETE, {
                 'battleId': battle_id,
                 'bets': state['bets']
             }))
@@ -293,11 +286,20 @@ async def handle_no_lobster_forfeit(websocket, room_id, player_id, rooms, manage
         return
 
     challenge_slot = payload.get('challengeSlot')
+
+    # 标记该战斗槽位已完成
+    tribute = game_state['areas'].get('tribute')
+    if tribute and challenge_slot is not None:
+        challenge_slots = tribute.get('challengeSlots', [])
+        if 0 <= challenge_slot - 3 < len(challenge_slots):
+            challenge_slots[challenge_slot - 3] = CHALLENGE_SLOT_DONE
+            log_info(f"[noLobsterForfeit] Marked challenge slot {challenge_slot} as Done")
+
     if swap_challenge_slot(game_state, challenge_slot):
-        print(f"[noLobsterForfeit] Slot swapped: challenger wins at slot {challenge_slot}")
+        log_info(f"[noLobsterForfeit] Slot swapped: challenger wins at slot {challenge_slot}")
 
     await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
-        _sra(ServerBattleActionTypes.BATTLE_ENDED, {
+        make_action_message(ServerBattleActionTypes.BATTLE_ENDED, {
             'battleData': {
                 'challengeSlot': challenge_slot,
                 'reason': 'no_available_lobsters',
@@ -305,6 +307,9 @@ async def handle_no_lobster_forfeit(websocket, room_id, player_id, rooms, manage
             },
             'senderId': player_id
         }))
+
+    # 更新上供战斗完成计数并检查是否全部完成
+    await _check_tribute_battles_complete(game_state, websocket, room_id, rooms, manager)
 
 
 def _make_battle_action_router(handlers: dict):

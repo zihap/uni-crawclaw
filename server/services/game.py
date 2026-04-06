@@ -4,50 +4,18 @@
 """
 
 from typing import Dict
-from utils.constants import AREAS, MARKET_PRICES
-from utils.events import ServerEvents, ServerRoomActionTypes, ServerGameActionTypes
+import time
+from utils.constants import AREAS, MARKET_PRICES, CHALLENGE_SLOT_DONE
+from utils.events import ServerEvents, ServerRoomActionTypes, ServerGameActionTypes, ServerAreaActionTypes
 from utils.game_state import draw_tribute_tasks, draw_downtown_cards
-
-
-def _srg(action_type, data):
-    """构造 serverGameAction 消息体"""
-    return {'actionType': action_type, **data}
-
-
-def _srr(action_type, data):
-    """构造 serverRoomAction 消息体"""
-    return {'actionType': action_type, **data}
+from utils.logger import log_info, log_debug
+from utils.helpers import make_action_message, calculate_market_prices
 
 
 def update_market_prices(game_state: dict):
     """根据市场龙虾数量更新动态价格"""
     market_area = game_state['areas']['seafood_market']
-    count = market_area['marketLobsterCount']
-
-    if count > 5:
-        market_area['dynamicPrices'] = {
-            **MARKET_PRICES,
-            'buyLobster': 1,
-            'sellLobster': 1,
-            'buyCage': 4,
-            'sellCage': 3
-        }
-    elif count > 3:
-        market_area['dynamicPrices'] = {
-            **MARKET_PRICES,
-            'buyLobster': 2,
-            'sellLobster': 2,
-            'buyCage': 3,
-            'sellCage': 2
-        }
-    else:
-        market_area['dynamicPrices'] = {
-            **MARKET_PRICES,
-            'buyLobster': 3,
-            'sellLobster': 3,
-            'buyCage': 2,
-            'sellCage': 1
-        }
+    market_area['dynamicPrices'] = calculate_market_prices(market_area['marketLobsterCount'])
 
 
 def prepare_phase(game_state: dict):
@@ -97,7 +65,7 @@ def cleanup_room(room_id: str, rooms: dict, manager):
             if key.startswith(f"{room_id}_"):
                 del arena_betting_state[key]
 
-        print(f"Room {room_id} deleted")
+        log_info(f"Room {room_id} deleted")
 
 
 def transfer_host(room_id: str, game_state: dict):
@@ -118,16 +86,16 @@ def transfer_host(room_id: str, game_state: dict):
     if current_host:
         current_host['isHost'] = False
     new_host['isHost'] = True
-    print(f"Host transferred to {new_host['name']} in room {room_id}")
+    log_info(f"Host transferred to {new_host['name']} in room {room_id}")
 
 
 async def handle_player_disconnect(room_id: str, player_id: int, player_name: str, rooms: dict, manager, broadcast_func):
     """处理玩家断开连接"""
-    print(f"DEBUG: handle_player_disconnect called for room {room_id}, player {player_id}")
+    log_debug(f"handle_player_disconnect called for room {room_id}, player {player_id}")
 
     game_state = rooms.get(room_id)
     if not game_state:
-        print(f"DEBUG: game_state not found in handle_player_disconnect for room {room_id}")
+        log_debug(f"game_state not found in handle_player_disconnect for room {room_id}")
         return
 
     if player_name is None and player_id is not None:
@@ -136,7 +104,7 @@ async def handle_player_disconnect(room_id: str, player_id: int, player_name: st
             player_name = player.get('name')
             player['isOnline'] = False
             player['ready'] = False
-            player['lastSeen'] = int(__import__('time').time())
+            player['lastSeen'] = int(time.time())
 
     transfer_host(room_id, game_state)
 
@@ -149,12 +117,12 @@ async def handle_player_disconnect(room_id: str, player_id: int, player_name: st
         return
 
     await manager.broadcast_to_room_members(room_id, ServerEvents.SERVER_ROOM_ACTION,
-        _srr(ServerRoomActionTypes.PLAYER_STATUS_CHANGE, {
-            'playerId': player_id,
-            'playerName': player_name,
-            'status': 'offline',
-            'players': game_state['players']
-        }))
+        make_action_message(ServerRoomActionTypes.PLAYER_STATUS_CHANGE,
+            playerId=player_id,
+            playerName=player_name,
+            status='offline',
+            players=game_state['players']
+        ))
 
 
 async def broadcast_room_state(room_id: str, rooms: dict, manager):
@@ -167,7 +135,7 @@ async def broadcast_room_state(room_id: str, rooms: dict, manager):
             'maxPlayers': game_state.get('maxPlayers', 4)
         }
         await manager.send_to_room(room_id, ServerEvents.SERVER_ROOM_ACTION,
-            _srr(ServerRoomActionTypes.ROOM_STATE_UPDATE, data))
+            make_action_message(ServerRoomActionTypes.ROOM_STATE_UPDATE, **data))
 
 
 async def broadcast_game_state(room_id: str, rooms: dict, manager):
@@ -183,7 +151,7 @@ async def broadcast_game_state(room_id: str, rooms: dict, manager):
             'status': game_state['status']
         }
         await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-            _srg(ServerGameActionTypes.GAME_STATE_UPDATE, data))
+            make_action_message(ServerGameActionTypes.GAME_STATE_UPDATE, **data))
 
 
 async def start_game(room_id: str, rooms: dict, manager):
@@ -217,26 +185,22 @@ async def start_game(room_id: str, rooms: dict, manager):
     draw_tribute_tasks(game_state)
     draw_downtown_cards(game_state)
 
-    print(f"start_game: Sending gameStarted to room {room_id}")
-    print(f"  game_state['status'] = {game_state['status']}")
-    print(f"  game_state['phase'] = {game_state['phase']}")
-    print(f"  game_state['currentPlayerIndex'] = {game_state['currentPlayerIndex']}")
-    print(f"  players in room: {len(game_state['players'])}")
-    print(f"  active_connections: {list(manager.active_connections.get(room_id, {}).keys())}")
+    log_debug(f"start_game: Sending gameStarted to room {room_id}")
+    log_debug(f"  game_state['status'] = {game_state['status']}")
+    log_debug(f"  game_state['phase'] = {game_state['phase']}")
+    log_debug(f"  game_state['currentPlayerIndex'] = {game_state['currentPlayerIndex']}")
+    log_debug(f"  players in room: {len(game_state['players'])}")
+    log_debug(f"  active_connections: {list(manager.active_connections.get(room_id, {}).keys())}")
 
     await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-        _srg(ServerGameActionTypes.GAME_STARTED, game_state))
+        make_action_message(ServerGameActionTypes.GAME_STARTED, **game_state))
     await broadcast_game_state(room_id, rooms, manager)
-    print(f"Game started in room {room_id}")
+    log_info(f"Game started in room {room_id}")
 
 
-async def next_round(room_id: str, rooms: dict, manager):
-    """处理下一回合"""
-    from services.area import resolve_area
-
-    game_state = rooms.get(room_id)
-    if not game_state:
-        return
+async def complete_settlement(room_id, game_state, rooms, manager):
+    """完成结算阶段，进入清理和下一回合"""
+    cleanup_phase(game_state)
 
     if game_state['currentRound'] >= game_state['maxRounds']:
         game_state['status'] = 'ended'
@@ -247,28 +211,80 @@ async def next_round(room_id: str, rooms: dict, manager):
             reverse=True
         )[0]
 
+        await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
+            make_action_message(ServerAreaActionTypes.SETTLEMENT_COMPLETE, {
+                'gameState': game_state
+            }))
         await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-            _srg(ServerGameActionTypes.GAME_ENDED, {'winner': winner, 'gameState': game_state}))
+            make_action_message(ServerGameActionTypes.GAME_ENDED, {'winner': winner, 'gameState': game_state}))
+        await broadcast_game_state(room_id, rooms, manager)
         return
 
     game_state['currentRound'] += 1
     game_state['phase'] = 'placement'
-    game_state['currentPlayerIndex'] = 0
+    game_state['currentPlayerIndex'] = game_state.get('startingPlayerIndex', 0)
     game_state['currentArea'] = 0
     game_state['lastPlacement'] = None
-
-    for p in game_state['players']:
-        p['royalCountThisRound'] = 0
-        p['coins'] += 2 + p['bonusGold']
+    game_state['areas'].get('tribute')['challengeSlots'] = [None] * 3
 
     for area_name in AREAS:
         if area_name in game_state['areas']:
             slot_count = len(game_state['areas'][area_name]['slots'])
             game_state['areas'][area_name]['slots'] = [None] * slot_count
 
+    for p in game_state['players']:
+        p['royalCountThisRound'] = 0
+
     draw_tribute_tasks(game_state)
     draw_downtown_cards(game_state)
 
+    await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
+        make_action_message(ServerAreaActionTypes.SETTLEMENT_COMPLETE, {
+            'gameState': game_state
+        }))
     await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-        _srg(ServerGameActionTypes.ROUND_STARTED, {'round': game_state['currentRound'], 'gameState': game_state}))
+        make_action_message(ServerGameActionTypes.ROUND_STARTED, {
+            'round': game_state['currentRound'],
+            'gameState': game_state
+        }))
     await broadcast_game_state(room_id, rooms, manager)
+
+
+async def start_area_settlement(websocket, room_id, game_state, rooms, manager):
+    """启动当前区域的结算流程"""
+    from services.area import resolve_area_step
+
+    current_area = game_state.get('currentArea', 0)
+    log_debug(f"[start_area_settlement] current_area={current_area}, area_name={AREAS[current_area] if current_area < len(AREAS) else 'N/A'}")
+
+    if current_area >= len(AREAS):
+        await complete_settlement(room_id, game_state, rooms, manager)
+        return
+
+    area_name = AREAS[current_area]
+    log_info(f"[start_area_settlement] resolving area: {area_name}")
+
+    area_data = game_state['areas'].get(area_name)
+    if not area_data:
+        game_state['currentArea'] = current_area + 1
+        await start_area_settlement(websocket, room_id, game_state, rooms, manager)
+        return
+
+    result = await resolve_area_step(game_state, current_area, manager, room_id)
+    log_debug(f"[start_area_settlement] result={result}, area={area_name}")
+
+    if result == 'auto_next':
+        if current_area + 1 >= len(AREAS):
+            await complete_settlement(room_id, game_state, rooms, manager)
+        else:
+            next_area = current_area + 1
+            game_state['currentArea'] = next_area
+            next_area_name = AREAS[next_area]
+            await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
+                make_action_message(ServerAreaActionTypes.AREA_SETTLEMENT_START, {
+                    'areaType': next_area_name,
+                    'gameState': game_state
+                }))
+            await start_area_settlement(websocket, room_id, game_state, rooms, manager)
+    elif result == 'waiting_ui':
+        await broadcast_game_state(room_id, rooms, manager)

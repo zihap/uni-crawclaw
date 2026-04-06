@@ -19,6 +19,13 @@
             </button>
         </view>
 
+        <!-- 捕虾抽取结果悬浮提示 -->
+        <view class="shrimp-draw-messages">
+            <view v-for="msg in shrimpDrawMessages" :key="msg.id" class="shrimp-draw-msg">
+                <text class="shrimp-draw-msg-text">{{ msg.text }}</text>
+            </view>
+        </view>
+
         <!-- 放置阶段提示 -->
         <view v-if="isPlacementPhase" class="placement-banner">
             <view class="placement-info">
@@ -233,9 +240,51 @@
                     <text class="resource-label">虾笼</text>
                     <text class="resource-value">{{ onlineGameStore.myPlayer.cages || 0 }}</text>
                 </view>
-                <view class="resource-item">
+                <view class="resource-item lobster-resource" @longpress="showLobsterList = true">
                     <text class="resource-label">龙虾</text>
-                    <text class="resource-value">{{ onlineGameStore.myPlayer.lobsters?.length }}</text>
+                    <text class="resource-value">{{
+                        onlineGameStore.myPlayer.lobsters?.length || onlineGameStore.myPlayer.titleCards?.length
+                    }}</text>
+                </view>
+            </view>
+        </view>
+
+        <!-- 我的龙虾/称号列表（长按龙虾资源弹出） -->
+        <view v-if="showLobsterList" class="lobster-list-overlay" @click="showLobsterList = false">
+            <view class="lobster-list-panel" @click.stop>
+                <view class="lobster-list-header">
+                    <text class="lobster-list-title"
+                        >我的龙虾 ({{ onlineGameStore.myPlayer.lobsters?.length || 0 }})</text
+                    >
+                    <text class="lobster-list-close" @click="showLobsterList = false">✕</text>
+                </view>
+                <view class="lobster-list-body">
+                    <view v-if="onlineGameStore.myPlayer.lobsters?.length" class="lobster-list-grid">
+                        <view
+                            v-for="lobster in onlineGameStore.myPlayer.lobsters"
+                            :key="lobster.id"
+                            class="lobster-list-item"
+                        >
+                            <text class="lobster-list-icon">🦞</text>
+                            <text class="lobster-list-grade">{{ getLobsterGradeName(lobster.grade) }}</text>
+                            <text v-if="lobster.title" class="lobster-list-title-tag">{{ lobster.title.name }}</text>
+                        </view>
+                    </view>
+                    <view v-else class="empty-list-hint">暂无龙虾</view>
+
+                    <view v-if="onlineGameStore.myPlayer.titleCards?.length" class="title-cards-section">
+                        <text class="title-cards-label">称号 ({{ onlineGameStore.myPlayer.titleCards?.length }})</text>
+                        <view class="title-cards-grid">
+                            <view
+                                v-for="card in onlineGameStore.myPlayer.titleCards"
+                                :key="card.id"
+                                class="title-card-item"
+                            >
+                                <text class="title-card-name">{{ card.name }}</text>
+                                <text v-if="card.description" class="title-card-desc">{{ card.description }}</text>
+                            </view>
+                        </view>
+                    </view>
                 </view>
             </view>
         </view>
@@ -273,14 +322,25 @@
                 </view>
 
                 <view class="modal-body">
-                    <!-- 指示物展示 -->
-                    <view class="indicator-display">
+                    <!-- 等待确认：点击确认后抽取 -->
+                    <view v-if="pendingSettlement?.step === 'waiting_confirm'" class="indicator-display">
+                        <text class="indicator-icon">🎣</text>
+                        <text class="indicator-text">确认继续捕虾？</text>
+                    </view>
+
+                    <!-- 等待选择：抽到了either -->
+                    <view v-else class="indicator-display">
                         <text class="indicator-icon">🎣</text>
                         <text class="indicator-text">抽到了"龙虾或海草"，请选择：</text>
                     </view>
 
+                    <!-- 确认按钮 -->
+                    <view v-if="pendingSettlement?.step === 'waiting_confirm'" class="choice-buttons">
+                        <button class="btn btn-choice" @click="confirmShrimpCatch">确认抽取</button>
+                    </view>
+
                     <!-- 选择按钮 -->
-                    <view class="choice-buttons">
+                    <view v-else class="choice-buttons">
                         <button class="btn btn-choice" @click="chooseShrimpReward('lobster')">🦞 选择龙虾</button>
                         <button class="btn btn-choice" @click="chooseShrimpReward('seaweed')">🌿 选择海草</button>
                     </view>
@@ -729,6 +789,7 @@ const onlineGameStore = useOnlineGameStore()
 const playerStore = usePlayerStore()
 const showLog = ref(false)
 const showArenaModal = ref(false)
+const showLobsterList = ref(false)
 
 // ============ 结算阶段状态 ============
 const pendingSettlement = computed(() => onlineGameStore.pendingSettlement)
@@ -741,6 +802,26 @@ watch(settlementActionCount, (newVal, oldVal) => {
 const showSettlementModal = computed(() => {
     return pendingSettlement.value !== null && onlineGameStore.currentPhase === 'settlement'
 })
+
+// ============ 捕虾抽取结果悬浮提示 ============
+const SHRIMP_ITEM_EMOJI = { bubble: '🫧', lobster: '🦞', seaweed: '🌿', either: '❓' }
+const getDrawnItemEmoji = (item) => SHRIMP_ITEM_EMOJI[item] || '🎣'
+const shrimpDrawMessages = ref([])
+let shrimpMsgId = 0
+
+watch(
+    () => pendingSettlement.value?.lastResult,
+    (newResult) => {
+        if (newResult && pendingSettlement.value?.areaType === 'shrimp_catching') {
+            const id = ++shrimpMsgId
+            const item = pendingSettlement.value?.lastItem || ''
+            shrimpDrawMessages.value.push({ id, text: `${getDrawnItemEmoji(item)} ${newResult}` })
+            setTimeout(() => {
+                shrimpDrawMessages.value = shrimpDrawMessages.value.filter((m) => m.id !== id)
+            }, 3000)
+        }
+    }
+)
 
 const breedingState = ref({
     lobsterIndex: -1,
@@ -1076,6 +1157,10 @@ const skipSettlementAction = () => {
 }
 
 // --- 捕虾区 ---
+const confirmShrimpCatch = () => {
+    onlineGameStore.sendSettlementAction('confirm')
+}
+
 const chooseShrimpReward = (choice) => {
     onlineGameStore.sendSettlementAction('choose_either', { choice })
 }
@@ -1325,7 +1410,7 @@ watch(
 const buildArenaPlayerData = (player, selectedLobster, defaultColor) => ({
     id: player.id,
     name: player.name,
-    lobsterId: selectedLobster.id,
+    lobsterId: selectedLobster.grade || selectedLobster.id,
     lobsterName: selectedLobster.name,
     lobsterDesc: selectedLobster.description,
     color: PLAYER_COLORS[player.id]?.bg || defaultColor
@@ -1388,18 +1473,6 @@ const prepareNextArenaBattle = () => {
     showArenaModal.value = true
 }
 
-const autoContinueAfterBattles = () => {
-    const tributeSlots = onlineGameStore.gameState?.areas?.tribute?.slots || []
-    const hasBattles = tributeSlots.some((slot) => slot !== null)
-    console.log('[autoContinueAfterBattles] currentPhase:', onlineGameStore.currentPhase)
-    console.log('[autoContinueAfterBattles] tributeSlots:', tributeSlots, 'hasBattles:', hasBattles)
-
-    if (hasBattles) {
-        console.log('[autoContinueAfterBattles] sending nextArea')
-        onlineGameStore.sendGameAction('nextArea', {})
-    }
-}
-
 const initGameState = (options) => {
     if (options.gameState) {
         try {
@@ -1408,14 +1481,6 @@ const initGameState = (options) => {
         } catch {
             // ignore parse errors
         }
-    }
-}
-
-const initSocket = (roomId, playerId) => {
-    const isAlreadyConnected = onlineGameStore.isConnected && onlineGameStore.roomId === roomId
-    if (!isAlreadyConnected) {
-        socketService.setRoomContext(roomId, playerId)
-        socketService.connect(roomId, playerId)
     }
 }
 
@@ -1431,22 +1496,12 @@ onMounted(() => {
 
     // 先恢复队列，再初始化（避免 initOnlineMode 清空队列）
     const hadQueue = restoreArenaQueue(roomId)
-    console.log('[onMounted] roomId:', roomId, 'hadQueue:', hadQueue)
-    console.log('[onMounted] queue after restore:', onlineGameStore.arenaBattleQueue.length)
 
     initGameState(options)
-    console.log('[onMounted] gameState after initGameState:', onlineGameStore.gameState?.areas?.tribute?.slots)
     onlineGameStore.initOnlineMode(roomId, playerId)
-    console.log('[onMounted] gameState after initOnlineMode:', onlineGameStore.gameState?.areas?.tribute?.slots)
 
     setTimeout(() => {
-        const tributeSlots = onlineGameStore.gameState?.areas?.tribute?.slots || []
-        const hasBattles = tributeSlots.some((slot) => slot !== null)
-        console.log('[onMounted] tributeSlots:', tributeSlots, 'hasBattles:', hasBattles)
-
-        if (hasBattles && onlineGameStore.currentPhase === 'settlement') {
-            autoContinueAfterBattles()
-        } else if (onlineGameStore.arenaBattleQueue.length > 0) {
+        if (onlineGameStore.arenaBattleQueue.length > 0) {
             prepareNextArenaBattle()
         }
     }, 500)
@@ -1462,39 +1517,48 @@ onUnmounted(() => {
     position: fixed;
     bottom: 120px;
     right: 20px;
-    background: #e94560;
+    background: linear-gradient(135deg, #e94560, #c23152);
     color: #fff;
     padding: 12px 20px;
     border-radius: 24px;
     font-size: 15px;
     font-weight: bold;
     z-index: 999;
-    box-shadow: 0 4px 12px rgba(233, 69, 96, 0.4);
+    box-shadow:
+        0 0 20px rgba(233, 69, 96, 0.5),
+        0 4px 12px rgba(0, 0, 0, 0.3);
     animation: arena-pulse 2s ease-in-out infinite;
+    border: 1px solid rgba(233, 69, 96, 0.4);
 }
 
 @keyframes arena-pulse {
     0%,
     100% {
         transform: scale(1);
+        box-shadow:
+            0 0 20px rgba(233, 69, 96, 0.5),
+            0 4px 12px rgba(0, 0, 0, 0.3);
     }
     50% {
         transform: scale(1.08);
+        box-shadow:
+            0 0 30px rgba(233, 69, 96, 0.7),
+            0 4px 12px rgba(0, 0, 0, 0.3);
     }
 }
 
-/* ============ 结算弹窗通用样式 ============ */
 .modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(10, 10, 26, 0.9);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    backdrop-filter: blur(8px);
 }
 
 .modal-content {
@@ -1504,12 +1568,27 @@ onUnmounted(() => {
     max-width: 500px;
     max-height: 80vh;
     overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    box-shadow:
+        0 0 40px rgba(0, 0, 0, 0.6),
+        0 0 20px rgba(78, 205, 196, 0.1);
+    border: 1px solid rgba(78, 205, 196, 0.2);
+    position: relative;
+}
+
+.modal-content::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 15%;
+    right: 15%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #4ecdc4, transparent);
+    border-radius: 50%;
 }
 
 .modal-header {
     padding: 20px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(78, 205, 196, 0.15);
 }
 
 .modal-title-group {
@@ -1523,16 +1602,18 @@ onUnmounted(() => {
     font-size: 18px;
     font-weight: bold;
     margin-bottom: 8px;
+    text-shadow: 0 0 10px rgba(78, 205, 196, 0.3);
 }
 
 .modal-subtitle {
-    color: rgba(255, 255, 255, 0.6);
+    color: #a0a0b0;
     font-size: 14px;
 }
 
 .modal-subtitle .highlight {
     color: #4ecdc4;
     font-weight: bold;
+    text-shadow: 0 0 8px rgba(78, 205, 196, 0.3);
 }
 
 .modal-body {
@@ -1541,7 +1622,7 @@ onUnmounted(() => {
 
 .modal-footer {
     padding: 16px 20px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid rgba(78, 205, 196, 0.15);
 }
 
 .modal-actions {
@@ -1550,7 +1631,6 @@ onUnmounted(() => {
     justify-content: space-between;
 }
 
-/* 按钮通用样式 */
 .btn {
     padding: 12px 20px;
     border-radius: 8px;
@@ -1566,41 +1646,47 @@ onUnmounted(() => {
 }
 
 .btn-primary {
-    background: #4ecdc4;
-    color: #1a1a2e;
+    background: linear-gradient(135deg, #4ecdc4, #3ba89f);
+    color: #0a0a1a;
     font-weight: bold;
+    box-shadow: 0 0 15px rgba(78, 205, 196, 0.3);
+}
+
+.btn-primary:active {
+    box-shadow: 0 0 25px rgba(78, 205, 196, 0.5);
+    transform: scale(0.98);
 }
 
 .btn-secondary {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    color: #a0a0b0;
+    border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .btn-ghost {
     background: transparent;
-    color: rgba(255, 255, 255, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #a0a0b0;
+    border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .btn-outline {
     background: transparent;
     color: #4ecdc4;
-    border: 1px solid #4ecdc4;
+    border: 1px solid rgba(78, 205, 196, 0.4);
     padding: 10px 16px;
     font-size: 13px;
 }
 
 .btn-outline:disabled {
     opacity: 0.4;
-    border-color: rgba(78, 205, 196, 0.3);
-    color: rgba(78, 205, 196, 0.4);
+    border-color: rgba(78, 205, 196, 0.2);
+    color: rgba(78, 205, 196, 0.3);
 }
 
 .w-full {
     width: 100%;
 }
 
-/* ============ 捕虾区弹窗 ============ */
 .shrimp-modal .indicator-display {
     display: flex;
     flex-direction: column;
@@ -1619,6 +1705,51 @@ onUnmounted(() => {
     text-align: center;
 }
 
+.shrimp-draw-messages {
+    position: fixed;
+    top: 10%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    pointer-events: none;
+    width: 70%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+}
+
+.shrimp-draw-msg {
+    padding: 4rpx 40rpx;
+    background: transparent;
+    width: 100%;
+    animation: shrimpDrawFadeIn 0.3s ease-out;
+}
+
+.shrimp-draw-msg-text {
+    font-size: 22rpx;
+    font-weight: 600;
+    color: #e2c38f;
+    text-align: center;
+    text-shadow:
+        0 2rpx 8rpx rgba(0, 0, 0, 0.8),
+        0 0 20rpx rgba(0, 0, 0, 0.5);
+    font-family: 'Georgia', 'Times New Roman', serif;
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+@keyframes shrimpDrawFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .shrimp-modal .choice-buttons {
     display: flex;
     gap: 16px;
@@ -1627,30 +1758,32 @@ onUnmounted(() => {
 
 .shrimp-modal .btn-choice {
     flex: 1;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(78, 205, 196, 0.08);
     color: #fff;
     padding: 16px;
     font-size: 16px;
     border: 2px solid rgba(78, 205, 196, 0.3);
+    border-radius: 8px;
 }
 
-.shrimp-modal .btn-choice:hover {
+.shrimp-modal .btn-choice:active {
     border-color: #4ecdc4;
-    background: rgba(78, 205, 196, 0.1);
+    background: rgba(78, 205, 196, 0.15);
 }
 
-/* ============ 海鲜市场弹窗 ============ */
 .seafood-market-modal .market-display-board {
     padding: 16px 20px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(78, 205, 196, 0.05);
+    border-bottom: 1px solid rgba(78, 205, 196, 0.1);
 }
 
 .seafood-market-modal .price-title {
-    color: rgba(255, 255, 255, 0.8);
+    color: #4ecdc4;
     font-size: 14px;
     font-weight: bold;
     display: block;
     margin-bottom: 8px;
+    text-shadow: 0 0 8px rgba(78, 205, 196, 0.3);
 }
 
 .seafood-market-modal .price-tags {
@@ -1660,11 +1793,12 @@ onUnmounted(() => {
 }
 
 .seafood-market-modal .price-tags text {
-    color: rgba(255, 255, 255, 0.6);
+    color: #a0a0b0;
     font-size: 12px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(78, 205, 196, 0.08);
     padding: 4px 8px;
     border-radius: 4px;
+    border: 1px solid rgba(78, 205, 196, 0.1);
 }
 
 .seafood-market-modal .trade-grid {
@@ -1682,14 +1816,13 @@ onUnmounted(() => {
     flex: 1;
 }
 
-/* ============ 养蛊区弹窗 ============ */
 .breeding-modal .lobster-selection {
     display: flex;
     flex-direction: column;
 }
 
 .breeding-modal .section-label {
-    color: rgba(255, 255, 255, 0.8);
+    color: #a0a0b0;
     font-size: 14px;
     margin-bottom: 12px;
 }
@@ -1701,8 +1834,8 @@ onUnmounted(() => {
 }
 
 .breeding-modal .lobster-card {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(78, 205, 196, 0.05);
+    border: 1px solid rgba(78, 205, 196, 0.15);
     border-radius: 8px;
     padding: 12px;
     display: flex;
@@ -1710,6 +1843,12 @@ onUnmounted(() => {
     align-items: center;
     position: relative;
     overflow: hidden;
+    transition: all 0.2s;
+}
+
+.breeding-modal .lobster-card:active:not(.max-royal) {
+    border-color: #4ecdc4;
+    background: rgba(78, 205, 196, 0.1);
 }
 
 .breeding-modal .lobster-card.max-royal {
@@ -1725,10 +1864,11 @@ onUnmounted(() => {
     color: #4ecdc4;
     font-size: 12px;
     font-weight: bold;
+    text-shadow: 0 0 8px rgba(78, 205, 196, 0.3);
 }
 
 .breeding-modal .lobster-title {
-    color: rgba(255, 255, 255, 0.6);
+    color: #ffd700;
     font-size: 11px;
     margin-top: 4px;
 }
@@ -1743,13 +1883,13 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
+    color: #666;
     font-size: 14px;
     font-weight: bold;
 }
 
 .breeding-modal .empty-hint {
-    color: rgba(255, 255, 255, 0.4);
+    color: #666;
     text-align: center;
     padding: 20px;
 }
@@ -1771,13 +1911,14 @@ onUnmounted(() => {
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(78, 205, 196, 0.08);
     padding: 8px 16px;
     border-radius: 8px;
+    border: 1px solid rgba(78, 205, 196, 0.15);
 }
 
 .breeding-modal .grade-box text {
-    color: rgba(255, 255, 255, 0.5);
+    color: #a0a0b0;
     font-size: 11px;
 }
 
@@ -1790,11 +1931,13 @@ onUnmounted(() => {
 
 .breeding-modal .grade-box .val.highlight {
     color: #4ecdc4;
+    text-shadow: 0 0 8px rgba(78, 205, 196, 0.3);
 }
 
 .breeding-modal .arrow {
     color: #4ecdc4;
     font-size: 20px;
+    text-shadow: 0 0 10px rgba(78, 205, 196, 0.4);
 }
 
 .breeding-modal .options-group {
@@ -1808,8 +1951,9 @@ onUnmounted(() => {
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(78, 205, 196, 0.05);
     border-radius: 8px;
+    border: 1px solid rgba(78, 205, 196, 0.1);
 }
 
 .breeding-modal .checkbox-wrapper.disabled {
@@ -1819,17 +1963,18 @@ onUnmounted(() => {
 .breeding-modal .custom-checkbox {
     width: 18px;
     height: 18px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.2);
     border-radius: 4px;
 }
 
 .breeding-modal .custom-checkbox.checked {
     background: #4ecdc4;
     border-color: #4ecdc4;
+    box-shadow: 0 0 8px rgba(78, 205, 196, 0.4);
 }
 
 .breeding-modal .checkbox-text {
-    color: rgba(255, 255, 255, 0.7);
+    color: #a0a0b0;
     font-size: 13px;
 }
 
@@ -1838,15 +1983,16 @@ onUnmounted(() => {
     flex-direction: column;
     gap: 12px;
     padding: 12px;
-    background: rgba(255, 215, 0, 0.1);
+    background: rgba(255, 215, 0, 0.08);
     border-radius: 8px;
-    border: 1px solid rgba(255, 215, 0, 0.2);
+    border: 1px solid rgba(255, 215, 0, 0.25);
 }
 
 .breeding-modal .req-title {
-    color: rgba(255, 255, 255, 0.8);
+    color: #ffd700;
     font-size: 13px;
     font-weight: bold;
+    text-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
 }
 
 .breeding-modal .cost-options {
@@ -1858,16 +2004,17 @@ onUnmounted(() => {
     flex: 1;
     padding: 10px;
     background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #a0a0b0;
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 8px;
     font-size: 12px;
 }
 
 .breeding-modal .cost-btn.active {
-    background: rgba(78, 205, 196, 0.2);
+    background: rgba(78, 205, 196, 0.15);
     border-color: #4ecdc4;
     color: #4ecdc4;
+    box-shadow: 0 0 10px rgba(78, 205, 196, 0.2);
 }
 
 .breeding-modal .cost-btn:disabled {
@@ -1879,7 +2026,6 @@ onUnmounted(() => {
     gap: 12px;
 }
 
-/* ============ 闹市区弹窗 ============ */
 .marketplace-modal .marketplace-cards {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -1887,17 +2033,24 @@ onUnmounted(() => {
 }
 
 .marketplace-modal .mp-card {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(78, 205, 196, 0.05);
+    border: 1px solid rgba(78, 205, 196, 0.15);
     border-radius: 8px;
     padding: 12px;
     position: relative;
     overflow: hidden;
+    transition: all 0.2s;
+}
+
+.marketplace-modal .mp-card:active:not(.used) {
+    border-color: #4ecdc4;
+    background: rgba(78, 205, 196, 0.1);
 }
 
 .marketplace-modal .mp-card.selected {
     border-color: #4ecdc4;
-    background: rgba(78, 205, 196, 0.1);
+    background: rgba(78, 205, 196, 0.15);
+    box-shadow: 0 0 15px rgba(78, 205, 196, 0.2);
 }
 
 .marketplace-modal .mp-card.used {
@@ -1913,7 +2066,7 @@ onUnmounted(() => {
 }
 
 .marketplace-modal .mp-card-desc {
-    color: rgba(255, 255, 255, 0.5);
+    color: #666;
     font-size: 11px;
     display: block;
 }
@@ -1928,7 +2081,7 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
+    color: #666;
     font-size: 12px;
     font-weight: bold;
 }
@@ -1936,8 +2089,9 @@ onUnmounted(() => {
 .marketplace-modal .mp-options-panel {
     margin-top: 16px;
     padding: 12px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(78, 205, 196, 0.05);
     border-radius: 8px;
+    border: 1px solid rgba(78, 205, 196, 0.1);
 }
 
 .marketplace-modal .mp-options {
@@ -1952,30 +2106,32 @@ onUnmounted(() => {
     align-items: center;
     gap: 8px;
     padding: 10px 12px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(78, 205, 196, 0.05);
+    border: 1px solid rgba(78, 205, 196, 0.15);
     border-radius: 8px;
 }
 
 .marketplace-modal .mp-option-btn.active {
     border-color: #4ecdc4;
-    background: rgba(78, 205, 196, 0.1);
+    background: rgba(78, 205, 196, 0.15);
+    box-shadow: 0 0 10px rgba(78, 205, 196, 0.15);
 }
 
 .marketplace-modal .custom-radio {
     width: 16px;
     height: 16px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.2);
     border-radius: 50%;
 }
 
 .marketplace-modal .custom-radio.checked {
     border-color: #4ecdc4;
     background: #4ecdc4;
+    box-shadow: 0 0 8px rgba(78, 205, 196, 0.4);
 }
 
 .marketplace-modal .option-text {
-    color: rgba(255, 255, 255, 0.7);
+    color: #a0a0b0;
     font-size: 12px;
 }
 
@@ -1984,9 +2140,9 @@ onUnmounted(() => {
     font-size: 12px;
     margin-top: 8px;
     display: block;
+    text-shadow: 0 0 8px rgba(233, 69, 96, 0.3);
 }
 
-/* 动画 */
 .animate-fade-in {
     animation: fadeIn 0.3s ease;
 }
@@ -2002,7 +2158,6 @@ onUnmounted(() => {
     }
 }
 
-/* ============ 上供区弹窗样式 ============ */
 .tribute-modal {
     background: #1a1a2e;
     border-radius: 16px;
@@ -2010,11 +2165,13 @@ onUnmounted(() => {
     max-width: 500px;
     max-height: 85vh;
     overflow-y: auto;
+    border: 1px solid rgba(78, 205, 196, 0.2);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
 }
 
 .tribute-modal .modal-header {
     padding: 20px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(78, 205, 196, 0.15);
 }
 
 .tribute-modal .modal-title-group {
@@ -2028,10 +2185,11 @@ onUnmounted(() => {
     font-size: 18px;
     font-weight: bold;
     margin-bottom: 8px;
+    text-shadow: 0 0 10px rgba(78, 205, 196, 0.3);
 }
 
 .tribute-modal .modal-subtitle {
-    color: rgba(255, 255, 255, 0.6);
+    color: #a0a0b0;
     font-size: 14px;
     text-align: center;
 }
@@ -2049,9 +2207,10 @@ onUnmounted(() => {
 }
 
 .tribute-modal .tavern-box {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(78, 205, 196, 0.05);
     border-radius: 12px;
     padding: 12px;
+    border: 1px solid rgba(78, 205, 196, 0.1);
 }
 
 .tribute-modal .tavern-header {
@@ -2065,6 +2224,7 @@ onUnmounted(() => {
     color: #ffd700;
     font-size: 15px;
     font-weight: bold;
+    text-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
 }
 
 .tribute-modal .tavern-status {
@@ -2073,7 +2233,7 @@ onUnmounted(() => {
 }
 
 .tribute-modal .empty-hint {
-    color: rgba(255, 255, 255, 0.4);
+    color: #666;
     font-size: 13px;
     text-align: center;
     padding: 10px;
@@ -2086,9 +2246,10 @@ onUnmounted(() => {
 }
 
 .tribute-modal .tribute-card {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(78, 205, 196, 0.05);
     border-radius: 8px;
     padding: 10px;
+    border: 1px solid rgba(78, 205, 196, 0.1);
 }
 
 .tribute-modal .tc-name {
@@ -2098,7 +2259,7 @@ onUnmounted(() => {
 }
 
 .tribute-modal .tc-desc {
-    color: rgba(255, 255, 255, 0.6);
+    color: #a0a0b0;
     font-size: 12px;
     display: block;
     margin: 4px 0;
@@ -2106,7 +2267,7 @@ onUnmounted(() => {
 
 .tribute-modal .tc-req,
 .tribute-modal .tc-rew {
-    color: rgba(255, 255, 255, 0.5);
+    color: #666;
     font-size: 11px;
 }
 
@@ -2121,6 +2282,7 @@ onUnmounted(() => {
 
 .tribute-modal .naked-intro {
     background: rgba(233, 69, 96, 0.1);
+    border: 1px solid rgba(233, 69, 96, 0.25);
     border-radius: 8px;
     padding: 12px;
     margin-bottom: 16px;
@@ -2132,16 +2294,17 @@ onUnmounted(() => {
     font-weight: bold;
     display: block;
     margin-bottom: 8px;
+    text-shadow: 0 0 10px rgba(233, 69, 96, 0.4);
 }
 
 .tribute-modal .sub-text {
-    color: rgba(255, 255, 255, 0.7);
+    color: #a0a0b0;
     font-size: 13px;
     line-height: 1.5;
 }
 
 .tribute-modal .section-label {
-    color: rgba(255, 255, 255, 0.8);
+    color: #a0a0b0;
     font-size: 13px;
     font-weight: bold;
     margin-bottom: 8px;
@@ -2158,17 +2321,19 @@ onUnmounted(() => {
 }
 
 .tribute-modal .lobster-card {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(78, 205, 196, 0.05);
     border-radius: 8px;
     padding: 10px;
     text-align: center;
     border: 2px solid transparent;
     min-width: 70px;
+    transition: all 0.2s;
 }
 
 .tribute-modal .lobster-card.selected {
     border-color: #4ecdc4;
-    background: rgba(78, 205, 196, 0.1);
+    background: rgba(78, 205, 196, 0.15);
+    box-shadow: 0 0 12px rgba(78, 205, 196, 0.3);
 }
 
 .tribute-modal .lobster-icon {
@@ -2195,17 +2360,19 @@ onUnmounted(() => {
 }
 
 .tribute-modal .tavern-select-btn {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(78, 205, 196, 0.05);
     border-radius: 8px;
     padding: 10px;
     text-align: center;
     border: 2px solid transparent;
     min-width: 80px;
+    transition: all 0.2s;
 }
 
 .tribute-modal .tavern-select-btn.active {
     border-color: #4ecdc4;
-    background: rgba(78, 205, 196, 0.1);
+    background: rgba(78, 205, 196, 0.15);
+    box-shadow: 0 0 12px rgba(78, 205, 196, 0.2);
 }
 
 .tribute-modal .tavern-select-btn.disabled {
@@ -2219,7 +2386,7 @@ onUnmounted(() => {
 }
 
 .tribute-modal .ts-status {
-    color: rgba(255, 255, 255, 0.5);
+    color: #666;
     font-size: 11px;
     display: block;
 }
@@ -2241,35 +2408,38 @@ onUnmounted(() => {
     align-items: center;
     justify-content: center;
     padding: 12px;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(78, 205, 196, 0.05);
     border-radius: 8px;
     border: 2px solid transparent;
-    color: rgba(255, 255, 255, 0.7);
+    color: #a0a0b0;
     font-size: 13px;
+    transition: all 0.2s;
 }
 
 .tribute-modal .custom-radio-wrap.active {
     border-color: #4ecdc4;
-    background: rgba(78, 205, 196, 0.1);
+    background: rgba(78, 205, 196, 0.15);
     color: #4ecdc4;
+    box-shadow: 0 0 12px rgba(78, 205, 196, 0.2);
 }
 
 .tribute-modal .custom-radio {
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.2);
     margin-right: 8px;
 }
 
 .tribute-modal .custom-radio.checked {
     background: #4ecdc4;
     border-color: #4ecdc4;
+    box-shadow: 0 0 8px rgba(78, 205, 196, 0.4);
 }
 
 .tribute-modal .modal-footer {
     padding: 16px 20px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid rgba(78, 205, 196, 0.15);
 }
 
 .tribute-modal .modal-actions {
@@ -2279,9 +2449,15 @@ onUnmounted(() => {
 }
 
 .tribute-modal .btn-warning {
-    background: #e94560;
+    background: linear-gradient(135deg, #e94560, #c23152);
     color: #fff;
     font-weight: bold;
+    box-shadow: 0 0 15px rgba(233, 69, 96, 0.3);
+}
+
+.tribute-modal .btn-warning:active {
+    box-shadow: 0 0 25px rgba(233, 69, 96, 0.5);
+    transform: scale(0.98);
 }
 
 .tribute-modal .btn-warning:disabled {
@@ -2291,5 +2467,6 @@ onUnmounted(() => {
 .tribute-modal .error-hint {
     color: #e94560;
     font-size: 12px;
+    text-shadow: 0 0 8px rgba(233, 69, 96, 0.3);
 }
 </style>

@@ -11,13 +11,10 @@
 """
 
 from utils.events import ClientRoomActionTypes, ServerEvents, ServerRoomActionTypes
-from utils.helpers import generate_room_id, get_player, send_error
+from utils.helpers import generate_room_id, get_player, send_error, make_action_message
+from utils.logger import log_info
 from utils.game_state import create_game_state, create_player
 from services.game import broadcast_room_state, start_game, transfer_host, cleanup_room
-
-def _sr(action_type, data):
-    """构造 serverRoomAction 消息体"""
-    return {'actionType': action_type, **data}
 
 
 async def handle_create_room(websocket, rooms, manager, payload):
@@ -42,11 +39,11 @@ async def handle_create_room(websocket, rooms, manager, payload):
 
     await websocket.send_json({
         'event': ServerEvents.SERVER_ROOM_ACTION,
-        'data': _sr(ServerRoomActionTypes.ROOM_CREATED, {
+        'data': make_action_message(ServerRoomActionTypes.ROOM_CREATED, {
             'roomId': new_room_id, 'playerId': 0, 'gameState': game_state
         })
     })
-    print(f"Room {new_room_id} created by {player_name}")
+    log_info(f"Room {new_room_id} created by {player_name}")
 
 
 async def handle_join_room(websocket, rooms, manager, payload):
@@ -72,19 +69,19 @@ async def handle_join_room(websocket, rooms, manager, payload):
             manager.user_rooms[user_id] = target_room_id
             await websocket.send_json({
                 'event': ServerEvents.SERVER_ROOM_ACTION,
-                'data': _sr(ServerRoomActionTypes.PLAYER_RECONNECTED, {
+                'data': make_action_message(ServerRoomActionTypes.PLAYER_RECONNECTED, {
                     'player': p, 'players': game_state['players']
                 })
             })
             await manager.broadcast_to_room_members(target_room_id, ServerEvents.SERVER_ROOM_ACTION,
-                _sr(ServerRoomActionTypes.PLAYER_STATUS_CHANGE, {
+                make_action_message(ServerRoomActionTypes.PLAYER_STATUS_CHANGE, {
                     'playerId': p['id'],
                     'playerName': p['name'],
                     'status': 'online',
                     'players': game_state['players']
                 }))
             await manager.broadcast_to_room_members(target_room_id, ServerEvents.SERVER_ROOM_ACTION,
-                _sr(ServerRoomActionTypes.ROOM_STATE_UPDATE, {
+                make_action_message(ServerRoomActionTypes.ROOM_STATE_UPDATE, {
                     'players': game_state['players'],
                     'gameStarted': False,
                     'status': 'waiting',
@@ -116,19 +113,19 @@ async def handle_join_room(websocket, rooms, manager, payload):
 
         await websocket.send_json({
             'event': ServerEvents.SERVER_ROOM_ACTION,
-            'data': _sr(ServerRoomActionTypes.PLAYER_JOINED, {
+            'data': make_action_message(ServerRoomActionTypes.PLAYER_JOINED, {
                 'playerId': new_player_id, 'player': player, 'gameState': game_state
             })
         })
 
         await manager.broadcast_to_room_members(target_room_id, ServerEvents.SERVER_ROOM_ACTION,
-            _sr(ServerRoomActionTypes.ROOM_STATE_UPDATE, {
+            make_action_message(ServerRoomActionTypes.ROOM_STATE_UPDATE, {
                 'players': game_state['players'],
                 'gameStarted': False,
                 'status': 'waiting',
                 'maxPlayers': game_state.get('maxPlayers', 4)
             }))
-        print(f"{player_name} joined room {target_room_id}")
+        log_info(f"{player_name} joined room {target_room_id}")
 
 
 async def handle_leave_room(websocket, room_id, player_id, rooms, manager, payload, fingerprint):
@@ -153,7 +150,7 @@ async def handle_leave_room(websocket, room_id, player_id, rooms, manager, paylo
             transfer_host(room_id, game_state)
             await broadcast_room_state(room_id, rooms, manager)
             await manager.broadcast_to_room_members(room_id, ServerEvents.SERVER_ROOM_ACTION,
-                _sr(ServerRoomActionTypes.PLAYER_STATUS_CHANGE, {
+                make_action_message(ServerRoomActionTypes.PLAYER_STATUS_CHANGE, {
                     'playerId': player_id, 'playerName': player_name,
                     'status': 'offline', 'players': game_state['players']
                 }))
@@ -179,7 +176,7 @@ async def handle_set_ready(websocket, room_id, player_id, rooms, manager, payloa
     if player:
         player['ready'] = ready
         await manager.send_to_room(room_id, ServerEvents.SERVER_ROOM_ACTION,
-            _sr(ServerRoomActionTypes.PLAYER_READY, {
+            make_action_message(ServerRoomActionTypes.PLAYER_READY, {
                 'playerId': player_id, 'ready': ready, 'players': game_state['players']
             }))
         await broadcast_room_state(room_id, rooms, manager)

@@ -414,6 +414,17 @@
     transform: translateY(-2px);
 }
 
+.resource-item.lobster-resource {
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.resource-item.lobster-resource:active {
+    background: rgba(102, 126, 234, 0.2);
+    transform: scale(0.95);
+}
+
 .resource-label {
     display: block;
     font-size: 0.75rem;
@@ -1796,7 +1807,8 @@
 }
 
 /* 棋子 - 唯一的绝对定位元素，但约束在安全的 padding 范围内 */
-.chess-p1, .chess-p2 {
+.chess-p1,
+.chess-p2 {
     position: absolute;
     top: 50%;
     width: 2.5rem;
@@ -1992,4 +2004,149 @@
 
 .log-msg {
     color: var(--color-text-primary);
+}
+
+/* 长按龙虾资源弹出的列表 */
+.lobster-list-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.lobster-list-panel {
+    background: var(--color-bg-secondary);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    max-width: 85%;
+    max-height: 70%;
+    overflow-y: auto;
+    border: 1px solid var(--color-border-default);
+}
+
+.lobster-list-header {
+    margin-bottom: 1rem;
+    text-align: center;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.lobster-list-title {
+    color: #e2c38f;
+    font-size: 1.125rem;
+    font-weight: 600;
+}
+
+.lobster-list-close {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-muted);
+    font-size: 1.25rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    line-height: 1;
+}
+
+.lobster-list-close:active {
+    color: #fff;
+}
+
+.lobster-list-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.empty-list-hint {
+    color: var(--color-text-muted);
+    text-align: center;
+    font-size: 0.875rem;
+    padding: 1rem 0;
+}
+
+.lobster-list-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.lobster-list-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: var(--color-bg-tertiary);
+    border-radius: 0.5rem;
+    min-width: 5rem;
+}
+
+.lobster-list-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.lobster-list-grade {
+    display: block;
+    color: #e2c38f;
+    font-size: 0.8125rem;
+    font-weight: 500;
+}
+
+.lobster-list-title-tag {
+    color: #f0c040;
+    font-size: 0.625rem;
+    margin-top: 0.125rem;
+}
+
+.title-cards-section {
+    border-top: 1px solid var(--color-border-default);
+    padding-top: 1rem;
+}
+
+.title-cards-label {
+    display: block;
+    color: #e2c38f;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    text-align: center;
+}
+
+.title-cards-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.title-card-item {
+    padding: 0.5rem 0.75rem;
+    background: var(--color-bg-tertiary);
+    border-radius: 0.5rem;
+    min-width: 6rem;
+    text-align: center;
+}
+
+.title-card-name {
+    display: block;
+    color: #e2c38f;
+    font-size: 0.8125rem;
+    font-weight: 500;
+}
+
+.title-card-desc {
+    display: block;
+    color: var(--color-text-muted);
+    font-size: 0.625rem;
+    margin-top: 0.25rem;
+    line-height: 1.3;
 }

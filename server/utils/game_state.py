@@ -12,8 +12,11 @@ from typing import Dict
 from .constants import AREAS, MARKET_PRICES, TRIBUTE_TASKS, DOWNTOWN_CARDS, SLOT_TEMPLATES, AREA_SLOT_COUNTS
 
 _CARD_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'card_config.json')
-with open(_CARD_CONFIG_PATH, 'r', encoding='utf-8') as _f:
-    _ALL_TITLE_CARDS = json.load(_f).get('titleCards', [])
+try:
+    with open(_CARD_CONFIG_PATH, 'r', encoding='utf-8') as _f:
+        _ALL_TITLE_CARDS = json.load(_f).get('titleCards', [])
+except (FileNotFoundError, json.JSONDecodeError):
+    _ALL_TITLE_CARDS = []
 
 
 def generate_user_id() -> str:

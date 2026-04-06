@@ -1,7 +1,9 @@
 <template>
     <view class="lobby-container">
+        <view class="scanline"></view>
         <view class="header">
-            <text class="title">🎮 联机对战</text>
+            <text class="title">联机对战</text>
+            <view class="title-decoration"></view>
             <text class="subtitle">与好友一起斗龙虾</text>
         </view>
 
@@ -111,7 +113,6 @@ function createRoom() {
         socketService.createRoom(playerName.value.trim(), userId.value, playerCount.value)
     }
 
-    // 检查当前连接是否是大厅端点，如果不是则先断开
     const isConnectedToLobby = socketService.connected && socketService._wsUrl === 'ws://localhost:3100/ws/lobby'
 
     if (isConnectedToLobby) {
@@ -145,7 +146,6 @@ function joinRoom() {
         socketService.joinRoom(roomId.value.trim().toUpperCase(), playerName.value.trim(), userId.value)
     }
 
-    // 检查当前连接是否是大厅端点，如果不是则先断开
     const isConnectedToLobby = socketService.connected && socketService._wsUrl === 'ws://localhost:3100/ws/lobby'
 
     if (isConnectedToLobby) {
@@ -257,34 +257,92 @@ function goBack() {
 <style scoped>
 .lobby-container {
     min-height: 100vh;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #0a0a1a;
     padding: 60rpx 30rpx;
+    position: relative;
+    overflow: hidden;
+}
+
+.lobby-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background:
+        linear-gradient(rgba(78, 205, 196, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(78, 205, 196, 0.03) 1px, transparent 1px);
+    background-size: 40rpx 40rpx;
+    pointer-events: none;
+}
+
+.scanline {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 200rpx;
+    background: linear-gradient(to bottom, transparent, rgba(233, 69, 96, 0.03), transparent);
+    animation: scanline 8s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+}
+
+@keyframes scanline {
+    0% {
+        transform: translateY(-200rpx);
+    }
+    100% {
+        transform: translateY(100vh);
+    }
 }
 
 .header {
     text-align: center;
     margin-bottom: 60rpx;
+    position: relative;
+    z-index: 2;
 }
 
 .title {
     display: block;
     font-size: 56rpx;
     font-weight: 800;
-    color: white;
-    margin-bottom: 10rpx;
+    color: #fff;
+    text-shadow:
+        0 0 10rpx rgba(233, 69, 96, 0.8),
+        0 0 30rpx rgba(233, 69, 96, 0.4),
+        0 0 60rpx rgba(233, 69, 96, 0.2);
+    letter-spacing: 4rpx;
+    margin-bottom: 16rpx;
+}
+
+.title-decoration {
+    display: block;
+    width: 120rpx;
+    height: 4rpx;
+    background: linear-gradient(90deg, transparent, #e94560, transparent);
+    margin: 16rpx auto;
+    box-shadow: 0 0 10rpx rgba(233, 69, 96, 0.6);
 }
 
 .subtitle {
     font-size: 28rpx;
-    color: rgba(255, 255, 255, 0.9);
+    color: #4ecdc4;
+    text-shadow: 0 0 8rpx rgba(78, 205, 196, 0.4);
 }
 
 .mode-tabs {
     display: flex;
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(26, 26, 46, 0.8);
+    border: 1rpx solid rgba(78, 205, 196, 0.2);
     border-radius: 40rpx;
     padding: 8rpx;
     margin-bottom: 40rpx;
+    position: relative;
+    z-index: 2;
+    backdrop-filter: blur(10rpx);
 }
 
 .tab {
@@ -296,25 +354,45 @@ function goBack() {
 }
 
 .tab.active {
-    background: white;
-    box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.1);
+    background: linear-gradient(135deg, #e94560, #c23152);
+    box-shadow:
+        0 0 20rpx rgba(233, 69, 96, 0.4),
+        0 4rpx 16rpx rgba(0, 0, 0, 0.3);
 }
 
 .tab-text {
     font-size: 28rpx;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(255, 255, 255, 0.6);
+    transition: all 0.3s ease;
 }
 
 .tab.active .tab-text {
-    color: #667eea;
+    color: #fff;
+    text-shadow: 0 0 8rpx rgba(255, 255, 255, 0.3);
 }
 
 .content-card {
-    background: white;
+    background: #1a1a2e;
+    border: 1rpx solid rgba(78, 205, 196, 0.2);
     border-radius: 32rpx;
     padding: 40rpx;
-    box-shadow: 0 16rpx 48rpx rgba(0, 0, 0, 0.15);
+    box-shadow:
+        0 0 30rpx rgba(0, 0, 0, 0.5),
+        inset 0 0 60rpx rgba(78, 205, 196, 0.02);
+    position: relative;
+    z-index: 2;
+}
+
+.content-card::before {
+    content: '';
+    position: absolute;
+    top: -1rpx;
+    left: 20%;
+    right: 20%;
+    height: 2rpx;
+    background: linear-gradient(90deg, transparent, #4ecdc4, transparent);
+    border-radius: 50%;
 }
 
 .input-group {
@@ -324,94 +402,155 @@ function goBack() {
 .input-label {
     display: block;
     font-size: 26rpx;
-    color: #666;
+    color: #a0a0b0;
     margin-bottom: 12rpx;
+    letter-spacing: 2rpx;
 }
 
 .input-field {
     width: 100%;
     height: 88rpx;
     padding: 0 30rpx;
-    background: #f5f5f5;
+    background: #0d0d2b;
     border-radius: 16rpx;
     font-size: 30rpx;
-    border: none;
+    color: #fff;
+    border: 1rpx solid rgba(78, 205, 196, 0.15);
+    transition: all 0.3s ease;
+}
+
+.input-field:focus {
+    border-color: #4ecdc4;
+    box-shadow: 0 0 15rpx rgba(78, 205, 196, 0.2);
 }
 
 .btn-create,
 .btn-join {
     width: 100%;
     height: 96rpx;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #e94560 0%, #c23152 100%);
     border: none;
     border-radius: 48rpx;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 8rpx 24rpx rgba(102, 126, 234, 0.4);
+    box-shadow:
+        0 0 20rpx rgba(233, 69, 96, 0.4),
+        0 8rpx 24rpx rgba(0, 0, 0, 0.3);
     margin-top: 20rpx;
+    transition: all 0.3s ease;
+}
+
+.btn-create:active,
+.btn-join:active {
+    box-shadow:
+        0 0 30rpx rgba(233, 69, 96, 0.6),
+        0 4rpx 12rpx rgba(0, 0, 0, 0.3);
+    transform: scale(0.98);
 }
 
 .btn-create:disabled,
 .btn-join:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
+    box-shadow: none;
 }
 
 .btn-text {
     font-size: 32rpx;
     font-weight: 700;
-    color: white;
+    color: #fff;
+    text-shadow: 0 1rpx 2rpx rgba(0, 0, 0, 0.3);
 }
 
 .room-code-box {
     margin-top: 40rpx;
     padding: 30rpx;
-    background: #f8f6ff;
+    background: rgba(255, 215, 0, 0.05);
+    border: 1rpx solid rgba(255, 215, 0, 0.2);
     border-radius: 20rpx;
     text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.room-code-box::before {
+    content: '';
+    position: absolute;
+    top: -1rpx;
+    left: 10%;
+    right: 10%;
+    height: 2rpx;
+    background: linear-gradient(90deg, transparent, #ffd700, transparent);
 }
 
 .room-code-label {
     font-size: 24rpx;
-    color: #666;
+    color: #a0a0b0;
 }
 
 .room-code {
     display: block;
     font-size: 56rpx;
     font-weight: 800;
-    color: #667eea;
-    letter-spacing: 8rpx;
+    color: #ffd700;
+    letter-spacing: 12rpx;
     margin: 10rpx 0;
+    text-shadow:
+        0 0 10rpx rgba(255, 215, 0, 0.6),
+        0 0 30rpx rgba(255, 215, 0, 0.3);
+    animation: neon-pulse 2s ease-in-out infinite;
+}
+
+@keyframes neon-pulse {
+    0%,
+    100% {
+        text-shadow:
+            0 0 10rpx rgba(255, 215, 0, 0.6),
+            0 0 30rpx rgba(255, 215, 0, 0.3);
+    }
+    50% {
+        text-shadow:
+            0 0 15rpx rgba(255, 215, 0, 0.8),
+            0 0 40rpx rgba(255, 215, 0, 0.5);
+    }
 }
 
 .room-code-hint {
     font-size: 22rpx;
-    color: #999;
+    color: #666;
 }
 
 .error-box {
     margin-top: 30rpx;
     padding: 20rpx;
-    background: #fff2f2;
+    background: rgba(233, 69, 96, 0.1);
+    border: 1rpx solid rgba(233, 69, 96, 0.3);
     border-radius: 12rpx;
     text-align: center;
 }
 
 .error-text {
     font-size: 26rpx;
-    color: #e53935;
+    color: #e94560;
+    text-shadow: 0 0 8rpx rgba(233, 69, 96, 0.3);
 }
 
 .back-btn {
     margin-top: 40rpx;
     text-align: center;
+    position: relative;
+    z-index: 2;
 }
 
 .back-text {
     font-size: 28rpx;
-    color: rgba(255, 255, 255, 0.8);
+    color: #a0a0b0;
     padding: 20rpx;
+    transition: all 0.3s ease;
+}
+
+.back-text:active {
+    color: #4ecdc4;
 }
 
 .player-count-selector {
@@ -425,22 +564,26 @@ function goBack() {
     padding: 20rpx;
     border-radius: 16rpx;
     text-align: center;
-    background: #f5f5f5;
-    border: 2rpx solid #e8e8e8;
+    background: #0d0d2b;
+    border: 1rpx solid rgba(78, 205, 196, 0.15);
+    transition: all 0.3s ease;
 }
 
 .count-btn.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-color: #667eea;
+    background: linear-gradient(135deg, rgba(233, 69, 96, 0.2), rgba(233, 69, 96, 0.1));
+    border-color: #e94560;
+    box-shadow: 0 0 15rpx rgba(233, 69, 96, 0.3);
 }
 
 .count-btn text {
     font-size: 28rpx;
-    color: #666;
+    color: #a0a0b0;
     font-weight: 600;
+    transition: all 0.3s ease;
 }
 
 .count-btn.active text {
-    color: white;
+    color: #fff;
+    text-shadow: 0 0 8rpx rgba(233, 69, 96, 0.4);
 }
 </style>

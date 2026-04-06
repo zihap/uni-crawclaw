@@ -322,7 +322,6 @@ class WebSocketService {
     _send(event, data) {
         if (this._connected && this.socket) {
             var message = JSON.stringify({ event: event, data: data })
-            console.log('Sending message:', message)
             try {
                 this.socket.send({
                     data: message,

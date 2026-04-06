@@ -412,7 +412,7 @@ export const useBattleStore = defineStore('battle', () => {
         battleData.value.winnerAwardChoice = choice
         battleData.value.lastAction = 'rewardSelected'
         battleData.value = { ...battleData.value }
-        broadcastBattleUpdate('battleUpdate')
+        broadcastBattleUpdate('battleEnd')
     }
 
     function addLog(message) {
@@ -448,7 +448,7 @@ export const useBattleStore = defineStore('battle', () => {
     function broadcastRewardSelected() {
         battleData.value.lastAction = 'rewardSelected'
         battleData.value = { ...battleData.value }
-        broadcastBattleUpdate('battleUpdate')
+        broadcastBattleUpdate('battleEnd')
     }
 
     // ============ 数据同步 ============
@@ -461,7 +461,9 @@ export const useBattleStore = defineStore('battle', () => {
             'diceValue',
             'diceRoller',
             'lastAction',
-            'winnerAwardChoice'
+            'winnerAwardChoice',
+            'p1CrossedMidline',
+            'p2CrossedMidline'
         ]
         fields.forEach((field) => {
             if (syncedData[field] !== undefined) {
@@ -538,15 +540,22 @@ export const useBattleStore = defineStore('battle', () => {
                 _onRewardSelected()
             }
         }
+
+        // 同步 winnerAwardChoice（失败玩家需要收到胜利玩家的选择）
+        if (data.battleData.winnerAwardChoice && battleData.value) {
+            battleData.value.winnerAwardChoice = data.battleData.winnerAwardChoice
+        }
     }
 
     function setupBattleActionListener(onRewardSelected) {
         _onRewardSelected = onRewardSelected || null
         socketService.onAction('serverBattleAction', 'battleUpdate', handleBattleAction)
+        socketService.onAction('serverBattleAction', 'battleEnded', handleBattleAction)
     }
 
     function cleanupBattleActionListener() {
         socketService.offAction('serverBattleAction', 'battleUpdate')
+        socketService.offAction('serverBattleAction', 'battleEnded')
         _onRewardSelected = null
     }
 

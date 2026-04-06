@@ -292,7 +292,10 @@ export const useOnlineGameStore = defineStore('online-game', () => {
                 rewardGiven: data.rewardGiven,
                 slotIndex: data.slotIndex,
                 taverns: data.taverns,
-                tributeTasks: data.tributeTasks
+                tributeTasks: data.tributeTasks,
+                step: data.step,
+                lastResult: data.lastResult,
+                lastItem: data.lastItem
             }
             if (data.areaType === 'tribute') {
                 pendingTribute.value = {

@@ -13,17 +13,13 @@ WebSocket控制器模块
 import time
 from fastapi import WebSocket, WebSocketDisconnect
 from utils.events import ClientEvents, ServerEvents, ServerRoomActionTypes, ClientRoomActionTypes
-from utils.helpers import get_player
+from utils.helpers import get_player, make_action_message
+from utils.logger import log_info, log_debug, log_error
 from services.game import handle_player_disconnect, broadcast_room_state
-from controllers.room_action_handler import handle_room_action
+from controllers.room_action_handler import handle_room_action, handle_set_ready, handle_leave_room
 from controllers.game_action_handler import handle_game_action
 from controllers.battle_action_handler import handle_battle_action
-from controllers.room_action_handler import handle_set_ready, handle_leave_room
-
-
-def _sr(action_type, data):
-    """构造 serverRoomAction 消息体"""
-    return {'actionType': action_type, **data}
+from controllers.battle_action_handler import handle_battle_action
 
 
 async def handle_lobby_websocket(websocket: WebSocket, rooms: dict, manager):
@@ -67,7 +63,7 @@ async def handle_lobby_websocket(websocket: WebSocket, rooms: dict, manager):
                     await handle_player_disconnect(room_id, player['id'], player.get('name'), rooms, manager, lambda r: broadcast_room_state(r, rooms, manager))
 
     except Exception as e:
-        print(f"Lobby WebSocket error: {e}")
+        log_error(f"Lobby WebSocket error: {e}")
 
     finally:
         manager.heartbeat_timestamps.pop(fingerprint, None)
@@ -85,8 +81,8 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
     """
     fingerprint = id(websocket)
 
-    print(f"WebSocket connection: room_id={room_id}, player_id={player_id}")
-    print(f"DEBUG: rooms at connection time: {list(rooms.keys())}")
+    log_info(f"WebSocket connection: room_id={room_id}, player_id={player_id}")
+    log_debug(f"rooms at connection time: {list(rooms.keys())}")
 
     await manager.connect(websocket, room_id, player_id)
 
@@ -96,7 +92,7 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
         if player:
             player['isOnline'] = True
             await manager.send_to_room(room_id, ServerEvents.SERVER_ROOM_ACTION,
-                _sr(ServerRoomActionTypes.PLAYER_STATUS_CHANGE, {
+                make_action_message(ServerRoomActionTypes.PLAYER_STATUS_CHANGE, {
                     'playerId': player_id,
                     'playerName': player['name'],
                     'status': 'online',
@@ -104,7 +100,7 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
                 }))
 
         await manager.send_to_player(room_id, player_id, ServerEvents.SERVER_ROOM_ACTION,
-            _sr(ServerRoomActionTypes.ROOM_STATE_UPDATE, {
+            make_action_message(ServerRoomActionTypes.ROOM_STATE_UPDATE, {
                 'players': game_state['players'],
                 'gameStarted': game_state['status'] == 'playing',
                 'status': game_state['status'],
@@ -118,7 +114,6 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
             data = await websocket.receive_json()
             event = data.get('event')
             payload = data.get('data', {})
-            print(f"WebSocket message in room {room_id} from player {player_id}: event={event}, payload={payload}")
 
             if event == ClientEvents.HEARTBEAT:
                 manager.heartbeat_timestamps[fingerprint] = time.time()
@@ -161,7 +156,7 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
                 continue
 
     except WebSocketDisconnect:
-        print(f"DEBUG: WebSocketDisconnect for player {player_id} in room {room_id}")
+        log_debug(f"WebSocketDisconnect for player {player_id} in room {room_id}")
         manager.disconnect(room_id, player_id, fingerprint)
         await handle_player_disconnect(room_id, player_id, None, rooms, manager, lambda r: broadcast_room_state(r, rooms, manager))
 
@@ -171,7 +166,6 @@ _last_action_ts: dict = {}
 
 def _check_idempotency(player_id: int, event: str, payload: dict) -> bool:
     """检查操作是否重复（500ms 窗口），返回 True 表示是重复请求"""
-    import time
     key = f"{player_id}:{event}"
     now = time.time()
     last = _last_action_ts.get(key)

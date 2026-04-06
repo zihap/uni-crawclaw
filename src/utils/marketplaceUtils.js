@@ -14,19 +14,19 @@ export const MARKETPLACE_SLOTS = [
     },
     {
         id: 1,
-        reward: {coins: 1},
+        reward: { coins: 1 },
         actions: 1,
         availableFrom: 3, // 第3回合开始才能使用
         description: '奖励1枚金币；该区域结算阶段可执行1次闹市行动'
     },
     {
         id: 2,
-        reward: {coins: 2},
+        reward: { coins: 2 },
         actions: 1,
         availableFrom: 4, // 第4回合开始才能使用
         description: '奖励2枚金币；该区域结算阶段可执行1次闹市行动'
     }
-];
+]
 
 /**
  * 计算闹市区行动格奖励

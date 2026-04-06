@@ -19,24 +19,10 @@
 
 from utils.constants import AREAS
 from utils.events import ClientGameActionTypes, ServerEvents, ServerGameActionTypes, ServerAreaActionTypes
-from utils.helpers import send_error, has_resources, update_resources, get_player
-from services.game import broadcast_game_state
+from utils.helpers import send_error, has_resources, update_resources, get_player, make_action_message, make_broadcast_fn, make_settlement_state
+from utils.logger import log_info, log_debug
+from services.game import broadcast_game_state, start_area_settlement, complete_settlement
 from services.area import resolve_area_step, process_area_action
-from utils.game_state import draw_tribute_tasks, draw_downtown_cards
-
-
-def _sra(action_type, data):
-    """构造 serverGameAction / serverAreaAction 消息体"""
-    return {'actionType': action_type, **data}
-
-
-def _make_bf(manager, room_id):
-    """创建资源广播闭包"""
-    async def bf(player_id, resources):
-        await manager.send_to_room(room_id, ServerEvents.PLAYER_RESOURCE_UPDATE, {
-            'playerId': player_id, 'resources': resources
-        })
-    return bf
 
 
 async def handle_use_seaweed(websocket, room_id, player_id, rooms, manager, payload):
@@ -48,7 +34,7 @@ async def handle_use_seaweed(websocket, room_id, player_id, rooms, manager, payl
     if not player or player['seaweed'] <= 0:
         await send_error(websocket, '海草不足')
         return
-    await update_resources(player, {'seaweed': -1}, broadcast_fn=_make_bf(manager, room_id))
+    await update_resources(player, {'seaweed': -1}, broadcast_fn=make_broadcast_fn(manager.send_to_room, room_id))
 
 
 async def handle_place_headman(websocket, room_id, player_id, rooms, manager, payload):
@@ -82,7 +68,7 @@ async def handle_place_headman(websocket, room_id, player_id, rooms, manager, pa
         return
 
     slots = area_data['slots']
-    bf = _make_bf(manager, room_id)
+    bf = make_broadcast_fn(manager.send_to_room, room_id)
     if slot_index < 0 or slot_index >= len(slots) or slots[slot_index] is not None:
         await send_error(websocket, '该位置已有米宝')
         return
@@ -129,95 +115,8 @@ async def handle_cancel_headman(websocket, room_id, player_id, rooms, manager, p
     player = game_state['players'][player_id]
     slots[slot_index] = None
     game_state['lastPlacement'] = None
-    bf = _make_bf(manager, room_id)
+    bf = make_broadcast_fn(manager.send_to_room, room_id)
     await update_resources(player, {'liZhang': 1}, broadcast_fn=bf)
-    await broadcast_game_state(room_id, rooms, manager)
-
-
-async def _start_area_settlement(websocket, room_id, game_state, rooms, manager):
-    """启动当前区域的结算流程"""
-    current_area = game_state.get('currentArea', 0)
-
-    if current_area >= len(AREAS):
-        await _complete_settlement(room_id, game_state, rooms, manager)
-        return
-
-    area_name = AREAS[current_area]
-    area_data = game_state['areas'].get(area_name)
-    if not area_data:
-        game_state['currentArea'] = current_area + 1
-        await _start_area_settlement(websocket, room_id, game_state, rooms, manager)
-        return
-
-    result = await resolve_area_step(game_state, current_area, manager, room_id)
-
-    if result == 'auto_next':
-        if current_area + 1 >= len(AREAS):
-            await _complete_settlement(room_id, game_state, rooms, manager)
-        else:
-            next_area = current_area + 1
-            game_state['currentArea'] = next_area
-            next_area_name = AREAS[next_area]
-            await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
-                _sra(ServerAreaActionTypes.AREA_SETTLEMENT_START, {
-                    'areaType': next_area_name,
-                    'gameState': game_state
-                }))
-            await _start_area_settlement(websocket, room_id, game_state, rooms, manager)
-    elif result == 'waiting_ui':
-        await broadcast_game_state(room_id, rooms, manager)
-
-
-async def _complete_settlement(room_id, game_state, rooms, manager):
-    """完成结算阶段，进入清理和下一回合"""
-    from services.game import cleanup_phase
-
-    cleanup_phase(game_state)
-
-    if game_state['currentRound'] >= game_state['maxRounds']:
-        game_state['status'] = 'ended'
-        
-        winner = sorted(
-            game_state['players'],
-            key=lambda x: (x['de'] * x['wang'] + x['bonusPoints'], x['coins']),
-            reverse=True
-        )[0]
-        
-        await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
-            _sra(ServerAreaActionTypes.SETTLEMENT_COMPLETE, {
-                'gameState': game_state
-            }))
-        await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-            _sra(ServerGameActionTypes.GAME_ENDED, {'winner': winner, 'gameState': game_state}))
-        await broadcast_game_state(room_id, rooms, manager)
-        return
-
-    game_state['currentRound'] += 1
-    game_state['phase'] = 'placement'
-    game_state['currentPlayerIndex'] = game_state.get('startingPlayerIndex', 0)
-    game_state['currentArea'] = 0
-    game_state['lastPlacement'] = None
-
-    for area_name in AREAS:
-        if area_name in game_state['areas']:
-            slot_count = len(game_state['areas'][area_name]['slots'])
-            game_state['areas'][area_name]['slots'] = [None] * slot_count
-
-    for p in game_state['players']:
-        p['royalCountThisRound'] = 0
-
-    draw_tribute_tasks(game_state)
-    draw_downtown_cards(game_state)
-
-    await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
-        _sra(ServerAreaActionTypes.SETTLEMENT_COMPLETE, {
-            'gameState': game_state
-        }))
-    await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-        _sra(ServerGameActionTypes.ROUND_STARTED, {
-            'round': game_state['currentRound'],
-            'gameState': game_state
-        }))
     await broadcast_game_state(room_id, rooms, manager)
 
 
@@ -237,14 +136,9 @@ async def handle_next_player(websocket, room_id, player_id, rooms, manager, payl
         game_state['phase'] = 'settlement'
         game_state['currentArea'] = 0
         game_state['battleQueue'] = []
-        game_state['settlementState'] = {
-            'currentSlotIndex': -1,
-            'remainingActions': -1,
-            'waitingForPlayer': None,
-            'areaType': None
-        }
+        game_state['settlementState'] = make_settlement_state(None, -1, -1)
 
-        await _start_area_settlement(websocket, room_id, game_state, rooms, manager)
+        await start_area_settlement(websocket, room_id, game_state, rooms, manager)
     else:
         current_idx = game_state.get('currentPlayerIndex', 0)
         game_state['currentPlayerIndex'] = (current_idx + 1) % len(game_state['players'])
@@ -264,17 +158,12 @@ async def handle_next_area(websocket, room_id, player_id, rooms, manager, payloa
         return
 
     current_area = game_state.get('currentArea', 0)
-    area_name = AREAS[current_area] if current_area < len(AREAS) else None
-
-    if area_name and area_name in game_state['areas']:
-        slot_count = len(game_state['areas'][area_name]['slots'])
-        game_state['areas'][area_name]['slots'] = [None] * slot_count
 
     if current_area + 1 >= len(AREAS):
-        await _complete_settlement(room_id, game_state, rooms, manager)
+        await complete_settlement(room_id, game_state, rooms, manager)
     else:
         game_state['currentArea'] = current_area + 1
-        await _start_area_settlement(websocket, room_id, game_state, rooms, manager)
+        await start_area_settlement(websocket, room_id, game_state, rooms, manager)
 
 
 async def handle_area_action(websocket, room_id, player_id, rooms, manager, payload):
@@ -296,7 +185,7 @@ async def handle_area_action(websocket, room_id, player_id, rooms, manager, payl
     action_payload = payload.get('payload', {})
 
     result = await process_area_action(game_state, action_type, action_payload, manager, room_id, websocket)
-    print(f"[handle_settlement_action] actionType={action_type}, result={result}")
+    log_debug(f"[handle_settlement_action] actionType={action_type}, result={result}")
 
     if result == 'action_complete':
         await broadcast_game_state(room_id, rooms, manager)
@@ -311,47 +200,62 @@ async def handle_area_action(websocket, room_id, player_id, rooms, manager, payl
             slots = area_data.get('slots', [])
             settlement_state = game_state.get('settlementState', {})
             current_slot_index = settlement_state.get('currentSlotIndex', -1)
-            print(f"[handle_settlement_action] area={area_name}, slots={slots}, currentSlotIndex={current_slot_index}")
+            log_debug(f"[handle_settlement_action] area={area_name}, slots={slots}, currentSlotIndex={current_slot_index}")
             
             # 检查是否有更多slot需要处理
             # currentSlotIndex 是下一个要处理的slot索引，从这里开始向后检查
             if current_slot_index >= 0 and current_slot_index < len(slots):
                 for idx in range(current_slot_index, len(slots)):
-                    print(f"[handle_settlement_action] checking slot {idx}, value={slots[idx]}")
                     if slots[idx] is not None:
                         more_players_in_area = True
                         break
         
-        print(f"[handle_settlement_action] more_players_in_area={more_players_in_area}")
+        remaining_actions = settlement_state.get('remainingActions', 1)
+        player_slots = settlement_state.get('playerSlots', [])
         
-        if more_players_in_area:
-            # 当前区域还有更多玩家，继续结算
+        log_debug(f"[handle_settlement_action] more_players_in_area={more_players_in_area}, remainingActions={remaining_actions}, playerSlots={player_slots}, waitingForPlayer={player_id}")
+        
+        if remaining_actions > 1:
+            game_state['settlementState']['remainingActions'] = remaining_actions - 1
+            await broadcast_game_state(room_id, rooms, manager)
+            player = game_state['players'][player_id]
             await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
-                _sra(ServerAreaActionTypes.AREA_SETTLEMENT_START, {
+                make_action_message(ServerAreaActionTypes.AREA_WAITING_UI, {
+                    'areaType': area_name,
+                    'playerId': player_id,
+                    'actionCount': remaining_actions - 1,
+                    'slotIndex': player_slots[0] if player_slots else 0,
+                    'player': player,
+                    'taverns': game_state.get('taverns', []),
+                    'tributeTasks': game_state.get('tributeTasks', [])
+                }))
+        elif more_players_in_area:
+            if player_slots and len(player_slots) > 1:
+                game_state['settlementState']['currentSlotIndex'] = player_slots[1]
+            game_state['settlementState']['waitingForPlayer'] = None
+            game_state['settlementState']['playerSlots'] = []
+            await broadcast_game_state(room_id, rooms, manager)
+            await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
+                make_action_message(ServerAreaActionTypes.AREA_SETTLEMENT_START, {
                     'areaType': area_name,
                     'gameState': game_state
                 }))
-            await _start_area_settlement(websocket, room_id, game_state, rooms, manager)
+            await start_area_settlement(websocket, room_id, game_state, rooms, manager)
         elif current_area + 1 >= len(AREAS):
-            await _complete_settlement(room_id, game_state, rooms, manager)
+            await complete_settlement(room_id, game_state, rooms, manager)
         else:
             # 跳转到下一个区域前，重置settlementState
             next_area = current_area + 1
             next_area_name = AREAS[next_area]
-            print(f"[handle_settlement_action] Jumping to next area: {next_area_name}")
-            game_state['settlementState'] = {
-                'currentSlotIndex': -1,
-                'remainingActions': -1,
-                'waitingForPlayer': None,
-                'areaType': next_area_name
-            }
+            log_info(f"[handle_settlement_action] Jumping to next area: {next_area_name}")
+            game_state['settlementState'] = make_settlement_state(next_area_name, -1, -1)
             game_state['currentArea'] = next_area
             await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
-                _sra(ServerAreaActionTypes.AREA_SETTLEMENT_START, {
+                make_action_message(ServerAreaActionTypes.AREA_SETTLEMENT_START, {
                     'areaType': next_area_name,
                     'gameState': game_state
                 }))
-            await _start_area_settlement(websocket, room_id, game_state, rooms, manager)
+            await start_area_settlement(websocket, room_id, game_state, rooms, manager)
     elif result == 'continue_ui':
         await broadcast_game_state(room_id, rooms, manager)
 
@@ -365,7 +269,7 @@ async def handle_exchange_signals(websocket, room_id, player_id, rooms, manager,
         return
 
     player = game_state['players'][player_id]
-    bf = _make_bf(manager, room_id)
+    bf = make_broadcast_fn(manager.send_to_room, room_id)
 
     if exchange_type == '1to1' and player['tempBubbles'] >= 1:
         player['tempBubbles'] -= 1
@@ -378,7 +282,7 @@ async def handle_exchange_signals(websocket, room_id, player_id, rooms, manager,
         await update_resources(player, {'grade2': 1}, broadcast_fn=bf)
 
     await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-        _sra(ServerGameActionTypes.GAME_ACTION, {
+        make_action_message(ServerGameActionTypes.GAME_ACTION, {
             'actionType': 'signalsExchanged',
             'playerId': player_id,
             'gameState': game_state
@@ -396,7 +300,7 @@ async def handle_buy_item(websocket, room_id, player_id, rooms, manager, payload
 
     player = game_state['players'][player_id]
     prices = game_state['areas']['seafood_market']['dynamicPrices']
-    bf = _make_bf(manager, room_id)
+    bf = make_broadcast_fn(manager.send_to_room, room_id)
     success = False
 
     if item_type == 'lobster' and player['coins'] >= prices['buyLobster']:
@@ -414,7 +318,7 @@ async def handle_buy_item(websocket, room_id, player_id, rooms, manager, payload
 
     if success:
         await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-            _sra(ServerGameActionTypes.GAME_ACTION, {
+            make_action_message(ServerGameActionTypes.GAME_ACTION, {
                 'actionType': 'itemBought',
                 'playerId': player_id,
                 'data': {'itemType': item_type},
@@ -435,7 +339,7 @@ async def handle_sell_item(websocket, room_id, player_id, rooms, manager, payloa
 
     player = game_state['players'][player_id]
     prices = game_state['areas']['seafood_market']['dynamicPrices']
-    bf = _make_bf(manager, room_id)
+    bf = make_broadcast_fn(manager.send_to_room, room_id)
     success = False
 
     if item_type == 'lobster' and has_resources(player, {'normal': 1}):
@@ -450,7 +354,7 @@ async def handle_sell_item(websocket, room_id, player_id, rooms, manager, payloa
 
     if success:
         await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-            _sra(ServerGameActionTypes.GAME_ACTION, {
+            make_action_message(ServerGameActionTypes.GAME_ACTION, {
                 'actionType': 'itemSold',
                 'playerId': player_id,
                 'data': {'itemType': item_type},
@@ -468,7 +372,7 @@ async def handle_cultivate_lobster(websocket, room_id, player_id, rooms, manager
         return
 
     player = game_state['players'][player_id]
-    bf = _make_bf(manager, room_id)
+    bf = make_broadcast_fn(manager.send_to_room, room_id)
     upgraded = False
 
     if has_resources(player, {'grade1': 1}) and (player['cages'] > 0 or player['coins'] >= 3):
@@ -492,7 +396,7 @@ async def handle_cultivate_lobster(websocket, room_id, player_id, rooms, manager
         upgraded = True
 
     await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-        _sra(ServerGameActionTypes.GAME_ACTION, {
+        make_action_message(ServerGameActionTypes.GAME_ACTION, {
             'actionType': 'lobsterCultivated',
             'playerId': player_id,
             'data': {'upgraded': upgraded},
@@ -525,7 +429,7 @@ async def handle_submit_tribute(websocket, room_id, player_id, rooms, manager, p
         await send_error(websocket, '资源不足')
         return
 
-    bf = _make_bf(manager, room_id)
+    bf = make_broadcast_fn(manager.send_to_room, room_id)
     await update_resources(player, {**req, **task['reward']}, broadcast_fn=bf)
 
     if 'completedTasks' not in player:
@@ -545,7 +449,7 @@ async def handle_submit_tribute(websocket, room_id, player_id, rooms, manager, p
             player['permaBuffs'].append(aura_type)
 
     await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-        _sra(ServerGameActionTypes.GAME_ACTION, {
+        make_action_message(ServerGameActionTypes.GAME_ACTION, {
             'actionType': 'tributeSubmitted',
             'playerId': player_id,
             'data': {'taskId': task_id},
@@ -582,11 +486,11 @@ async def handle_downtown_action(websocket, room_id, player_id, rooms, manager, 
         await send_error(websocket, '资源不足')
         return
 
-    bf = _make_bf(manager, room_id)
+    bf = make_broadcast_fn(manager.send_to_room, room_id)
     await update_resources(player, {**cost, **reward}, broadcast_fn=bf)
 
     await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-        _sra(ServerGameActionTypes.GAME_ACTION, {
+        make_action_message(ServerGameActionTypes.GAME_ACTION, {
             'actionType': 'downtownActionExecuted',
             'playerId': player_id,
             'data': {'card': card},

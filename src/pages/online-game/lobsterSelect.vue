@@ -3,6 +3,7 @@
         <view class="modal-container" @click.stop>
             <view class="modal-header">
                 <text class="modal-title">竞技场对决</text>
+                <view class="title-line"></view>
                 <text class="modal-subtitle">{{ subtitle }}</text>
             </view>
 
@@ -20,7 +21,7 @@
                 </view>
             </view>
 
-            <!-- Phase 1: Selecting - 战斗双方选龙虾 -->
+            <!-- Phase 1: Selecting -->
             <view v-if="localPhase === 'selecting'" class="selection-area">
                 <view v-if="isChallenger || isDefender" class="lobster-selection">
                     <text class="selection-title">选择你的出战龙虾</text>
@@ -53,7 +54,7 @@
                 </view>
             </view>
 
-            <!-- Phase 2: Betting - 观战者投注 -->
+            <!-- Phase 2: Betting -->
             <view v-if="localPhase === 'betting'" class="betting-area">
                 <view v-if="!isFighter" class="betting-selection">
                     <text class="selection-title">选择你要支持的龙虾（1金币）</text>
@@ -100,8 +101,25 @@
                 </view>
             </view>
 
-            <!-- Phase 3: Ready - 投注结果 + 倒计时 -->
+            <!-- Phase 3: Ready -->
             <view v-if="localPhase === 'ready'" class="ready-area">
+                <view class="fighters-preview">
+                    <view class="fighter-card challenger">
+                        <text class="fighter-label">挑战者</text>
+                        <text class="fighter-name">{{ challengerLobsterInfo?.name || '-' }}</text>
+                        <text class="fighter-skill" v-if="challengerLobsterInfo?.skillDesc">
+                            技能：{{ challengerLobsterInfo.skillDesc }}
+                        </text>
+                    </view>
+                    <text class="vs-text">VS</text>
+                    <view class="fighter-card defender">
+                        <text class="fighter-label">被挑战者</text>
+                        <text class="fighter-name">{{ defenderLobsterInfo?.name || '-' }}</text>
+                        <text class="fighter-skill" v-if="defenderLobsterInfo?.skillDesc">
+                            技能：{{ defenderLobsterInfo.skillDesc }}
+                        </text>
+                    </view>
+                </view>
                 <text class="ready-title">投注结果</text>
                 <view class="bet-results">
                     <view v-for="(bet, pid) in store.spectatorBets" :key="pid" class="bet-result-item">
@@ -126,6 +144,7 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 import { useOnlineGameStore } from '@stores/online-game.js'
 import { usePlayerStore } from '@stores/player.js'
 import { socketService } from '@utils/socket.js'
+import { getSkill } from '@data/cards.js'
 import { getLobsterGradeName } from '@utils/gameUtils.js'
 
 const store = useOnlineGameStore()
@@ -141,7 +160,6 @@ const props = defineProps({
 
 const emit = defineEmits(['bothReady'])
 
-// ============ 本地状态 ============
 const localPhase = ref('selecting')
 const selectedIndex = ref(-1)
 const hasConfirmed = ref(false)
@@ -151,7 +169,6 @@ const countdown = ref(5)
 let countdownTimer = null
 let currentBattleId = ''
 
-// ============ 身份判断 ============
 const isChallenger = computed(
     () => props.playerId !== null && props.challenger && String(props.challenger.id) === String(props.playerId)
 )
@@ -162,7 +179,6 @@ const isDefender = computed(
 
 const isFighter = computed(() => isChallenger.value || isDefender.value)
 
-// ============ 计算属性 ============
 const myLobsters = computed(() => {
     if (!isFighter.value) return []
     const player = isChallenger.value ? props.challenger : props.defender
@@ -176,6 +192,28 @@ const myLobsters = computed(() => {
         }) || []
     const titleCards = player?.titleCards?.filter((t) => t?.id && !usedIds.has(t.id)) || []
     return [...validLobsters, ...titleCards]
+})
+
+const challengerLobsterInfo = computed(() => {
+    const lobster = store.challengerSelectedLobster || store.challengerLobster
+    if (!lobster) return null
+    const grade = lobster.grade || lobster.lobsterId || lobster.id
+    const skill = getSkill(grade)
+    return {
+        name: lobster.name || getLobsterGradeName(grade),
+        skillDesc: skill?.description || ''
+    }
+})
+
+const defenderLobsterInfo = computed(() => {
+    const lobster = store.defenderSelectedLobster || store.defenderLobster
+    if (!lobster) return null
+    const grade = lobster.grade || lobster.lobsterId || lobster.id
+    const skill = getSkill(grade)
+    return {
+        name: lobster.name || getLobsterGradeName(grade),
+        skillDesc: skill?.description || ''
+    }
 })
 
 const canConfirm = computed(() => selectedIndex.value >= 0)
@@ -197,8 +235,6 @@ const subtitle = computed(() => {
     }
     return subtitles[localPhase.value] || ''
 })
-
-// ============ 工具方法 ============
 
 const stopCountdown = () => {
     if (countdownTimer) {
@@ -242,8 +278,6 @@ const getBetTargetName = (targetFighterId) => {
     if (String(targetFighterId) === String(props.defender?.id)) return props.defender?.name || '被挑战者'
     return '未知'
 }
-
-// ============ 选龙虾逻辑 ============
 
 const selectLobster = (index) => {
     if (!hasConfirmed.value) selectedIndex.value = index
@@ -291,8 +325,6 @@ const handleConfirm = () => {
     }
 }
 
-// ============ 投注逻辑 ============
-
 const selectBetTarget = (target) => {
     if (!hasBet.value) betTarget.value = target
 }
@@ -313,8 +345,6 @@ const handleSkipBet = () => {
     sendBetMessage(0, null)
 }
 
-// ============ Ready 阶段 ============
-
 const startCountdown = () => {
     countdown.value = 5
     countdownTimer = setInterval(() => {
@@ -330,8 +360,6 @@ const startCountdown = () => {
         }
     }, 1000)
 }
-
-// ============ 监听器 ============
 
 watch(
     () => store.arenaPhase,
@@ -364,11 +392,12 @@ onUnmounted(() => {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(10, 10, 26, 0.9);
     display: flex;
     justify-content: center;
     align-items: center;
     z-index: 1000;
+    backdrop-filter: blur(8px);
 }
 
 .modal-container {
@@ -379,6 +408,23 @@ onUnmounted(() => {
     max-width: 400px;
     max-height: 80vh;
     overflow-y: auto;
+    border: 1px solid rgba(78, 205, 196, 0.2);
+    box-shadow:
+        0 0 40px rgba(0, 0, 0, 0.6),
+        0 0 20px rgba(233, 69, 96, 0.1),
+        inset 0 0 30px rgba(78, 205, 196, 0.02);
+    position: relative;
+}
+
+.modal-container::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 15%;
+    right: 15%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #e94560, transparent);
+    border-radius: 50%;
 }
 
 .modal-header {
@@ -389,8 +435,20 @@ onUnmounted(() => {
 .modal-title {
     font-size: 22px;
     font-weight: bold;
-    color: #e94560;
+    color: #fff;
     display: block;
+    text-shadow:
+        0 0 10px rgba(233, 69, 96, 0.6),
+        0 0 20px rgba(233, 69, 96, 0.3);
+}
+
+.title-line {
+    display: block;
+    width: 80px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #e94560, transparent);
+    margin: 8px auto;
+    box-shadow: 0 0 8px rgba(233, 69, 96, 0.5);
 }
 
 .modal-subtitle {
@@ -413,12 +471,16 @@ onUnmounted(() => {
     padding: 12px;
     border-radius: 10px;
     background: #16213e;
+    border: 1px solid rgba(78, 205, 196, 0.1);
     position: relative;
+    transition: all 0.3s ease;
 }
 
 .player-info.active {
     border: 2px solid #e94560;
-    box-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
+    box-shadow:
+        0 0 15px rgba(233, 69, 96, 0.3),
+        inset 0 0 15px rgba(233, 69, 96, 0.05);
 }
 
 .player-label {
@@ -439,11 +501,13 @@ onUnmounted(() => {
     position: absolute;
     top: -8px;
     right: -8px;
-    background: #0f3460;
-    color: #4ecca3;
+    background: linear-gradient(135deg, #4ecdc4, #3ba89f);
+    color: #0a0a1a;
     font-size: 11px;
     padding: 2px 8px;
     border-radius: 10px;
+    font-weight: bold;
+    box-shadow: 0 0 10px rgba(78, 205, 196, 0.4);
 }
 
 .vs-text {
@@ -451,9 +515,24 @@ onUnmounted(() => {
     font-weight: bold;
     color: #e94560;
     margin: 0 10px;
+    text-shadow:
+        0 0 10px rgba(233, 69, 96, 0.6),
+        0 0 20px rgba(233, 69, 96, 0.3);
+    animation: vs-pulse 2s ease-in-out infinite;
 }
 
-/* Selecting phase */
+@keyframes vs-pulse {
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.15);
+        opacity: 0.8;
+    }
+}
+
 .selection-area {
     margin-top: 10px;
 }
@@ -475,7 +554,7 @@ onUnmounted(() => {
 
 .lobster-item {
     background: #16213e;
-    border: 2px solid #0f3460;
+    border: 2px solid rgba(78, 205, 196, 0.15);
     border-radius: 10px;
     padding: 12px 16px;
     text-align: center;
@@ -487,6 +566,7 @@ onUnmounted(() => {
 .lobster-item.selected {
     border-color: #e94560;
     background: rgba(233, 69, 96, 0.15);
+    box-shadow: 0 0 15px rgba(233, 69, 96, 0.3);
 }
 
 .lobster-icon {
@@ -503,7 +583,7 @@ onUnmounted(() => {
 .no-lobster {
     text-align: center;
     padding: 20px;
-    color: #a0a0b0;
+    color: #666;
 }
 
 .spectator-view {
@@ -513,10 +593,9 @@ onUnmounted(() => {
 
 .spectator-text {
     font-size: 14px;
-    color: #a0a0b0;
+    color: #666;
 }
 
-/* Betting phase */
 .betting-area {
     margin-top: 10px;
 }
@@ -538,6 +617,8 @@ onUnmounted(() => {
     padding: 12px;
     border-radius: 10px;
     background: #16213e;
+    border: 1px solid rgba(78, 205, 196, 0.1);
+    transition: all 0.2s;
 }
 
 .bf-label {
@@ -555,18 +636,21 @@ onUnmounted(() => {
 }
 
 .bf-select {
-    background: #0f3460;
+    background: #0d0d2b;
     color: #a0a0b0;
     padding: 6px 12px;
     border-radius: 6px;
     font-size: 13px;
     cursor: pointer;
     transition: all 0.2s;
+    border: 1px solid rgba(78, 205, 196, 0.15);
 }
 
 .bf-select.selected {
-    background: #e94560;
+    background: linear-gradient(135deg, #e94560, #c23152);
     color: #fff;
+    border-color: #e94560;
+    box-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
 }
 
 .bf-select.disabled {
@@ -578,7 +662,8 @@ onUnmounted(() => {
     text-align: center;
     margin: 8px 0;
     padding: 6px;
-    background: rgba(233, 69, 96, 0.15);
+    background: rgba(233, 69, 96, 0.1);
+    border: 1px solid rgba(233, 69, 96, 0.2);
     border-radius: 6px;
 }
 
@@ -600,6 +685,7 @@ onUnmounted(() => {
     padding: 10px;
     border-radius: 8px;
     background: #16213e;
+    border: 1px solid rgba(78, 205, 196, 0.1);
 }
 
 .preview-label {
@@ -611,23 +697,82 @@ onUnmounted(() => {
 .preview-lobster {
     font-size: 14px;
     font-weight: bold;
-    color: #4ecca3;
+    color: #4ecdc4;
     display: block;
     margin-top: 4px;
+    text-shadow: 0 0 8px rgba(78, 205, 196, 0.3);
 }
 
-/* Ready phase */
 .ready-area {
     margin-top: 10px;
     text-align: center;
 }
 
+.fighters-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: #16213e;
+    border-radius: 8px;
+    border: 1px solid rgba(78, 205, 196, 0.1);
+}
+
+.fighter-card {
+    flex: 1;
+    padding: 10px;
+    border-radius: 6px;
+    background: #1a1a2e;
+}
+
+.fighter-card.challenger {
+    border: 1px solid rgba(233, 69, 96, 0.4);
+}
+
+.fighter-card.defender {
+    border: 1px solid rgba(78, 205, 196, 0.4);
+}
+
+.fighter-label {
+    font-size: 11px;
+    color: #666;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.fighter-name {
+    font-size: 14px;
+    font-weight: bold;
+    color: #fff;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.fighter-card.challenger .fighter-name {
+    color: #e94560;
+    text-shadow: 0 0 8px rgba(233, 69, 96, 0.3);
+}
+
+.fighter-card.defender .fighter-name {
+    color: #4ecdc4;
+    text-shadow: 0 0 8px rgba(78, 205, 196, 0.3);
+}
+
+.fighter-skill {
+    font-size: 11px;
+    color: #666;
+    display: block;
+}
+
 .ready-title {
     font-size: 16px;
     font-weight: bold;
-    color: #4ecca3;
+    color: #4ecdc4;
     display: block;
     margin-bottom: 16px;
+    text-shadow: 0 0 8px rgba(78, 205, 196, 0.3);
 }
 
 .bet-results {
@@ -641,6 +786,7 @@ onUnmounted(() => {
     margin-bottom: 6px;
     background: #16213e;
     border-radius: 6px;
+    border: 1px solid rgba(78, 205, 196, 0.08);
 }
 
 .bet-player-name {
@@ -659,9 +805,24 @@ onUnmounted(() => {
     color: #e94560;
     display: block;
     margin-top: 10px;
+    text-shadow:
+        0 0 10px rgba(233, 69, 96, 0.6),
+        0 0 20px rgba(233, 69, 96, 0.3);
+    animation: countdown-pulse 1s ease-in-out infinite;
 }
 
-/* Actions */
+@keyframes countdown-pulse {
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.05);
+        opacity: 0.8;
+    }
+}
+
 .modal-actions {
     margin-top: 16px;
     display: flex;
@@ -677,6 +838,7 @@ onUnmounted(() => {
     font-weight: bold;
     border: none;
     cursor: pointer;
+    transition: all 0.2s;
 }
 
 .action-btn[disabled] {
@@ -685,12 +847,19 @@ onUnmounted(() => {
 }
 
 .confirm-btn {
-    background: #e94560;
+    background: linear-gradient(135deg, #e94560, #c23152);
     color: #fff;
+    box-shadow: 0 0 15px rgba(233, 69, 96, 0.3);
+}
+
+.confirm-btn:active {
+    box-shadow: 0 0 25px rgba(233, 69, 96, 0.5);
+    transform: scale(0.98);
 }
 
 .skip-btn {
-    background: #0f3460;
+    background: #0d0d2b;
     color: #a0a0b0;
+    border: 1px solid rgba(78, 205, 196, 0.15);
 }
 </style>

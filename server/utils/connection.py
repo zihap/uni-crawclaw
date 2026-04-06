@@ -6,6 +6,7 @@ WebSocket连接管理器
 import time
 from typing import Dict
 from fastapi import WebSocket
+from utils.logger import log_info, log_debug
 
 
 class ConnectionManager:
@@ -19,13 +20,13 @@ class ConnectionManager:
         await websocket.accept()
         self.lobby_connections[user_id] = websocket
         self.heartbeat_timestamps[id(websocket)] = time.time()
-        print(f"Lobby client connected: {user_id}")
+        log_info(f"Lobby client connected: {user_id}")
 
     def lobby_disconnect(self, user_id: str, fingerprint):
         self.lobby_connections.pop(user_id, None)
         self.heartbeat_timestamps.pop(fingerprint, None)
         self.user_rooms.pop(user_id, None)
-        print(f"Lobby client disconnected: {user_id}")
+        log_info(f"Lobby client disconnected: {user_id}")
 
     def set_user_room(self, user_id: str, room_id: str):
         self.user_rooms[user_id] = room_id
@@ -61,7 +62,7 @@ class ConnectionManager:
             self.active_connections[room_id] = {}
         self.active_connections[room_id][str(player_id)] = websocket
         self.heartbeat_timestamps[id(websocket)] = time.time()
-        print(f"Client {player_id} connected to room {room_id}")
+        log_info(f"Client {player_id} connected to room {room_id}")
 
     def disconnect(self, room_id: str, player_id: int, fingerprint):
         if room_id in self.active_connections:
@@ -74,7 +75,7 @@ class ConnectionManager:
             if self.user_rooms[uid] == room_id:
                 self.user_rooms.pop(uid, None)
 
-        print(f"Client {player_id} disconnected from room {room_id}")
+        log_info(f"Client {player_id} disconnected from room {room_id}")
 
     async def send_to_room(self, room_id: str, event: str, data: dict):
         if room_id in self.active_connections:
@@ -86,7 +87,7 @@ class ConnectionManager:
                     disconnected.append(player_id)
             for player_id in disconnected:
                 self.active_connections[room_id].pop(player_id, None)
-                print(f"Removed disconnected player {player_id} from room {room_id}")
+                log_debug(f"Removed disconnected player {player_id} from room {room_id}")
 
     async def send_to_player(self, room_id: str, player_id: int, event: str, data: dict):
         if room_id in self.active_connections:
