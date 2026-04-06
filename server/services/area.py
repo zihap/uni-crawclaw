@@ -237,7 +237,7 @@ async def _resolve_tribute_step(game_state: dict, manager, room_id):
             challenger_id = slots[challenge_idx]
             defender_id = slots[defender_idx]
 
-            if challenger_id is not None and defender_id is not None and challenge_slots_battle_status[defender_idx] != CHALLENGE_SLOT_DONE:
+            if challenger_id is not None and defender_id is not None and challenge_slots_battle_status[defender_idx] != CHALLENGE_SLOT_DONE and challenger_id != defender_id:
                 game_state['battleQueue'].append({
                     'challengerId': challenger_id,
                     'defenderId': defender_id,
@@ -934,9 +934,15 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                 player['de'] += 1
                 if lobster.get('title'):
                     player['de'] += 1
+                bonus_choice = action_payload.get('bonusTributeChoice')
+                if bonus_choice == 'de':
+                    player['de'] += 1
             else:
                 player['wang'] += 1
                 if lobster.get('title'):
+                    player['wang'] += 1
+                bonus_choice = action_payload.get('bonusTributeChoice')
+                if bonus_choice == 'wang':
                     player['wang'] += 1
 
             if player['id'] not in tavern['occupants']:
@@ -970,6 +976,70 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                 await send_error(websocket, '虾笼不足')
                 return 'error'
 
+            lobster_reqs = requirements.get('lobsters', {})
+            selected_lobster_ids = action_payload.get('selectedLobsterIds', [])
+            if lobster_reqs:
+                if not selected_lobster_ids or len(selected_lobster_ids) == 0:
+                    await send_error(websocket, '请选择要上供的龙虾')
+                    return 'error'
+
+                grade_values = {'normal': 0, 'grade3': 1, 'grade2': 2, 'grade1': 3, 'royal': 4}
+                player_lobsters = player.get('lobsters', [])
+                player_title_cards = player.get('titleCards', [])
+
+                selected_items = []
+                for lid in selected_lobster_ids:
+                    lobster = next((l for l in player_lobsters if l.get('id') == lid), None)
+                    if lobster:
+                        selected_items.append(('lobster', lobster))
+                        continue
+                    tc = next((t for t in player_title_cards if t.get('id') == lid), None)
+                    if tc:
+                        selected_items.append(('titleCard', tc))
+                        continue
+                    await send_error(websocket, '选择的龙虾不存在')
+                    return 'error'
+
+                def get_lobster_value(item):
+                    kind, obj = item
+                    if kind == 'titleCard':
+                        return 4
+                    if obj.get('title'):
+                        return 4
+                    return grade_values.get(obj.get('grade', 'normal'), 0)
+
+                req_by_grade = []
+                for grade_key, count in lobster_reqs.items():
+                    req_val = grade_values.get(grade_key, 0)
+                    req_by_grade.append((req_val, count))
+                req_by_grade.sort(key=lambda x: x[0], reverse=True)
+
+                used_indices = set()
+                for req_val, count in req_by_grade:
+                    matched = 0
+                    candidates = []
+                    for idx, item in enumerate(selected_items):
+                        if idx not in used_indices and get_lobster_value(item) >= req_val:
+                            candidates.append((get_lobster_value(item), idx))
+                    candidates.sort(key=lambda x: x[0])
+                    for _, idx in candidates[:count]:
+                        used_indices.add(idx)
+                        matched += 1
+                    if matched < count:
+                        await send_error(websocket, '选择的龙虾不满足上供要求')
+                        return 'error'
+
+                for lid in selected_lobster_ids:
+                    for i, lobster in enumerate(player_lobsters):
+                        if lobster.get('id') == lid:
+                            del player_lobsters[i]
+                            break
+                    else:
+                        for i, tc in enumerate(player_title_cards):
+                            if tc.get('id') == lid:
+                                del player_title_cards[i]
+                                break
+
             player['coins'] = player.get('coins', 0) - requirements.get('coins', 0)
             player['seaweed'] = player.get('seaweed', 0) - requirements.get('seaweed', 0)
             player['cages'] = player.get('cages', 0) - requirements.get('cages', 0)
@@ -979,6 +1049,12 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             reward = card.get('reward', {})
             player['de'] = player.get('de', 0) + reward.get('de', 0)
             player['wang'] = player.get('wang', 0) + reward.get('wang', 0)
+
+            bonus_choice = action_payload.get('bonusTributeChoice')
+            if bonus_choice == 'de':
+                player['de'] = player.get('de', 0) + 1
+            elif bonus_choice == 'wang':
+                player['wang'] = player.get('wang', 0) + 1
 
             effect_type = card.get('effectType')
             if effect_type == 'instant_upgrade_all':
@@ -1038,5 +1114,6 @@ def _serialize_player(player: dict) -> dict:
         'de': player['de'],
         'wang': player['wang'],
         'lobsters': player['lobsters'],
+        'titleCards': player['titleCards'],
         'tempBubbles': player.get('tempBubbles', 0),
     }

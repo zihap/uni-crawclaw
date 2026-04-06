@@ -643,7 +643,7 @@
                     </view>
                 </view>
 
-                <view class="modal-body" v-if="!tributeState.isNakedMode">
+                <view class="modal-body" v-if="!tributeState.isNakedMode && !tributeState.showLobsterPicker">
                     <view class="taverns-list">
                         <view v-for="tavern in pendingSettlement?.taverns" :key="tavern.id" class="tavern-box">
                             <view class="tavern-header">
@@ -680,7 +680,38 @@
                     </view>
                 </view>
 
-                <view class="modal-body naked-mode-panel" v-else>
+                <view
+                    v-if="!tributeState.isNakedMode && hasBonusTribute && !tributeState.showLobsterPicker"
+                    class="modal-body bonus-tribute-section"
+                >
+                    <view class="section-label">🌟 黄金鳌效果：选择额外奖励</view>
+                    <view class="reward-options">
+                        <view
+                            class="custom-radio-wrap"
+                            :class="{ active: tributeState.bonusTributeChoice === 'de' }"
+                            @click="tributeState.bonusTributeChoice = 'de'"
+                        >
+                            <view
+                                class="custom-radio"
+                                :class="{ checked: tributeState.bonusTributeChoice === 'de' }"
+                            ></view>
+                            额外获得 1 德
+                        </view>
+                        <view
+                            class="custom-radio-wrap"
+                            :class="{ active: tributeState.bonusTributeChoice === 'wang' }"
+                            @click="tributeState.bonusTributeChoice = 'wang'"
+                        >
+                            <view
+                                class="custom-radio"
+                                :class="{ checked: tributeState.bonusTributeChoice === 'wang' }"
+                            ></view>
+                            额外获得 1 望
+                        </view>
+                    </view>
+                </view>
+
+                <view class="modal-body naked-mode-panel" v-else-if="tributeState.isNakedMode">
                     <view class="naked-intro">
                         <text class="warn-text">🔥 裸交模式 🔥</text>
                         <text class="sub-text">
@@ -754,10 +785,68 @@
                     </view>
                 </view>
 
+                <view v-if="tributeState.showLobsterPicker" class="modal-body lobster-picker-panel">
+                    <view class="section-label">🦞 选择要上供的龙虾</view>
+                    <view class="lobster-req-hint">
+                        <text v-for="(req, grade) in getPendingCardLobsterReqs()" :key="grade" class="req-item">
+                            需要 {{ req }} 只 {{ getLobsterGradeName(grade) }} 及以上
+                        </text>
+                    </view>
+                    <view class="lobster-picker-grid">
+                        <view
+                            v-for="lobster in pendingSettlement?.player?.lobsters"
+                            :key="lobster.id"
+                            class="lobster-pick-card"
+                            :class="{ selected: tributeState.selectedLobsterIds.includes(lobster.id) }"
+                            @click="toggleLobsterSelect(lobster.id)"
+                        >
+                            <view
+                                class="lpd-check"
+                                :class="{ checked: tributeState.selectedLobsterIds.includes(lobster.id) }"
+                            >
+                                <text v-if="tributeState.selectedLobsterIds.includes(lobster.id)">✓</text>
+                            </view>
+                            <text class="lpd-icon">🦞</text>
+                            <text class="lpd-grade">{{ getLobsterGradeName(lobster.grade) }}</text>
+                            <text class="lpd-title" v-if="lobster.title">{{ lobster.title.name }}</text>
+                        </view>
+                        <view
+                            v-for="tc in pendingSettlement?.player?.titleCards"
+                            :key="tc.id"
+                            class="lobster-pick-card title-card-pick"
+                            :class="{ selected: tributeState.selectedLobsterIds.includes(tc.id) }"
+                            @click="toggleLobsterSelect(tc.id)"
+                        >
+                            <view
+                                class="lpd-check"
+                                :class="{ checked: tributeState.selectedLobsterIds.includes(tc.id) }"
+                            >
+                                <text v-if="tributeState.selectedLobsterIds.includes(tc.id)">✓</text>
+                            </view>
+                            <text class="lpd-icon">🏆</text>
+                            <text class="lpd-grade">{{ tc.name }}</text>
+                            <text class="lpd-title" v-if="tc.skill?.description">{{ tc.skill.description }}</text>
+                        </view>
+                    </view>
+                    <view class="lobster-picker-count">
+                        已选 {{ tributeState.selectedLobsterIds.length }} / {{ getTotalLobsterReqCount() }} 只
+                    </view>
+                </view>
+
                 <view class="modal-footer">
-                    <view class="modal-actions" v-if="!tributeState.isNakedMode">
+                    <view class="modal-actions" v-if="!tributeState.isNakedMode && !tributeState.showLobsterPicker">
                         <button class="btn btn-ghost" @click="tributeState.isNakedMode = true">强行裸交</button>
                         <button class="btn btn-secondary" @click="skipTributeAction">放弃上供</button>
+                    </view>
+                    <view class="modal-actions" v-else-if="tributeState.showLobsterPicker">
+                        <button class="btn btn-ghost" @click="cancelLobsterSelection">取消</button>
+                        <button
+                            class="btn btn-warning"
+                            :disabled="tributeState.selectedLobsterIds.length < getTotalLobsterReqCount()"
+                            @click="confirmLobsterSelection"
+                        >
+                            确认选择
+                        </button>
                     </view>
                     <view class="modal-actions" v-else>
                         <button class="btn btn-ghost" @click="tributeState.isNakedMode = false">返回卡牌列表</button>
@@ -1256,7 +1345,11 @@ const tributeState = reactive({
     isNakedMode: false,
     nakedLobsterIndex: -1,
     nakedTavernId: '',
-    nakedRewardType: 'de'
+    nakedRewardType: 'de',
+    bonusTributeChoice: '',
+    showLobsterPicker: false,
+    pendingCardSubmit: null,
+    selectedLobsterIds: []
 })
 
 watch(
@@ -1267,6 +1360,10 @@ watch(
             tributeState.nakedLobsterIndex = -1
             tributeState.nakedTavernId = ''
             tributeState.nakedRewardType = 'de'
+            tributeState.bonusTributeChoice = ''
+            tributeState.showLobsterPicker = false
+            tributeState.pendingCardSubmit = null
+            tributeState.selectedLobsterIds = []
         }
     },
     { immediate: true }
@@ -1299,6 +1396,27 @@ const checkTributeReq = (req, player) => {
     if ((player.coins ?? 0) < (req.coins ?? 0)) return false
     if ((player.seaweed ?? 0) < (req.seaweed ?? 0)) return false
     if ((player.cages ?? 0) < (req.cages ?? 0)) return false
+
+    if (req.lobsters) {
+        const gradeValues = { normal: 0, grade3: 1, grade2: 2, grade1: 3, royal: 4 }
+        let tempLobsters = [...(player.lobsters || []), ...(player.titleCards || [])]
+        for (const [gradeKey, count] of Object.entries(req.lobsters)) {
+            let foundCount = 0
+            for (let i = 0; i < count; i++) {
+                const reqGradeVal = gradeValues[gradeKey] ?? 0
+                const matchIdx = tempLobsters.findIndex((l) => {
+                    if (l.name && !l.grade) return 4 >= reqGradeVal
+                    const lv = l.title ? 4 : (gradeValues[l.grade] ?? 0)
+                    return lv >= reqGradeVal
+                })
+                if (matchIdx !== -1) {
+                    foundCount++
+                    tempLobsters.splice(matchIdx, 1)
+                }
+            }
+            if (foundCount < count) return false
+        }
+    }
     return true
 }
 
@@ -1308,23 +1426,91 @@ const getValidNakedLobsters = (player) => {
     return player.lobsters.filter((l) => (gradeValues[l.grade] ?? 0) >= 1)
 }
 
+const hasBonusTribute = computed(() => {
+    const player = pendingSettlement.value?.player
+    if (!player || !player.titleCards) return false
+    return player.titleCards.some((tc) => tc.skill?.bonusTribute === true)
+})
+
 const confirmTributeCard = (tavernId, cardId) => {
-    onlineGameStore.sendSettlementAction('submitTribute', {
+    const tavern = pendingSettlement.value?.taverns?.find((t) => t.id === tavernId)
+    if (!tavern) return
+    const card = tavern.cards?.find((c) => c.id === cardId)
+    if (!card) return
+    if (card.requirements?.lobsters && Object.keys(card.requirements.lobsters).length > 0) {
+        tributeState.showLobsterPicker = true
+        tributeState.pendingCardSubmit = { tavernId, cardId }
+        tributeState.selectedLobsterIds = []
+        return
+    }
+    submitTributeCard(tavernId, cardId)
+}
+
+const submitTributeCard = (tavernId, cardId) => {
+    const payload = {
         isNaked: false,
         tavernId,
         cardId
-    })
-    onlineGameStore.clearPendingSettlement()
+    }
+    if (tributeState.selectedLobsterIds.length > 0) {
+        payload.selectedLobsterIds = tributeState.selectedLobsterIds
+    }
+    if (hasBonusTribute.value && tributeState.bonusTributeChoice) {
+        payload.bonusTributeChoice = tributeState.bonusTributeChoice
+    }
+    onlineGameStore.sendSettlementAction('submitTribute', payload)
+}
+
+const confirmLobsterSelection = () => {
+    if (!tributeState.pendingCardSubmit) return
+    const { tavernId, cardId } = tributeState.pendingCardSubmit
+    submitTributeCard(tavernId, cardId)
+    tributeState.showLobsterPicker = false
+    tributeState.pendingCardSubmit = null
+    tributeState.selectedLobsterIds = []
+}
+
+const cancelLobsterSelection = () => {
+    tributeState.showLobsterPicker = false
+    tributeState.pendingCardSubmit = null
+    tributeState.selectedLobsterIds = []
+}
+
+const toggleLobsterSelect = (lobsterId) => {
+    const idx = tributeState.selectedLobsterIds.indexOf(lobsterId)
+    if (idx > -1) {
+        tributeState.selectedLobsterIds.splice(idx, 1)
+    } else {
+        tributeState.selectedLobsterIds.push(lobsterId)
+    }
+}
+
+const getPendingCardLobsterReqs = () => {
+    if (!tributeState.pendingCardSubmit) return {}
+    const { tavernId, cardId } = tributeState.pendingCardSubmit
+    const tavern = pendingSettlement.value?.taverns?.find((t) => t.id === tavernId)
+    if (!tavern) return {}
+    const card = tavern.cards?.find((c) => c.id === cardId)
+    return card?.requirements?.lobsters || {}
+}
+
+const getTotalLobsterReqCount = () => {
+    const reqs = getPendingCardLobsterReqs()
+    return Object.values(reqs).reduce((sum, count) => sum + count, 0)
 }
 
 const confirmNakedTribute = () => {
     if (tributeState.nakedLobsterIndex === -1 || tributeState.nakedTavernId === '') return
-    onlineGameStore.sendSettlementAction('submitTribute', {
+    const payload = {
         isNaked: true,
         tavernId: tributeState.nakedTavernId,
         nakedLobsterIndex: tributeState.nakedLobsterIndex,
         nakedRewardType: tributeState.nakedRewardType
-    })
+    }
+    if (hasBonusTribute.value && tributeState.bonusTributeChoice) {
+        payload.bonusTributeChoice = tributeState.bonusTributeChoice
+    }
+    onlineGameStore.sendSettlementAction('submitTribute', payload)
     onlineGameStore.clearPendingSettlement()
 }
 
@@ -2437,6 +2623,22 @@ onUnmounted(() => {
     box-shadow: 0 0 8px rgba(78, 205, 196, 0.4);
 }
 
+.tribute-modal .bonus-tribute-section {
+    padding: 12px 20px;
+    background: rgba(255, 215, 0, 0.05);
+    border-top: 1px solid rgba(255, 215, 0, 0.15);
+    border-bottom: 1px solid rgba(255, 215, 0, 0.15);
+}
+
+.tribute-modal .bonus-tribute-section .section-label {
+    font-size: 14px;
+    color: #ffd700;
+    font-weight: bold;
+    margin-bottom: 10px;
+    text-align: center;
+    display: block;
+}
+
 .tribute-modal .modal-footer {
     padding: 16px 20px;
     border-top: 1px solid rgba(78, 205, 196, 0.15);
@@ -2446,6 +2648,116 @@ onUnmounted(() => {
     display: flex;
     gap: 12px;
     justify-content: space-between;
+}
+
+.tribute-modal .error-hint {
+    color: #e94560;
+    font-size: 12px;
+    text-align: center;
+    padding: 8px;
+}
+
+.tribute-modal .lobster-picker-panel {
+    padding: 12px 20px;
+}
+
+.tribute-modal .lobster-req-hint {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.tribute-modal .lobster-req-hint .req-item {
+    background: rgba(255, 107, 107, 0.15);
+    color: #ff6b6b;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    display: inline-block;
+}
+
+.tribute-modal .lobster-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.tribute-modal .lobster-pick-card {
+    background: rgba(78, 205, 196, 0.05);
+    border: 2px solid rgba(78, 205, 196, 0.15);
+    border-radius: 10px;
+    padding: 10px 8px;
+    text-align: center;
+    cursor: pointer;
+    min-width: 0;
+    position: relative;
+    transition: all 0.2s;
+}
+
+.tribute-modal .lobster-pick-card.selected {
+    border-color: #4ecdc4;
+    background: rgba(78, 205, 196, 0.15);
+    box-shadow: 0 0 12px rgba(78, 205, 196, 0.3);
+}
+
+.tribute-modal .lobster-pick-card.title-card-pick {
+    border-color: rgba(255, 215, 0, 0.3);
+    background: rgba(255, 215, 0, 0.05);
+}
+
+.tribute-modal .lobster-pick-card.title-card-pick.selected {
+    border-color: #ffd700;
+    background: rgba(255, 215, 0, 0.15);
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.3);
+}
+
+.tribute-modal .lpd-check {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(100, 100, 100, 0.8);
+    color: #fff;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tribute-modal .lpd-check.checked {
+    background: #4ecdc4;
+    box-shadow: 0 0 8px rgba(78, 205, 196, 0.5);
+}
+
+.tribute-modal .lpd-icon {
+    font-size: 32px;
+    display: block;
+}
+
+.tribute-modal .lpd-grade {
+    color: #fff;
+    font-size: 14px;
+    display: block;
+    margin-top: 2px;
+}
+
+.tribute-modal .lpd-title {
+    color: #ffd700;
+    font-size: 12px;
+    display: block;
+    margin-top: 2px;
+}
+
+.tribute-modal .lobster-picker-count {
+    text-align: center;
+    color: #a0a0b0;
+    font-size: 13px;
+    margin-top: 10px;
 }
 
 .tribute-modal .btn-warning {

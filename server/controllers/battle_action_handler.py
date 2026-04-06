@@ -147,6 +147,7 @@ async def handle_battle_end(websocket, room_id, player_id, rooms, manager, paylo
         award_choice = battle_data.get('winnerAwardChoice')
         upgrade_from = None
         upgrade_to = None
+        winner_lobster_id = None
         if winner_id is not None and award_choice:
             winner = get_player(game_state, winner_id)
             if winner:
@@ -158,8 +159,23 @@ async def handle_battle_end(websocket, room_id, player_id, rooms, manager, paylo
                     if new_grade and new_grade in GRADE_UPGRADE:
                         upgrade_from = GRADE_UPGRADE[new_grade]
                         upgrade_to = new_grade
-                        deltas[upgrade_from] = -1
-                        deltas[upgrade_to] = 1
+
+                        for key in list(arena_betting_state.keys()):
+                            bs = arena_betting_state[key]
+                            if not key.startswith(f"{room_id}_"):
+                                continue
+                            if str(challenge_slot) in key:
+                                winner_lobster = None
+                                if winner_id == bs.get('challengerId'):
+                                    winner_lobster = bs.get('challengerLobster')
+                                elif winner_id == bs.get('defenderId'):
+                                    winner_lobster = bs.get('defenderLobster')
+                                if winner_lobster and winner_lobster.get('id'):
+                                    winner_lobster_id = winner_lobster['id']
+                                    lobster = next((l for l in winner.get('lobsters', []) if l.get('id') == winner_lobster_id), None)
+                                    if lobster:
+                                        lobster['grade'] = upgrade_to
+                                break
 
                 for pi, field in [(0, 'p1CrossedMidline'), (1, 'p2CrossedMidline')]:
                     if battle_data.get(field):
@@ -178,6 +194,7 @@ async def handle_battle_end(websocket, room_id, player_id, rooms, manager, paylo
                 'awardChoice': award_choice,
                 'upgradeFrom': upgrade_from,
                 'upgradeTo': upgrade_to,
+                'winnerLobsterId': winner_lobster_id,
                 'battleData': battle_data,
                 'gameState': game_state
             }))

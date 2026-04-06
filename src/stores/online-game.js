@@ -414,11 +414,17 @@ export const useOnlineGameStore = defineStore('online-game', () => {
     }
 
     function handleBattleEnded(data) {
-        const { winnerId, upgradeFrom, upgradeTo } = data
+        const { winnerId, upgradeFrom, upgradeTo, winnerLobsterId } = data
         if (winnerId !== null && upgradeFrom && upgradeTo) {
             const winner = playerStore.getPlayerById(winnerId)
             if (winner && winner.lobsters) {
-                const lobster = winner.lobsters.find((l) => l.grade === upgradeFrom)
+                let lobster = null
+                if (winnerLobsterId) {
+                    lobster = winner.lobsters.find((l) => l.id === winnerLobsterId)
+                }
+                if (!lobster) {
+                    lobster = winner.lobsters.find((l) => l.grade === upgradeFrom)
+                }
                 if (lobster) {
                     lobster.grade = upgradeTo
                 }

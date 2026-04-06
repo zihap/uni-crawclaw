@@ -340,20 +340,29 @@ const canUseSeaweed = computed(() => {
     if (battleStore.canReroll) return false
     if (battleData.value?.rollDiceTimestamp) return false
     const player = battleData.value?.players[battleData.value?.currentPlayer]
-    return player?.lobsterId !== 'grade3'
+    if (player?.lobsterId === 'grade3') return false
+    const opponentIndex = 1 - battleData.value?.currentPlayer
+    const opponent = battleData.value?.players[opponentIndex]
+    if (opponent && getSkill(opponent.lobsterId)?.blockSeaweed) return false
+    return true
 })
 
 const seaweedBonus = computed(() => {
     if (!isSeaweedChecked.value) return 0
     const player = battleData.value?.players[battleData.value?.currentPlayer]
+    let base
     switch (player?.lobsterId) {
         case 'grade2':
-            return 1
+            base = 1
+            break
         case 'grade1':
-            return 2
+            base = 2
+            break
         default:
-            return 3
+            base = 3
     }
+    const bonus = getSkill(player?.lobsterId)?.seaweedDiceBonus || 0
+    return base + bonus
 })
 
 // ============ 计算属性 ============

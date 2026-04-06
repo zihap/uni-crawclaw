@@ -3,31 +3,51 @@
         {
             "id": "title_1",
             "name": "红头紫",
-            "skill": null,
-            "description": "骰子改为12面骰"
+            "skill": {
+                "description": "抛掷12面骰",
+                "diceSides": 12
+            },
+            "grade": "royal",
+            "description": ""
         },
         {
             "id": "title_2",
             "name": "铁甲将军",
-            "skill": null,
-            "description": "对方不能用草"
+            "skill": {
+                "description": "对方不能用草",
+                "diceSides": 10,
+                "blockSeaweed": true
+            },
+            "grade": "royal",
+            "description": ""
         },
         {
             "id": "title_3",
             "name": "黄金鳌",
-            "skill": null,
-            "description": "上贡时可以多加1德或者多加1望"
+            "skill": {
+                "description": "上贡时可以多加1德或者多加1望",
+                "diceSides": 10,
+                "bonusTribute": true
+            },
+            "grade": "royal",
+            "description": ""
         },
         {
             "id": "title_4",
             "name": "闪电钳",
-            "skill": null,
-            "description": "吃草可以点数多加1点"
+            "skill": {
+                "description": "吃草可以点数多加1点",
+                "diceSides": 10,
+                "seaweedDiceBonus": 1
+            },
+            "grade": "royal",
+            "description": ""
         },
         {
-            "id": "doubleRoll",
+            "id": "title_5",
             "name": "勇者龙虾",
             "description": "非常骁勇善战",
+            "grade": "royal",
             "skill": {
                 "description": "可抛两次骰子，选择较优结果，使用10面骰",
                 "canReroll": true,
@@ -35,9 +55,10 @@
             }
         },
         {
-            "id": "readyToMove",
+            "id": "title_6",
             "name": "急先锋龙虾",
             "description": "",
+            "grade": "royal",
             "skill": {
                 "description": "出场即可移动",
                 "startStarted": true,
@@ -45,9 +66,10 @@
             }
         },
         {
-            "id": "counterStrike",
+            "id": "title_7",
             "name": "铁壁龙虾",
             "description": "",
+            "grade": "royal",
             "skill": {
                 "description": "被覆盖时反败为胜",
                 "onCovered": true,
@@ -55,9 +77,10 @@
             }
         },
         {
-            "id": "longStrike",
+            "id": "title_8",
             "name": "长鳌虾",
             "description": "",
+            "grade": "royal",
             "skill": {
                 "description": "紧贴对方一格即可获胜",
                 "nearWinOnAdjacent": true,
@@ -65,9 +88,10 @@
             }
         },
         {
-            "id": "steady",
+            "id": "title_9",
             "name": "稳健龙虾",
             "description": "天生沉稳，谋定而后动",
+            "grade": "royal",
             "skill": {
                 "description": "每次移动额外+1步",
                 "bonusStep": 1,
@@ -75,9 +99,10 @@
             }
         },
         {
-            "id": "lucky",
+            "id": "title_10",
             "name": "幸运龙虾",
             "description": "",
+            "grade": "royal",
             "skill": {
                 "description": "掷出1、2、3点视为6点",
                 "modifyRule": {

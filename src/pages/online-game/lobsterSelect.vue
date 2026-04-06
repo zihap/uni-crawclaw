@@ -29,11 +29,12 @@
                         <view
                             v-for="(lobster, index) in myLobsters"
                             :key="lobster.id"
-                            :class="['lobster-item', { selected: selectedIndex === index }]"
+                            :class="['lobster-item', { selected: selectedIndex === index, used: lobster.used }]"
                             @click="selectLobster(index)"
                         >
                             <view class="lobster-icon">🦞</view>
                             <text class="lobster-name">{{ lobster.name || getLobsterGradeName(lobster.grade) }}</text>
+                            <view v-if="lobster.used" class="used-badge">已参战</view>
                         </view>
                         <view v-if="myLobsters.length === 0" class="no-lobster">
                             <text>没有可用的龙虾</text>
@@ -183,15 +184,30 @@ const myLobsters = computed(() => {
     if (!isFighter.value) return []
     const player = isChallenger.value ? props.challenger : props.defender
     const usedIds = new Set(store.getUsedLobsterIds(player.id))
-    const validLobsters =
+    const allLobsters =
         player?.lobsters?.filter((l) => {
             if (!l?.id || l.id === 'normal') return false
-            if (usedIds.has(l.id)) return false
             if (l.grade === 'normal' || !l.grade) return false
             return true
         }) || []
-    const titleCards = player?.titleCards?.filter((t) => t?.id && !usedIds.has(t.id)) || []
-    return [...validLobsters, ...titleCards]
+    const allTitleCards = player?.titleCards?.filter((t) => t?.id) || []
+    const validLobsters = []
+    const usedLobsters = []
+    for (const l of allLobsters) {
+        if (usedIds.has(l.id)) {
+            usedLobsters.push({ ...l, used: true })
+        } else {
+            validLobsters.push({ ...l, used: false })
+        }
+    }
+    for (const t of allTitleCards) {
+        if (usedIds.has(t.id)) {
+            usedLobsters.push({ ...t, used: true })
+        } else {
+            validLobsters.push({ ...t, used: false })
+        }
+    }
+    return [...validLobsters, ...usedLobsters]
 })
 
 const challengerLobsterInfo = computed(() => {
@@ -280,6 +296,7 @@ const getBetTargetName = (targetFighterId) => {
 }
 
 const selectLobster = (index) => {
+    if (myLobsters.value[index]?.used) return
     if (!hasConfirmed.value) selectedIndex.value = index
 }
 
@@ -567,6 +584,26 @@ onUnmounted(() => {
     border-color: #e94560;
     background: rgba(233, 69, 96, 0.15);
     box-shadow: 0 0 15px rgba(233, 69, 96, 0.3);
+}
+
+.lobster-item.used {
+    opacity: 0.4;
+    border-color: rgba(255, 255, 255, 0.1);
+    cursor: not-allowed;
+    position: relative;
+}
+
+.used-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: rgba(100, 100, 100, 0.9);
+    color: #ccc;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-weight: bold;
+    white-space: nowrap;
 }
 
 .lobster-icon {

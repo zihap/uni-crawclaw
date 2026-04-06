@@ -1042,10 +1042,70 @@
                     </view>
                 </view>
 
+                <view v-if="tributeState.showLobsterPicker" class="modal-body lobster-picker-panel">
+                    <view class="section-label">🦞 选择要上供的龙虾</view>
+                    <view class="lobster-req-hint">
+                        <text v-for="(req, grade) in getPendingCardLobsterReqs()" :key="grade" class="req-item">
+                            需要 {{ req }} 只
+                            {{ getLobsterGradeName(LOBSTER_GRADES[grade.toUpperCase()] || LOBSTER_GRADES.NORMAL) }}
+                            及以上
+                        </text>
+                    </view>
+                    <view class="lobster-picker-grid">
+                        <view
+                            v-for="lobster in currentPendingTribute?.player?.lobsters"
+                            :key="lobster.id"
+                            class="lobster-pick-card"
+                            :class="{ selected: tributeState.selectedLobsterIds.includes(lobster.id) }"
+                            @click="toggleLobsterSelect(lobster.id)"
+                        >
+                            <view
+                                class="lpd-check"
+                                :class="{ checked: tributeState.selectedLobsterIds.includes(lobster.id) }"
+                            >
+                                <text v-if="tributeState.selectedLobsterIds.includes(lobster.id)">✓</text>
+                            </view>
+                            <text class="lpd-icon">🦞</text>
+                            <text class="lpd-grade">{{ getLobsterGradeName(lobster.grade) }}</text>
+                            <text class="lpd-title" v-if="lobster.title">{{ lobster.title.name }}</text>
+                        </view>
+                        <view
+                            v-for="tc in currentPendingTribute?.player?.titleCards"
+                            :key="tc.id"
+                            class="lobster-pick-card title-card-pick"
+                            :class="{ selected: tributeState.selectedLobsterIds.includes(tc.id) }"
+                            @click="toggleLobsterSelect(tc.id)"
+                        >
+                            <view
+                                class="lpd-check"
+                                :class="{ checked: tributeState.selectedLobsterIds.includes(tc.id) }"
+                            >
+                                <text v-if="tributeState.selectedLobsterIds.includes(tc.id)">✓</text>
+                            </view>
+                            <text class="lpd-icon">🏆</text>
+                            <text class="lpd-grade">{{ tc.name }}</text>
+                            <text class="lpd-title" v-if="tc.skill?.description">{{ tc.skill.description }}</text>
+                        </view>
+                    </view>
+                    <view class="lobster-picker-count">
+                        已选 {{ tributeState.selectedLobsterIds.length }} / {{ getTotalLobsterReqCount() }} 只
+                    </view>
+                </view>
+
                 <view class="modal-footer">
-                    <view class="modal-actions" v-if="!tributeState.isNakedMode">
+                    <view class="modal-actions" v-if="!tributeState.isNakedMode && !tributeState.showLobsterPicker">
                         <button class="btn btn-ghost" @click="tributeState.isNakedMode = true">强行裸交</button>
                         <button class="btn btn-secondary" @click="skipTributeAction">放弃上供</button>
+                    </view>
+                    <view class="modal-actions" v-else-if="tributeState.showLobsterPicker">
+                        <button class="btn btn-ghost" @click="cancelLobsterSelection">取消</button>
+                        <button
+                            class="btn btn-warning"
+                            :disabled="tributeState.selectedLobsterIds.length < getTotalLobsterReqCount()"
+                            @click="confirmLobsterSelection"
+                        >
+                            确认选择
+                        </button>
                     </view>
                     <view class="modal-actions" v-else>
                         <button class="btn btn-ghost" @click="tributeState.isNakedMode = false">返回卡牌列表</button>
@@ -1985,7 +2045,10 @@ const tributeState = reactive({
     isNakedMode: false,
     nakedLobsterIndex: -1,
     nakedTavernId: '',
-    nakedRewardType: 'de'
+    nakedRewardType: 'de',
+    showLobsterPicker: false,
+    pendingCardSubmit: null,
+    selectedLobsterIds: []
 })
 
 // 格式化上供区卡牌资源需求
@@ -2018,43 +2081,17 @@ const checkTributeReq = (req, player) => {
     if (req.cages && player.cages < req.cages) return false
 
     if (req.lobsters) {
-        let tempLobsters = [...player.lobsters]
+        const gradeValues = { normal: 0, grade3: 1, grade2: 2, grade1: 3, royal: 4 }
+        let tempLobsters = [...(player.lobsters || []), ...(player.titleCards || [])]
         for (const [gradeKey, count] of Object.entries(req.lobsters)) {
             let foundCount = 0
             for (let i = 0; i < count; i++) {
-                const reqGradeVal = Object.values(LOBSTER_GRADES).indexOf(LOBSTER_GRADES[gradeKey.toUpperCase()])
-                const matchIdx = tempLobsters.findIndex(
-                    (l) => Object.values(LOBSTER_GRADES).indexOf(l.grade) >= reqGradeVal
-                )
-                if (matchIdx !== -1) {
-                    foundCount++
-                    tempLobsters.splice(matchIdx, 1)
-                }
-            }
-            if (foundCount < count) return false
-        }
-    }
-    return true
-}
-
-const confirmTributeCard = (tavernId, cardId) => {
-    if (currentPendingTribute.value) {
-        currentPendingTribute.value.resolve({ isNaked: false, tavernId, cardId })
-    }
-}
-
-// 裸交：筛选三品以上的龙虾
-const getValidNakedLobsters = (player) => {
-    if (!player) return []
-    return player.lobsters
-        .map((l, index) => ({ ...l, originalIndex: index }))
-        .filter(
-            (l) =>
-                l.grade === LOBSTER_GRADES.GRADE3 ||
-                l.grade === LOBSTER_GRADES.GRADE2 ||
-                l.grade === LOBSTER_GRADES.GRADE1 ||
-                l.grade === LOBSTER_GRADES.ROYAL
-        )
+                const reqGradeVal = gradeValues[gradeKey] ?? 0
+                const matchIdx = tempLobsters.findIndex((l) => {
+                    if (l.name && !l.grade) return 4 >= reqGradeVal
+                    const lv = l.title ? 4 : (gradeValues[l.grade] ?? 0)
+                    return lv >= reqGradeVal
+                })
 }
 
 const confirmNakedTribute = () => {

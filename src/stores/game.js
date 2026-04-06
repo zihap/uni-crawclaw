@@ -735,7 +735,7 @@ export const useGameStore = defineStore('game', () => {
      * 处理上供区实际资源交互与卡牌获取
      */
     const processTributeAction = (player, result) => {
-        const { isNaked, tavernId, cardId, nakedCostLobsterIndex, nakedRewardType } = result
+        const { isNaked, tavernId, cardId, nakedCostLobsterIndex, nakedRewardType, selectedLobsterIds } = result
         const tavern = taverns.value[tavernId]
 
         let logMsg = `${player.name} 在【${tavern.name}】`
@@ -778,16 +778,31 @@ export const useGameStore = defineStore('game', () => {
             if (card.requirements.cages) player.cages -= card.requirements.cages
 
             if (card.requirements.lobsters) {
-                for (const [gradeKey, count] of Object.entries(card.requirements.lobsters)) {
-                    for (let i = 0; i < count; i++) {
-                        // 找到满足该等级及以上的最低龙虾剔除
-                        const reqGradeVal = Object.values(LOBSTER_GRADES).indexOf(
-                            LOBSTER_GRADES[gradeKey.toUpperCase()]
-                        )
-                        const matchIdx = player.lobsters.findIndex(
-                            (l) => Object.values(LOBSTER_GRADES).indexOf(l.grade) >= reqGradeVal
-                        )
-                        if (matchIdx !== -1) player.lobsters.splice(matchIdx, 1)
+                if (selectedLobsterIds && selectedLobsterIds.length > 0) {
+                    for (const lid of selectedLobsterIds) {
+                        const idx = player.lobsters.findIndex((l) => l.id === lid)
+                        if (idx !== -1) {
+                            const removed = player.lobsters.splice(idx, 1)[0]
+                            logMsg += `，献祭了 ${getLobsterGradeName(removed.grade)}`
+                        } else {
+                            const tcIdx = player.titleCards.findIndex((tc) => tc.id === lid)
+                            if (tcIdx !== -1) {
+                                const removedTc = player.titleCards.splice(tcIdx, 1)[0]
+                                logMsg += `，献祭了称号卡 ${removedTc.name}`
+                            }
+                        }
+                    }
+                } else {
+                    for (const [gradeKey, count] of Object.entries(card.requirements.lobsters)) {
+                        for (let i = 0; i < count; i++) {
+                            const reqGradeVal = Object.values(LOBSTER_GRADES).indexOf(
+                                LOBSTER_GRADES[gradeKey.toUpperCase()]
+                            )
+                            const matchIdx = player.lobsters.findIndex(
+                                (l) => Object.values(LOBSTER_GRADES).indexOf(l.grade) >= reqGradeVal
+                            )
+                            if (matchIdx !== -1) player.lobsters.splice(matchIdx, 1)
+                        }
                     }
                 }
             }
