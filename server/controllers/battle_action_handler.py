@@ -35,7 +35,7 @@ async def _check_tribute_battles_complete(game_state, websocket, room_id, rooms,
             del game_state['_lastBattleStartSent']
 
         game_state['battleQueue'] = []
-        game_state['settlementState'] = make_settlement_state('tribute', 0, -1)
+        game_state['settlementState'] = make_settlement_state('tribute', 0, 0)
 
         from services.area import _resolve_tribute_actions
         result = await _resolve_tribute_actions(game_state, manager, room_id)

@@ -69,10 +69,7 @@ async def _resolve_shrimp_catching_step(game_state: dict, manager, room_id):
     templates = SLOT_TEMPLATES['shrimp_catching']
 
     settlement_state = game_state.get('settlementState', {})
-    current_slot_index = settlement_state.get('currentSlotIndex', -1)
-
-    if current_slot_index == -1:
-        current_slot_index = 0
+    current_slot_index = settlement_state.get('currentSlotIndex', 0)
 
     while current_slot_index < len(slots):
         player_id = slots[current_slot_index]
@@ -127,10 +124,7 @@ async def _resolve_seafood_market_step(game_state: dict, manager, room_id):
     templates = SLOT_TEMPLATES['seafood_market']
 
     settlement_state = game_state.get('settlementState', {})
-    current_slot_index = settlement_state.get('currentSlotIndex', -1)
-
-    if current_slot_index == -1:
-        current_slot_index = 0
+    current_slot_index = settlement_state.get('currentSlotIndex', 0)
 
     while current_slot_index < len(slots):
         player_id = slots[current_slot_index]
@@ -174,20 +168,12 @@ async def _resolve_breeding_step(game_state: dict, manager, room_id):
     templates = SLOT_TEMPLATES['breeding']
 
     settlement_state = game_state.get('settlementState', {})
-    current_slot_index = settlement_state.get('currentSlotIndex', -1)
-
-    if current_slot_index == -1:
-        current_slot_index = 0
+    current_slot_index = settlement_state.get('currentSlotIndex', 0)
 
     while current_slot_index < len(slots):
         player_id = slots[current_slot_index]
         if player_id is not None:
             player = game_state['players'][player_id]
-
-            if len(player['lobsters']) == 0:
-                current_slot_index += 1
-                continue
-
             # 从模板读取 actionCount 和 reward
             template = templates[current_slot_index]
             action_count = template['actionCount'] if template else 1
@@ -198,6 +184,11 @@ async def _resolve_breeding_step(game_state: dict, manager, room_id):
                 player['seaweed'] = player.get('seaweed', 0) + reward['seaweed']
             if reward.get('coins'):
                 player['coins'] = player.get('coins', 0) + reward['coins']
+
+            # 如果没有克升级的龙虾，跳过UI交互
+            if len(player['lobsters']) == 0:
+                current_slot_index += 1
+                continue
 
             game_state['settlementState'] = make_settlement_state('breeding', current_slot_index, action_count, player_id)
 
@@ -321,10 +312,7 @@ async def _resolve_marketplace_step(game_state: dict, manager, room_id):
     current_round = game_state.get('currentRound', 1)
 
     settlement_state = game_state.get('settlementState', {})
-    current_slot_index = settlement_state.get('currentSlotIndex', -1)
-
-    if current_slot_index == -1:
-        current_slot_index = 0
+    current_slot_index = settlement_state.get('currentSlotIndex', 0)
 
     while current_slot_index < len(slots):
         player_id = slots[current_slot_index]
@@ -919,27 +907,48 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
         tavern = taverns[tavern_id]
 
         if is_naked:
-            if naked_lobster_index < 0 or naked_lobster_index >= len(player['lobsters']):
+            if player.get('tavernCompletions', {}).get(tavern_id) is not None:
+                await send_error(websocket, '你已在该酒楼上供过，无法重复选择')
+                return 'error'
+
+            naked_lobster_index = action_payload.get('nakedLobsterIndex', -1)
+            player_lobsters = player.get('lobsters', [])
+            player_title_cards = player.get('titleCards', [])
+
+            if naked_lobster_index < 0:
                 await send_error(websocket, '无效的龙虾选择')
                 return 'error'
 
-            lobster = player['lobsters'][naked_lobster_index]
-            if GRADE_VALUES.get(lobster.get('grade', 'normal'), 0) < 1:
+            lobster = None
+            if naked_lobster_index < len(player_lobsters):
+                lobster = player_lobsters[naked_lobster_index]
+            else:
+                tc_index = naked_lobster_index - len(player_lobsters)
+                if tc_index < 0 or tc_index >= len(player_title_cards):
+                    await send_error(websocket, '无效的龙虾选择')
+                    return 'error'
+                lobster = player_title_cards[tc_index]
+
+            if GRADE_VALUES.get(lobster.get('grade', 'normal'), 0) < 1 and not lobster.get('name'):
                 await send_error(websocket, '裸交需要献祭3品及以上的龙虾')
                 return 'error'
 
-            del player['lobsters'][naked_lobster_index]
+            if naked_lobster_index < len(player_lobsters):
+                del player_lobsters[naked_lobster_index]
+            else:
+                tc_index = naked_lobster_index - len(player_lobsters)
+                del player_title_cards[tc_index]
 
             if naked_reward_type == 'de':
                 player['de'] += 1
-                if lobster.get('title'):
+                if lobster.get('title') or lobster.get('name'):
                     player['de'] += 1
                 bonus_choice = action_payload.get('bonusTributeChoice')
                 if bonus_choice == 'de':
                     player['de'] += 1
             else:
                 player['wang'] += 1
-                if lobster.get('title'):
+                if lobster.get('title') or lobster.get('name'):
                     player['wang'] += 1
                 bonus_choice = action_payload.get('bonusTributeChoice')
                 if bonus_choice == 'wang':
@@ -948,37 +957,65 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             if player['id'] not in tavern['occupants']:
                 tavern['occupants'].append(player['id'])
 
+            if 'tavernCompletionOrder' not in game_state:
+                game_state['tavernCompletionOrder'] = {}
+
+            tavern_id_str = str(tavern_id)
+            if tavern_id_str not in game_state['tavernCompletionOrder']:
+                game_state['tavernCompletionOrder'][tavern_id_str] = []
+
+            game_state['tavernCompletionOrder'][tavern_id_str].append(player['id'])
+            order = len(game_state['tavernCompletionOrder'][tavern_id_str])
+
+            if 'tavernCompletions' not in player:
+                player['tavernCompletions'] = {}
+            player['tavernCompletions'][tavern_id] = order
+
         else:
-            if not card_id:
+            card_ids = action_payload.get('cardIds', [])
+            if not card_ids and not card_id:
                 await send_error(websocket, '请选择上供卡牌')
                 return 'error'
 
-            card = None
-            card_index = -1
-            for idx, c in enumerate(tavern['cards']):
-                if c.get('id') == card_id:
-                    card = c
-                    card_index = idx
-                    break
+            if card_id and not card_ids:
+                card_ids = [card_id]
 
-            if not card:
-                await send_error(websocket, '无效的卡牌选择')
-                return 'error'
+            cards_to_process = []
+            for cid in card_ids:
+                card = None
+                card_index = -1
+                for idx, c in enumerate(tavern['cards']):
+                    if c.get('id') == cid:
+                        card = c
+                        card_index = idx
+                        break
+                if not card:
+                    await send_error(websocket, f'无效的卡牌选择: {cid}')
+                    return 'error'
+                cards_to_process.append((card, card_index))
 
-            requirements = card.get('requirements', {})
-            if requirements.get('coins', 0) > player.get('coins', 0):
+            total_coins = sum(c.get('requirements', {}).get('coins', 0) for c, _ in cards_to_process)
+            total_seaweed = sum(c.get('requirements', {}).get('seaweed', 0) for c, _ in cards_to_process)
+            total_cages = sum(c.get('requirements', {}).get('cages', 0) for c, _ in cards_to_process)
+
+            if player.get('coins', 0) < total_coins:
                 await send_error(websocket, '金币不足')
                 return 'error'
-            if requirements.get('seaweed', 0) > player.get('seaweed', 0):
+            if player.get('seaweed', 0) < total_seaweed:
                 await send_error(websocket, '海草不足')
                 return 'error'
-            if requirements.get('cages', 0) > player.get('cages', 0):
+            if player.get('cages', 0) < total_cages:
                 await send_error(websocket, '虾笼不足')
                 return 'error'
 
-            lobster_reqs = requirements.get('lobsters', {})
+            all_lobster_reqs = {}
+            for card, _ in cards_to_process:
+                lr = card.get('requirements', {}).get('lobsters', {})
+                for grade, count in lr.items():
+                    all_lobster_reqs[grade] = all_lobster_reqs.get(grade, 0) + count
+
             selected_lobster_ids = action_payload.get('selectedLobsterIds', [])
-            if lobster_reqs:
+            if all_lobster_reqs:
                 if not selected_lobster_ids or len(selected_lobster_ids) == 0:
                     await send_error(websocket, '请选择要上供的龙虾')
                     return 'error'
@@ -1009,7 +1046,7 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                     return grade_values.get(obj.get('grade', 'normal'), 0)
 
                 req_by_grade = []
-                for grade_key, count in lobster_reqs.items():
+                for grade_key, count in all_lobster_reqs.items():
                     req_val = grade_values.get(grade_key, 0)
                     req_by_grade.append((req_val, count))
                 req_by_grade.sort(key=lambda x: x[0], reverse=True)
@@ -1040,15 +1077,33 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                                 del player_title_cards[i]
                                 break
 
-            player['coins'] = player.get('coins', 0) - requirements.get('coins', 0)
-            player['seaweed'] = player.get('seaweed', 0) - requirements.get('seaweed', 0)
-            player['cages'] = player.get('cages', 0) - requirements.get('cages', 0)
+            player['coins'] = player.get('coins', 0) - total_coins
+            player['seaweed'] = player.get('seaweed', 0) - total_seaweed
+            player['cages'] = player.get('cages', 0) - total_cages
 
-            del tavern['cards'][card_index]
+            sorted_indices = sorted([ci for _, ci in cards_to_process], reverse=True)
+            for ci in sorted_indices:
+                del tavern['cards'][ci]
 
-            reward = card.get('reward', {})
-            player['de'] = player.get('de', 0) + reward.get('de', 0)
-            player['wang'] = player.get('wang', 0) + reward.get('wang', 0)
+            for card, _ in cards_to_process:
+                reward = card.get('reward', {})
+                player['de'] = player.get('de', 0) + reward.get('de', 0)
+                player['wang'] = player.get('wang', 0) + reward.get('wang', 0)
+
+                effect_type = card.get('effectType')
+                if effect_type == 'instant_upgrade_all':
+                    for l in player.get('lobsters', []):
+                        if l.get('grade') != 'royal':
+                            if l.get('grade') == 'normal':
+                                l['grade'] = 'grade3'
+                            elif l.get('grade') == 'grade3':
+                                l['grade'] = 'grade2'
+                            elif l.get('grade') == 'grade2':
+                                l['grade'] = 'grade1'
+                            elif l.get('grade') == 'grade1':
+                                l['grade'] = 'royal'
+                elif effect_type == 'instant_gain_cages':
+                    player['cages'] = player.get('cages', 0) + 2
 
             bonus_choice = action_payload.get('bonusTributeChoice')
             if bonus_choice == 'de':
@@ -1056,23 +1111,22 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             elif bonus_choice == 'wang':
                 player['wang'] = player.get('wang', 0) + 1
 
-            effect_type = card.get('effectType')
-            if effect_type == 'instant_upgrade_all':
-                for l in player.get('lobsters', []):
-                    if l.get('grade') != 'royal':
-                        if l.get('grade') == 'normal':
-                            l['grade'] = 'grade3'
-                        elif l.get('grade') == 'grade3':
-                            l['grade'] = 'grade2'
-                        elif l.get('grade') == 'grade2':
-                            l['grade'] = 'grade1'
-                        elif l.get('grade') == 'grade1':
-                            l['grade'] = 'royal'
-            elif effect_type == 'instant_gain_cages':
-                player['cages'] = player.get('cages', 0) + 2
-
             if player['id'] not in tavern['occupants'] and len(tavern['occupants']) < 4:
                 tavern['occupants'].append(player['id'])
+
+            if 'tavernCompletionOrder' not in game_state:
+                game_state['tavernCompletionOrder'] = {}
+
+            tavern_id_str = str(tavern_id)
+            if tavern_id_str not in game_state['tavernCompletionOrder']:
+                game_state['tavernCompletionOrder'][tavern_id_str] = []
+
+            game_state['tavernCompletionOrder'][tavern_id_str].append(player['id'])
+            order = len(game_state['tavernCompletionOrder'][tavern_id_str])
+
+            if 'tavernCompletions' not in player:
+                player['tavernCompletions'] = {}
+            player['tavernCompletions'][tavern_id] = order
 
         remaining = game_state['settlementState'].get('remainingActions', 1)
         if remaining > 1:
@@ -1116,4 +1170,5 @@ def _serialize_player(player: dict) -> dict:
         'lobsters': player['lobsters'],
         'titleCards': player['titleCards'],
         'tempBubbles': player.get('tempBubbles', 0),
+        'tavernCompletions': player.get('tavernCompletions', {}),
     }

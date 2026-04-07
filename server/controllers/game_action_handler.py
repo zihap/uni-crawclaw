@@ -136,7 +136,7 @@ async def handle_next_player(websocket, room_id, player_id, rooms, manager, payl
         game_state['phase'] = 'settlement'
         game_state['currentArea'] = 0
         game_state['battleQueue'] = []
-        game_state['settlementState'] = make_settlement_state(None, -1, -1)
+        game_state['settlementState'] = make_settlement_state(None, 0, 0)
 
         await start_area_settlement(websocket, room_id, game_state, rooms, manager)
     else:
@@ -199,7 +199,7 @@ async def handle_area_action(websocket, room_id, player_id, rooms, manager, payl
             area_data = game_state['areas'][area_name]
             slots = area_data.get('slots', [])
             settlement_state = game_state.get('settlementState', {})
-            current_slot_index = settlement_state.get('currentSlotIndex', -1)
+            current_slot_index = settlement_state.get('currentSlotIndex', 0)
             log_debug(f"[handle_settlement_action] area={area_name}, slots={slots}, currentSlotIndex={current_slot_index}")
             
             # 检查是否有更多slot需要处理
@@ -248,7 +248,7 @@ async def handle_area_action(websocket, room_id, player_id, rooms, manager, payl
             next_area = current_area + 1
             next_area_name = AREAS[next_area]
             log_info(f"[handle_settlement_action] Jumping to next area: {next_area_name}")
-            game_state['settlementState'] = make_settlement_state(next_area_name, -1, -1)
+            game_state['settlementState'] = make_settlement_state(next_area_name, 0, 0)
             game_state['currentArea'] = next_area
             await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
                 make_action_message(ServerAreaActionTypes.AREA_SETTLEMENT_START, {

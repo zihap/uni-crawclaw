@@ -66,7 +66,7 @@ def handle_skip_action(settlement_state: dict, current_slot_index: Optional[int]
     settlement_state['currentSlotIndex'] = idx + 1
 
 
-def make_settlement_state(area_type: str, current_slot_index: int = -1, remaining_actions: int = 0, waiting_for_player: Optional[int] = None, **extra) -> dict:
+def make_settlement_state(area_type: str, current_slot_index: int = 0, remaining_actions: int = 0, waiting_for_player: Optional[int] = None, **extra) -> dict:
     """构造结算状态字典"""
     state = {
         'currentSlotIndex': current_slot_index,

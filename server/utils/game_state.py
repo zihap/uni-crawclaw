@@ -105,7 +105,7 @@ def create_player(player_id: int, name: str, is_host: bool = False, user_id: str
         'lobsters': lobsters,
 
         'completedTasks': [],
-        'completedTaverns': [],
+        'tavernCompletions': {},
         'royalCountThisRound': 0,
         'bonusGold': 0,
 

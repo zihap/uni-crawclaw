@@ -645,69 +645,54 @@
 
                 <view class="modal-body" v-if="!tributeState.isNakedMode && !tributeState.showLobsterPicker">
                     <view class="taverns-list">
-                        <view v-for="tavern in pendingSettlement?.taverns" :key="tavern.id" class="tavern-box">
+                        <view v-for="tavern in getAvailableTaverns()" :key="tavern.id" class="tavern-box">
                             <view class="tavern-header">
                                 <text class="tavern-name">🏮 {{ tavern.name }}</text>
-                                <text
-                                    class="tavern-status"
-                                    v-if="tavern.occupants.includes(pendingSettlement?.player?.id)"
-                                    >已占席位
-                                </text>
                             </view>
 
                             <view v-if="tavern.cards.length === 0" class="empty-hint">上供卡已被抢空</view>
 
                             <view class="tribute-cards">
-                                <view v-for="card in tavern.cards" :key="card.id" class="tribute-card">
+                                <view
+                                    v-for="card in tavern.cards"
+                                    :key="card.id"
+                                    class="tribute-card"
+                                    :class="{
+                                        selected: tributeState.selectedCardIds.includes(card.id),
+                                        disabled: isCardDisabled(tavern.id, card.id)
+                                    }"
+                                    @click="toggleCardSelect(tavern.id, card.id)"
+                                >
+                                    <view
+                                        class="tribute-card-check"
+                                        :class="{ checked: tributeState.selectedCardIds.includes(card.id) }"
+                                    >
+                                        <text v-if="tributeState.selectedCardIds.includes(card.id)">✓</text>
+                                    </view>
                                     <text class="tc-name">{{ card.name }}</text>
                                     <text class="tc-desc">{{ card.effectDesc }}</text>
                                     <view class="tc-req">需求：{{ formatTributeReq(card.requirements) }}</view>
                                     <view class="tc-rew">奖励：{{ formatTributeRew(card.reward) }}</view>
-
-                                    <button
-                                        class="btn btn-primary btn-sm mt-2"
-                                        :disabled="
-                                            !checkTributeReq(card.requirements, pendingSettlement?.player) ||
-                                            tavern.occupants.includes(pendingSettlement?.player?.id)
-                                        "
-                                        @click="confirmTributeCard(tavern.id, card.id)"
-                                    >
-                                        缴纳上供
-                                    </button>
+                                </view>
+                            </view>
+                        </view>
+                        <view v-if="getCompletedTaverns().length > 0" class="completed-taverns-section">
+                            <view class="section-label">✅ 已完成上供的酒楼</view>
+                            <view
+                                v-for="tavern in getCompletedTaverns()"
+                                :key="tavern.id"
+                                class="tavern-box completed-tavern"
+                            >
+                                <view class="tavern-header">
+                                    <text class="tavern-name">🏮 {{ tavern.name }}</text>
+                                    <text class="tavern-status">已完成</text>
                                 </view>
                             </view>
                         </view>
                     </view>
-                </view>
-
-                <view
-                    v-if="!tributeState.isNakedMode && hasBonusTribute && !tributeState.showLobsterPicker"
-                    class="modal-body bonus-tribute-section"
-                >
-                    <view class="section-label">🌟 黄金鳌效果：选择额外奖励</view>
-                    <view class="reward-options">
-                        <view
-                            class="custom-radio-wrap"
-                            :class="{ active: tributeState.bonusTributeChoice === 'de' }"
-                            @click="tributeState.bonusTributeChoice = 'de'"
-                        >
-                            <view
-                                class="custom-radio"
-                                :class="{ checked: tributeState.bonusTributeChoice === 'de' }"
-                            ></view>
-                            额外获得 1 德
-                        </view>
-                        <view
-                            class="custom-radio-wrap"
-                            :class="{ active: tributeState.bonusTributeChoice === 'wang' }"
-                            @click="tributeState.bonusTributeChoice = 'wang'"
-                        >
-                            <view
-                                class="custom-radio"
-                                :class="{ checked: tributeState.bonusTributeChoice === 'wang' }"
-                            ></view>
-                            额外获得 1 望
-                        </view>
+                    <view v-if="tributeState.selectedCardIds.length > 0" class="selected-summary">
+                        已选 {{ tributeState.selectedCardIds.length }} 张卡牌
+                        <text v-if="!canConfirmTributeCards()" class="error-hint">，资源不足</text>
                     </view>
                 </view>
 
@@ -722,18 +707,53 @@
                     <view class="section-label">1. 请选择要强行献祭的龙虾：</view>
                     <view class="lobster-grid">
                         <view
-                            v-for="(lobster, index) in getValidNakedLobsters(pendingSettlement?.player)"
+                            v-for="lobster in getValidNakedLobsters(pendingSettlement?.player)"
                             :key="lobster.id"
                             class="lobster-card"
-                            :class="{ selected: tributeState.nakedLobsterIndex === index }"
-                            @click="tributeState.nakedLobsterIndex = index"
+                            :class="{
+                                selected:
+                                    tributeState.nakedLobsterIndex ===
+                                    getNakedLobsterGlobalIndex(lobster.id, pendingSettlement?.player)
+                            }"
+                            @click="
+                                tributeState.nakedLobsterIndex = getNakedLobsterGlobalIndex(
+                                    lobster.id,
+                                    pendingSettlement?.player
+                                )
+                            "
                         >
                             <text class="lobster-icon">🦞</text>
                             <text class="lobster-grade">{{ getLobsterGradeName(lobster.grade) }}</text>
                             <text class="lobster-title" v-if="lobster.title">{{ lobster.title.name }}</text>
                         </view>
+                        <view
+                            v-for="tc in getValidNakedTitleCards(pendingSettlement?.player)"
+                            :key="tc.id"
+                            class="lobster-card title-card-lobster"
+                            :class="{
+                                selected:
+                                    tributeState.nakedLobsterIndex ===
+                                    getNakedLobsterGlobalIndex(tc.id, pendingSettlement?.player)
+                            }"
+                            @click="
+                                tributeState.nakedLobsterIndex = getNakedLobsterGlobalIndex(
+                                    tc.id,
+                                    pendingSettlement?.player
+                                )
+                            "
+                        >
+                            <text class="lobster-icon">🏆</text>
+                            <text class="lobster-grade">{{ tc.name }}</text>
+                            <text class="lobster-title" v-if="tc.skill?.description">{{ tc.skill.description }}</text>
+                        </view>
                     </view>
-                    <view v-if="getValidNakedLobsters(pendingSettlement?.player).length === 0" class="error-hint mt-2">
+                    <view
+                        v-if="
+                            getValidNakedLobsters(pendingSettlement?.player).length === 0 &&
+                            getValidNakedTitleCards(pendingSettlement?.player).length === 0
+                        "
+                        class="error-hint mt-2"
+                    >
                         你连一只三品以上的龙虾都没有，怎么好意思裸交？
                     </view>
 
@@ -745,16 +765,13 @@
                             class="tavern-select-btn"
                             :class="{
                                 active: tributeState.nakedTavernId === t.id,
-                                disabled: t.occupants.includes(pendingSettlement?.player?.id)
+                                disabled: isNakedTavernDisabled(t)
                             }"
-                            @click="
-                                !t.occupants.includes(pendingSettlement?.player?.id) &&
-                                (tributeState.nakedTavernId = t.id)
-                            "
+                            @click="!isNakedTavernDisabled(t) && (tributeState.nakedTavernId = t.id)"
                         >
                             <text class="ts-name">{{ t.name }}</text>
-                            <text class="ts-status">席位: {{ t.occupants.length }}/4</text>
-                            <text v-if="t.occupants.includes(pendingSettlement?.player?.id)" class="ts-lock">已占</text>
+                            <text class="ts-status">席位: {{ getTavernOccupantCount(t.id) }}/4</text>
+                            <text v-if="isPlayerOccupiedTavern(t.id)" class="ts-lock">已占</text>
                         </view>
                     </view>
 
@@ -797,7 +814,12 @@
                             v-for="lobster in pendingSettlement?.player?.lobsters"
                             :key="lobster.id"
                             class="lobster-pick-card"
-                            :class="{ selected: tributeState.selectedLobsterIds.includes(lobster.id) }"
+                            :class="{
+                                selected: tributeState.selectedLobsterIds.includes(lobster.id),
+                                disabled:
+                                    !tributeState.selectedLobsterIds.includes(lobster.id) &&
+                                    tributeState.selectedLobsterIds.length >= getTotalLobsterReqCount()
+                            }"
                             @click="toggleLobsterSelect(lobster.id)"
                         >
                             <view
@@ -814,7 +836,12 @@
                             v-for="tc in pendingSettlement?.player?.titleCards"
                             :key="tc.id"
                             class="lobster-pick-card title-card-pick"
-                            :class="{ selected: tributeState.selectedLobsterIds.includes(tc.id) }"
+                            :class="{
+                                selected: tributeState.selectedLobsterIds.includes(tc.id),
+                                disabled:
+                                    !tributeState.selectedLobsterIds.includes(tc.id) &&
+                                    tributeState.selectedLobsterIds.length >= getTotalLobsterReqCount()
+                            }"
                             @click="toggleLobsterSelect(tc.id)"
                         >
                             <view
@@ -831,18 +858,55 @@
                     <view class="lobster-picker-count">
                         已选 {{ tributeState.selectedLobsterIds.length }} / {{ getTotalLobsterReqCount() }} 只
                     </view>
+                    <view v-if="selectedLobstersHaveBonus" class="bonus-tribute-inline" style="margin-top: 1rem">
+                        <view class="section-label">🌟 黄金鳌效果：选择额外奖励（必选）</view>
+                        <view class="reward-options">
+                            <view
+                                class="custom-radio-wrap"
+                                :class="{ active: tributeState.bonusTributeChoice === 'de' }"
+                                @click="tributeState.bonusTributeChoice = 'de'"
+                            >
+                                <view
+                                    class="custom-radio"
+                                    :class="{ checked: tributeState.bonusTributeChoice === 'de' }"
+                                ></view>
+                                额外获得 1 德
+                            </view>
+                            <view
+                                class="custom-radio-wrap"
+                                :class="{ active: tributeState.bonusTributeChoice === 'wang' }"
+                                @click="tributeState.bonusTributeChoice = 'wang'"
+                            >
+                                <view
+                                    class="custom-radio"
+                                    :class="{ checked: tributeState.bonusTributeChoice === 'wang' }"
+                                ></view>
+                                额外获得 1 望
+                            </view>
+                        </view>
+                    </view>
                 </view>
 
                 <view class="modal-footer">
                     <view class="modal-actions" v-if="!tributeState.isNakedMode && !tributeState.showLobsterPicker">
                         <button class="btn btn-ghost" @click="tributeState.isNakedMode = true">强行裸交</button>
                         <button class="btn btn-secondary" @click="skipTributeAction">放弃上供</button>
+                        <button
+                            class="btn btn-primary"
+                            :disabled="tributeState.selectedCardIds.length === 0 || !canConfirmTributeCards()"
+                            @click="confirmTributeCards"
+                        >
+                            确认上供（{{ tributeState.selectedCardIds.length }}张）
+                        </button>
                     </view>
                     <view class="modal-actions" v-else-if="tributeState.showLobsterPicker">
                         <button class="btn btn-ghost" @click="cancelLobsterSelection">取消</button>
                         <button
                             class="btn btn-warning"
-                            :disabled="tributeState.selectedLobsterIds.length < getTotalLobsterReqCount()"
+                            :disabled="
+                                tributeState.selectedLobsterIds.length < getTotalLobsterReqCount() ||
+                                (selectedLobstersHaveBonus && !tributeState.bonusTributeChoice)
+                            "
                             @click="confirmLobsterSelection"
                         >
                             确认选择
@@ -1349,7 +1413,9 @@ const tributeState = reactive({
     bonusTributeChoice: '',
     showLobsterPicker: false,
     pendingCardSubmit: null,
-    selectedLobsterIds: []
+    selectedLobsterIds: [],
+    selectedTavernId: null,
+    selectedCardIds: []
 })
 
 watch(
@@ -1364,6 +1430,8 @@ watch(
             tributeState.showLobsterPicker = false
             tributeState.pendingCardSubmit = null
             tributeState.selectedLobsterIds = []
+            tributeState.selectedTavernId = null
+            tributeState.selectedCardIds = []
         }
     },
     { immediate: true }
@@ -1426,45 +1494,192 @@ const getValidNakedLobsters = (player) => {
     return player.lobsters.filter((l) => (gradeValues[l.grade] ?? 0) >= 1)
 }
 
+const getValidNakedTitleCards = (player) => {
+    if (!player || !player.titleCards) return []
+    return player.titleCards
+}
+
+const getNakedLobsterGlobalIndex = (lobsterId, player) => {
+    const lobsters = getValidNakedLobsters(player)
+    const idx = lobsters.findIndex((l) => l.id === lobsterId)
+    if (idx !== -1) return idx
+    const titleCards = getValidNakedTitleCards(player)
+    const tcIdx = titleCards.findIndex((tc) => tc.id === lobsterId)
+    if (tcIdx !== -1) return lobsters.length + tcIdx
+    return -1
+}
+
+const isNakedTavernDisabled = (tavern) => {
+    const player = pendingSettlement.value?.player
+    const occupiedThisRound = tavern.occupants?.includes(player?.id)
+    const completedBefore = player?.tavernCompletions?.[tavern.id] !== undefined
+    return occupiedThisRound || completedBefore
+}
+
+const getTavernOccupantCount = (tavernId) => {
+    const players = playerStore.players || []
+    return players.filter((p) => p.tavernCompletions?.[tavernId] !== undefined).length
+}
+
+const isPlayerOccupiedTavern = (tavernId) => {
+    const player = pendingSettlement.value?.player
+    return player?.tavernCompletions?.[tavernId] !== undefined
+}
+
 const hasBonusTribute = computed(() => {
     const player = pendingSettlement.value?.player
     if (!player || !player.titleCards) return false
     return player.titleCards.some((tc) => tc.skill?.bonusTribute === true)
 })
 
-const confirmTributeCard = (tavernId, cardId) => {
-    const tavern = pendingSettlement.value?.taverns?.find((t) => t.id === tavernId)
-    if (!tavern) return
-    const card = tavern.cards?.find((c) => c.id === cardId)
-    if (!card) return
-    if (card.requirements?.lobsters && Object.keys(card.requirements.lobsters).length > 0) {
+const selectedLobstersHaveBonus = computed(() => {
+    const player = pendingSettlement.value?.player
+    if (!player || !player.titleCards) return false
+    const bonusCardIds = player.titleCards.filter((tc) => tc.skill?.bonusTribute === true).map((tc) => tc.id)
+    return tributeState.selectedLobsterIds.some((id) => bonusCardIds.includes(id))
+})
+
+const getAvailableTaverns = () => {
+    const taverns = pendingSettlement.value?.taverns || []
+    const player = pendingSettlement.value?.player
+    const tavernCompletions = player?.tavernCompletions || {}
+    return taverns.filter((t) => {
+        const occupiedThisRound = t.occupants?.includes(player?.id)
+        const completedBefore = Object.prototype.hasOwnProperty.call(tavernCompletions, t.id)
+        return !occupiedThisRound && !completedBefore
+    })
+}
+
+const getCompletedTaverns = () => {
+    const taverns = pendingSettlement.value?.taverns || []
+    const player = pendingSettlement.value?.player
+    const tavernCompletions = player?.tavernCompletions || {}
+    return taverns.filter((t) => {
+        const occupiedThisRound = t.occupants?.includes(player?.id)
+        const completedBefore = Object.prototype.hasOwnProperty.call(tavernCompletions, t.id)
+        return occupiedThisRound || completedBefore
+    })
+}
+
+const findCardById = (cardId) => {
+    for (const tavern of pendingSettlement.value?.taverns || []) {
+        const card = tavern.cards?.find((c) => c.id === cardId)
+        if (card) return { ...card, tavernId: tavern.id }
+    }
+    return null
+}
+
+const isCardDisabled = (tavernId, cardId) => {
+    if (tributeState.selectedCardIds.includes(cardId)) return false
+    if (tributeState.selectedCardIds.length > 0) {
+        const firstCard = findCardById(tributeState.selectedCardIds[0])
+        if (firstCard && firstCard.tavernId !== tavernId) return true
+    }
+    return false
+}
+
+const toggleCardSelect = (tavernId, cardId) => {
+    const idx = tributeState.selectedCardIds.indexOf(cardId)
+    if (idx > -1) {
+        tributeState.selectedCardIds.splice(idx, 1)
+        if (tributeState.selectedCardIds.length === 0) {
+            tributeState.selectedTavernId = null
+        }
+        return
+    }
+    if (tributeState.selectedCardIds.length >= 2) return
+    if (tributeState.selectedCardIds.length > 0) {
+        const firstCard = findCardById(tributeState.selectedCardIds[0])
+        if (firstCard && firstCard.tavernId !== tavernId) return
+    }
+    tributeState.selectedCardIds.push(cardId)
+    tributeState.selectedTavernId = tavernId
+}
+
+const canConfirmTributeCards = () => {
+    if (tributeState.selectedCardIds.length === 0) return false
+    const player = pendingSettlement.value?.player
+    if (!player) return false
+    let totalReq = { coins: 0, seaweed: 0, cages: 0, lobsters: {} }
+    for (const cardId of tributeState.selectedCardIds) {
+        const cardInfo = findCardById(cardId)
+        if (!cardInfo) return false
+        const req = cardInfo.requirements || {}
+        totalReq.coins += req.coins || 0
+        totalReq.seaweed += req.seaweed || 0
+        totalReq.cages += req.cages || 0
+        if (req.lobsters) {
+            for (const [grade, count] of Object.entries(req.lobsters)) {
+                totalReq.lobsters[grade] = (totalReq.lobsters[grade] || 0) + count
+            }
+        }
+    }
+    if ((player.coins ?? 0) < totalReq.coins) return false
+    if ((player.seaweed ?? 0) < totalReq.seaweed) return false
+    if ((player.cages ?? 0) < totalReq.cages) return false
+    if (Object.keys(totalReq.lobsters).length > 0) {
+        const gradeValues = { normal: 0, grade3: 1, grade2: 2, grade1: 3, royal: 4 }
+        let tempLobsters = [...(player.lobsters || []), ...(player.titleCards || [])]
+        for (const [gradeKey, count] of Object.entries(totalReq.lobsters)) {
+            let foundCount = 0
+            for (let i = 0; i < count; i++) {
+                const reqGradeVal = gradeValues[gradeKey] ?? 0
+                const matchIdx = tempLobsters.findIndex((l) => {
+                    if (l.name && !l.grade) return 4 >= reqGradeVal
+                    const lv = l.title ? 4 : (gradeValues[l.grade] ?? 0)
+                    return lv >= reqGradeVal
+                })
+                if (matchIdx !== -1) {
+                    foundCount++
+                    tempLobsters.splice(matchIdx, 1)
+                }
+            }
+            if (foundCount < count) return false
+        }
+    }
+    return true
+}
+
+const confirmTributeCards = () => {
+    if (!canConfirmTributeCards()) return
+    const hasLobsterReq = tributeState.selectedCardIds.some((cardId) => {
+        const cardInfo = findCardById(cardId)
+        return cardInfo?.requirements?.lobsters && Object.keys(cardInfo.requirements.lobsters).length > 0
+    })
+    if (hasLobsterReq) {
         tributeState.showLobsterPicker = true
-        tributeState.pendingCardSubmit = { tavernId, cardId }
+        tributeState.pendingCardSubmit = {
+            tavernId: tributeState.selectedTavernId,
+            cardIds: [...tributeState.selectedCardIds]
+        }
         tributeState.selectedLobsterIds = []
         return
     }
-    submitTributeCard(tavernId, cardId)
+    submitMultiTributeCards()
 }
 
-const submitTributeCard = (tavernId, cardId) => {
+const submitMultiTributeCards = () => {
     const payload = {
         isNaked: false,
-        tavernId,
-        cardId
+        tavernId: tributeState.selectedTavernId,
+        cardIds: [...tributeState.selectedCardIds]
     }
     if (tributeState.selectedLobsterIds.length > 0) {
         payload.selectedLobsterIds = tributeState.selectedLobsterIds
     }
-    if (hasBonusTribute.value && tributeState.bonusTributeChoice) {
+    if (selectedLobstersHaveBonus.value && tributeState.bonusTributeChoice) {
         payload.bonusTributeChoice = tributeState.bonusTributeChoice
     }
     onlineGameStore.sendSettlementAction('submitTribute', payload)
+    tributeState.selectedCardIds = []
+    tributeState.selectedTavernId = null
+    tributeState.selectedLobsterIds = []
+    tributeState.bonusTributeChoice = ''
 }
 
 const confirmLobsterSelection = () => {
     if (!tributeState.pendingCardSubmit) return
-    const { tavernId, cardId } = tributeState.pendingCardSubmit
-    submitTributeCard(tavernId, cardId)
+    submitMultiTributeCards()
     tributeState.showLobsterPicker = false
     tributeState.pendingCardSubmit = null
     tributeState.selectedLobsterIds = []
@@ -1481,22 +1696,52 @@ const toggleLobsterSelect = (lobsterId) => {
     if (idx > -1) {
         tributeState.selectedLobsterIds.splice(idx, 1)
     } else {
+        const maxCount = getTotalLobsterReqCount()
+        if (tributeState.selectedLobsterIds.length >= maxCount) {
+            return
+        }
         tributeState.selectedLobsterIds.push(lobsterId)
+    }
+    if (!selectedLobstersHaveBonus.value) {
+        tributeState.bonusTributeChoice = ''
     }
 }
 
 const getPendingCardLobsterReqs = () => {
     if (!tributeState.pendingCardSubmit) return {}
-    const { tavernId, cardId } = tributeState.pendingCardSubmit
-    const tavern = pendingSettlement.value?.taverns?.find((t) => t.id === tavernId)
-    if (!tavern) return {}
-    const card = tavern.cards?.find((c) => c.id === cardId)
-    return card?.requirements?.lobsters || {}
+    const cardIds = tributeState.pendingCardSubmit.cardIds || [tributeState.pendingCardSubmit.cardId]
+    const totalReqs = {}
+    for (const cardId of cardIds) {
+        const cardInfo = findCardById(cardId)
+        if (cardInfo?.requirements?.lobsters) {
+            for (const [grade, count] of Object.entries(cardInfo.requirements.lobsters)) {
+                totalReqs[grade] = (totalReqs[grade] || 0) + count
+            }
+        }
+    }
+    return totalReqs
 }
 
 const getTotalLobsterReqCount = () => {
     const reqs = getPendingCardLobsterReqs()
     return Object.values(reqs).reduce((sum, count) => sum + count, 0)
+}
+
+const hasNakedBonusTribute = () => {
+    const player = pendingSettlement.value?.player
+    if (!player) return false
+    if (tributeState.nakedLobsterIndex === -1) return false
+    const lobsters = getValidNakedLobsters(player)
+    const titleCards = getValidNakedTitleCards(player)
+    const bonusCardIds = (player.titleCards || []).filter((tc) => tc.skill?.bonusTribute === true).map((tc) => tc.id)
+    if (tributeState.nakedLobsterIndex < lobsters.length) {
+        return false
+    }
+    const tcIndex = tributeState.nakedLobsterIndex - lobsters.length
+    if (tcIndex >= 0 && tcIndex < titleCards.length) {
+        return bonusCardIds.includes(titleCards[tcIndex].id)
+    }
+    return false
 }
 
 const confirmNakedTribute = () => {
@@ -1507,7 +1752,7 @@ const confirmNakedTribute = () => {
         nakedLobsterIndex: tributeState.nakedLobsterIndex,
         nakedRewardType: tributeState.nakedRewardType
     }
-    if (hasBonusTribute.value && tributeState.bonusTributeChoice) {
+    if (hasNakedBonusTribute() && tributeState.bonusTributeChoice) {
         payload.bonusTributeChoice = tributeState.bonusTributeChoice
     }
     onlineGameStore.sendSettlementAction('submitTribute', payload)

@@ -1258,10 +1258,43 @@
 }
 
 .tribute-card {
+    position: relative;
     background: var(--color-bg-primary);
     padding: 0.75rem;
+    padding-left: 2.5rem;
     border-radius: 0.5rem;
-    border: 1px solid var(--color-border-light);
+    border: 2px solid var(--color-border-light);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tribute-card.selected {
+    border-color: #4ecdc4;
+    background: rgba(78, 205, 196, 0.1);
+}
+
+.tribute-card.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.tribute-card-check {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 50%;
+    background: rgba(100, 100, 100, 0.3);
+    color: #fff;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tribute-card-check.checked {
+    background: #4ecdc4;
 }
 
 .tc-name {
@@ -1289,6 +1322,25 @@
     font-size: 0.8125rem;
     color: var(--color-success);
     font-weight: 500;
+}
+
+.selected-summary {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: rgba(78, 205, 196, 0.1);
+    border-radius: 0.5rem;
+    text-align: center;
+    font-size: 0.9375rem;
+    font-weight: bold;
+}
+
+.completed-taverns-section {
+    margin-top: 1rem;
+    opacity: 0.6;
+}
+
+.completed-tavern {
+    opacity: 0.7;
 }
 
 /* 裸交面板样式 */
@@ -2194,6 +2246,11 @@
     border-color: #4ecdc4;
     background: rgba(78, 205, 196, 0.15);
     box-shadow: 0 0 0.75rem rgba(78, 205, 196, 0.3);
+}
+
+.lobster-pick-card.disabled {
+    opacity: 0.4;
+    pointer-events: none;
 }
 
 .lobster-pick-card.title-card-pick {
