@@ -62,7 +62,10 @@
                     <view class="betting-fighters">
                         <view class="betting-fighter-card" @click="selectBetTarget('challenger')">
                             <text class="bf-label">{{ challenger?.name }}</text>
-                            <text class="bf-lobster">{{ store.challengerLobster?.name || '龙虾' }}</text>
+                            <text class="bf-lobster">{{ challengerLobsterInfo?.name || '-' }}</text>
+                            <text class="fighter-skill" v-if="store.challengerSelectedLobster?.skill">
+                                技能：{{ store.challengerSelectedLobster?.skill.description }}
+                            </text>
                             <view :class="['bf-select', { selected: betTarget === 'challenger', disabled: !canBet }]">
                                 <text>投1金币</text>
                             </view>
@@ -70,7 +73,10 @@
                         <text class="vs-text">VS</text>
                         <view class="betting-fighter-card" @click="selectBetTarget('defender')">
                             <text class="bf-label">{{ defender?.name }}</text>
-                            <text class="bf-lobster">{{ store.defenderLobster?.name || '龙虾' }}</text>
+                            <text class="bf-lobster">{{ defenderLobsterInfo?.name || '-' }}</text>
+                            <text class="fighter-skill" v-if="store.defenderSelectedLobster?.skill">
+                                技能：{{ store.defenderSelectedLobster?.skill.description }}
+                            </text>
                             <view :class="['bf-select', { selected: betTarget === 'defender', disabled: !canBet }]">
                                 <text>投1金币</text>
                             </view>
@@ -91,12 +97,18 @@
                     <view class="lobster-preview">
                         <view class="preview-card">
                             <text class="preview-label">{{ challenger?.name }}</text>
-                            <text class="preview-lobster">{{ store.challengerLobster?.name || '' }}</text>
+                            <text class="preview-lobster">{{ challengerLobsterInfo?.name || '-' }}</text>
+                            <text class="fighter-skill" v-if="store.challengerSelectedLobster?.skill">
+                                技能：{{ store.challengerSelectedLobster?.skill.description }}
+                            </text>
                         </view>
                         <text class="vs-text">VS</text>
                         <view class="preview-card">
                             <text class="preview-label">{{ defender?.name }}</text>
-                            <text class="preview-lobster">{{ store.defenderLobster?.name || '' }}</text>
+                            <text class="preview-lobster">{{ defenderLobsterInfo?.name || '-' }}</text>
+                            <text class="fighter-skill" v-if="store.defenderSelectedLobster?.skill">
+                                技能：{{ store.defenderSelectedLobster?.skill.description }}
+                            </text>
                         </view>
                     </view>
                 </view>
@@ -108,16 +120,16 @@
                     <view class="fighter-card challenger">
                         <text class="fighter-label">挑战者</text>
                         <text class="fighter-name">{{ challengerLobsterInfo?.name || '-' }}</text>
-                        <text class="fighter-skill" v-if="challengerLobsterInfo?.skillDesc">
-                            技能：{{ challengerLobsterInfo.skillDesc }}
+                        <text class="fighter-skill" v-if="store.challengerSelectedLobster?.skill">
+                            技能：{{ store.challengerSelectedLobster?.skill.description }}
                         </text>
                     </view>
                     <text class="vs-text">VS</text>
                     <view class="fighter-card defender">
                         <text class="fighter-label">被挑战者</text>
                         <text class="fighter-name">{{ defenderLobsterInfo?.name || '-' }}</text>
-                        <text class="fighter-skill" v-if="defenderLobsterInfo?.skillDesc">
-                            技能：{{ defenderLobsterInfo.skillDesc }}
+                        <text class="fighter-skill" v-if="store.defenderSelectedLobster?.skill">
+                            技能：{{ store.defenderSelectedLobster?.skill.description }}
                         </text>
                     </view>
                 </view>

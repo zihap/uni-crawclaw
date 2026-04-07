@@ -54,22 +54,22 @@ export const useBattleStore = defineStore('battle', () => {
         color: data.color || defaultColor,
         lobsterName: data.lobsterName,
         lobsterId: data.lobsterId,
+        lobsterGrade: selectedLobster.grade,
         lobsterDesc: data.lobsterDesc,
+        lobsterSkill: selectedLobster.skill,
         position: startPosition,
         started: getSkill(data.lobsterId)?.startStarted || false
     })
 
     const buildInitialBattleLog = (p1Data, p2Data) => {
-        const p1Skill = getSkill(p1Data.lobsterId)
-        const p2Skill = getSkill(p2Data.lobsterId)
-        const formatLobsterInfo = (data, skill) =>
-            `${data.name || '玩家1'} 的 ${data.lobsterName}${skill?.description ? '[' + skill.description + ']' : ''}`
+        const formatLobsterInfo = (data) =>
+            `${data.name || '玩家1'} 的 ${data.lobsterName}${data?.lobsterSkill ? '[' + data.lobsterSkill + ']' : ''}`
 
         const logs = [
             { timestamp: Date.now(), message: '🦞 斗龙虾争锋开始！' },
             {
                 timestamp: Date.now(),
-                message: `${formatLobsterInfo(p1Data, p1Skill)} vs ${formatLobsterInfo(p2Data, p2Skill)}`
+                message: `${formatLobsterInfo(p1Data)} vs ${formatLobsterInfo(p2Data)}`
             },
             { timestamp: Date.now(), message: '🎲 投掷先手骰子决定行动顺序...' }
         ]

@@ -1526,12 +1526,6 @@ const isPlayerOccupiedTavern = (tavernId) => {
     return player?.tavernCompletions?.[tavernId] !== undefined
 }
 
-const hasBonusTribute = computed(() => {
-    const player = pendingSettlement.value?.player
-    if (!player || !player.titleCards) return false
-    return player.titleCards.some((tc) => tc.skill?.bonusTribute === true)
-})
-
 const selectedLobstersHaveBonus = computed(() => {
     const player = pendingSettlement.value?.player
     if (!player || !player.titleCards) return false
@@ -1841,9 +1835,11 @@ watch(
 const buildArenaPlayerData = (player, selectedLobster, defaultColor) => ({
     id: player.id,
     name: player.name,
-    lobsterId: selectedLobster.grade || selectedLobster.id,
-    lobsterName: selectedLobster.name,
+    lobsterId: selectedLobster.id,
+    lobsterGrade: selectedLobster.grade,
+    lobsterName: selectedLobster.name || getLobsterGradeName(selectedLobster.grade),
     lobsterDesc: selectedLobster.description,
+    lobsterSkill: selectedLobster.skill,
     color: PLAYER_COLORS[player.id]?.bg || defaultColor
 })
 
