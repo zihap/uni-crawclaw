@@ -1093,6 +1093,10 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                 from services.tribute_card_effects import apply_instant_effect
                 apply_instant_effect(player, card, game_state)
 
+                if 'tributeCards' not in player:
+                    player['tributeCards'] = []
+                player['tributeCards'].append(card)
+
             bonus_choice = action_payload.get('bonusTributeChoice')
             if bonus_choice == 'de':
                 player['de'] = player.get('de', 0) + 1

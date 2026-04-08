@@ -145,6 +145,7 @@ def _build_resource_snapshot(player: dict) -> dict:
         'bonusGold': player.get('bonusGold', 0),
         'lobsters': player.get('lobsters', []),
         'titleCards': player.get('titleCards', []),
+        'tributeCards': player.get('tributeCards', []),
     }
 
 

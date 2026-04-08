@@ -313,7 +313,6 @@ export const useOnlineGameStore = defineStore('online-game', () => {
     }
 
     function handleGameStateUpdate(data) {
-        if (data.players) playerStore.syncPlayers(data.players)
         if (data.areas) areas.value = data.areas
         if (data.phase) currentPhase.value = data.phase
         if (data.currentRound) currentRound.value = data.currentRound
@@ -323,9 +322,6 @@ export const useOnlineGameStore = defineStore('online-game', () => {
             currentArea.value = areaNames[data.currentArea] || ''
         }
         if (data.status) status.value = data.status
-        if (data.tributeTasks) tributeTasks.value = data.tributeTasks
-        if (data.downtownCards) downtownCards.value = data.downtownCards
-        if (data.lastPlacement !== undefined) lastPlacement.value = data.lastPlacement
     }
 
     function handleSettlementComplete(data) {
@@ -532,15 +528,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
 
     // ============ 客户端->服务端 ============
     function sendGameAction(actionType, payload = {}) {
-        const turnRequiredActions = [
-            'placeHeadman',
-            'exchangeSignals',
-            'buyItem',
-            'sellItem',
-            'cultivateLobster',
-            'submitTribute',
-            'executeDowntownAction'
-        ]
+        const turnRequiredActions = ['placeHeadman', 'nextPlayer', 'nextArea']
 
         if (turnRequiredActions.includes(actionType) && !isMyTurn.value) {
             uni.showToast({ title: '不是你的回合', icon: 'none' })

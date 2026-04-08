@@ -54,16 +54,16 @@ export const useBattleStore = defineStore('battle', () => {
         color: data.color || defaultColor,
         lobsterName: data.lobsterName,
         lobsterId: data.lobsterId,
-        lobsterGrade: selectedLobster.grade,
+        lobsterGrade: data.grade,
         lobsterDesc: data.lobsterDesc,
-        lobsterSkill: selectedLobster.skill,
+        lobsterSkill: data.skill,
         position: startPosition,
         started: getSkill(data.lobsterId)?.startStarted || false
     })
 
     const buildInitialBattleLog = (p1Data, p2Data) => {
         const formatLobsterInfo = (data) =>
-            `${data.name || '玩家1'} 的 ${data.lobsterName}${data?.lobsterSkill ? '[' + data.lobsterSkill + ']' : ''}`
+            `${data.name || '玩家1'} 的 ${data.lobsterName}${data?.lobsterSkill?.description ? '[' + data.lobsterSkill.description + ']' : ''}`
 
         const logs = [
             { timestamp: Date.now(), message: '🦞 斗龙虾争锋开始！' },
@@ -74,10 +74,10 @@ export const useBattleStore = defineStore('battle', () => {
             { timestamp: Date.now(), message: '🎲 投掷先手骰子决定行动顺序...' }
         ]
 
-        if (p1Skill?.startStarted) {
+        if (p1Data.lobsterSkill?.startStarted) {
             logs.push({ timestamp: Date.now(), message: `${p1Data.name} 的龙虾为急先锋，出场即可移动！` })
         }
-        if (p2Skill?.startStarted) {
+        if (p2Data.lobsterSkill?.startStarted) {
             logs.push({ timestamp: Date.now(), message: `${p2Data.name} 的龙虾为急先锋，出场即可移动！` })
         }
         return logs
