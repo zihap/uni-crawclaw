@@ -664,7 +664,7 @@ function triggerInitiativeRoll() {
 
     const initiative = battleData.value?.initiative
     const isFromSync = initiative && initiative.p1 !== null && initiative.p2 !== null
-    const isHost = battleStore.myPlayerIndex === 0 || battleStore.myPlayerIndex < 0
+    const isHost = battleStore.myPlayerIndex === 0
 
     showInitiativeOverlay.value = true
 
@@ -682,11 +682,10 @@ function triggerInitiativeRoll() {
 function showLobsterInfo(playerIndex) {
     const player = battleData.value?.players[playerIndex]
     if (!player) return
-    const skill = getSkill(player.lobsterId)
     lobsterPopupData.value = {
         lobsterName: player.lobsterName,
         lobsterDesc: player.lobsterDesc,
-        skillDesc: skill?.description || ''
+        skillDesc: player.lobsterSkill || ''
     }
     showLobsterPopup.value = true
 }

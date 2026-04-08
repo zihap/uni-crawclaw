@@ -127,7 +127,7 @@
                 "wang": 2
             },
             "effectDesc": "获得卡片时执行3次培养龙虾升级",
-            "effectType": "instant_breed_3"
+            "effectType": "instant_breed"
         },
         {
             "id": "tribute_2",
@@ -293,7 +293,8 @@
                 "de": 1
             },
             "effectDesc": "游戏结束最终结算前可以支付3/5/8个金币增加1/2/3德",
-            "effectType": "aura_endgame_score"
+            "effectType": "aura_endgame_score",
+            "costResourceType": "coins"
         },
         {
             "id": "tribute_14",
@@ -364,7 +365,8 @@
                 "de": 1
             },
             "effectDesc": "游戏结束最终结算前可以支付2/4/7个海草增加1/2/3德",
-            "effectType": "aura_endgame_score_seaweed"
+            "effectType": "aura_endgame_score",
+            "costResourceType": "seaweed"
         }
     ],
     "marketplaceCards": [

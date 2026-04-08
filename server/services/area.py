@@ -1090,20 +1090,8 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                 player['de'] = player.get('de', 0) + reward.get('de', 0)
                 player['wang'] = player.get('wang', 0) + reward.get('wang', 0)
 
-                effect_type = card.get('effectType')
-                if effect_type == 'instant_upgrade_all':
-                    for l in player.get('lobsters', []):
-                        if l.get('grade') != 'royal':
-                            if l.get('grade') == 'normal':
-                                l['grade'] = 'grade3'
-                            elif l.get('grade') == 'grade3':
-                                l['grade'] = 'grade2'
-                            elif l.get('grade') == 'grade2':
-                                l['grade'] = 'grade1'
-                            elif l.get('grade') == 'grade1':
-                                l['grade'] = 'royal'
-                elif effect_type == 'instant_gain_cages':
-                    player['cages'] = player.get('cages', 0) + 2
+                from services.tribute_card_effects import apply_instant_effect
+                apply_instant_effect(player, card, game_state)
 
             bonus_choice = action_payload.get('bonusTributeChoice')
             if bonus_choice == 'de':
@@ -1169,6 +1157,7 @@ def _serialize_player(player: dict) -> dict:
         'wang': player['wang'],
         'lobsters': player['lobsters'],
         'titleCards': player['titleCards'],
+        'tributeCards': player.get('tributeCards', []),
         'tempBubbles': player.get('tempBubbles', 0),
         'tavernCompletions': player.get('tavernCompletions', {}),
     }

@@ -60,8 +60,11 @@ class ClientGameActionTypes:
     SELL_ITEM = 'sellItem'
     CULTIVATE_LOBSTER = 'cultivateLobster'
     SUBMIT_TRIBUTE = 'submitTribute'
+    SUBMIT_TRIBUTE_CHOICE = 'submitTributeChoice'
     DOWNTOWN_ACTION = 'executeDowntownAction'
     AREA_ACTION = 'areaAction'
+    ENDGAME_SCORE_CHOICE = 'endgameScoreChoice'
+    SUBMIT_ENDGAME_CHOICE = 'submitEndgameChoice'
 
 
 # =============================================================================

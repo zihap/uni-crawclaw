@@ -10,6 +10,7 @@ from utils.events import ServerEvents, ServerRoomActionTypes, ServerGameActionTy
 from utils.game_state import draw_tribute_tasks, draw_downtown_cards
 from utils.logger import log_info, log_debug
 from utils.helpers import make_action_message, calculate_market_prices
+from services.tribute_card_effects import get_endgame_choices
 
 
 def update_market_prices(game_state: dict):
@@ -203,11 +204,47 @@ async def complete_settlement(room_id, game_state, rooms, manager):
     cleanup_phase(game_state)
 
     if game_state['currentRound'] >= game_state['maxRounds']:
+        players_need_endgame_choice = []
+        for player in game_state['players']:
+            tribute_cards = player.get('tributeCards', [])
+            for card in tribute_cards:
+                if card.get('effectType') == 'aura_endgame_score':
+                    players_need_endgame_choice.append({
+                        'playerId': player['id'],
+                        'playerName': player['name'],
+                        'card': card
+                    })
+                    break
+
+        if players_need_endgame_choice:
+            game_state['status'] = 'waitingEndgameChoice'
+            game_state['waitingForEndgameChoice'] = players_need_endgame_choice
+            game_state['endgameChoiceIndex'] = 0
+
+            first_player = players_need_endgame_choice[0]
+            player = game_state['players'][first_player['playerId']]
+            card = first_player['card']
+            choices = get_endgame_choices(player, card)
+
+            await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
+                make_action_message(ServerGameActionTypes.GAME_ACTION, {
+                    'actionType': 'endgameScoreChoiceRequired',
+                    'playerId': first_player['playerId'],
+                    'playerName': first_player['playerName'],
+                    'data': {
+                        'card': card,
+                        'choices': choices
+                    },
+                    'gameState': game_state
+                }))
+            await broadcast_game_state(room_id, rooms, manager)
+            return
+
         game_state['status'] = 'ended'
 
         winner = sorted(
             game_state['players'],
-            key=lambda x: (x['de'] * x['wang'] + x['bonusPoints'], x['coins']),
+            key=lambda x: (x.get('de', 0) * x.get('wang', 0) + x.get('bonusPoints', 0), x.get('coins', 0)),
             reverse=True
         )[0]
 
@@ -221,6 +258,17 @@ async def complete_settlement(room_id, game_state, rooms, manager):
         return
 
     game_state['currentRound'] += 1
+
+    # 触发每轮 aura 效果
+    for player in game_state['players']:
+        tribute_cards = player.get('tributeCards', [])
+        for card in tribute_cards:
+            effect_type = card.get('effectType')
+            if effect_type == 'aura_round_coin':
+                player['coins'] = player.get('coins', 0) + 1
+            elif effect_type == 'aura_round_seaweed':
+                player['seaweed'] = player.get('seaweed', 0) + 1
+
     game_state['phase'] = 'placement'
     game_state['currentPlayerIndex'] = game_state.get('startingPlayerIndex', 0)
     game_state['currentArea'] = 0

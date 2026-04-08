@@ -246,6 +246,10 @@
                         onlineGameStore.myPlayer.lobsters?.length || onlineGameStore.myPlayer.titleCards?.length
                     }}</text>
                 </view>
+                <view class="resource-item tribute-cards-item" @longpress="showTributeCards = true">
+                    <text class="resource-label">上供卡</text>
+                    <text class="resource-value">{{ onlineGameStore.myPlayer.tributeCards?.length || 0 }}</text>
+                </view>
             </view>
         </view>
 
@@ -285,6 +289,31 @@
                             </view>
                         </view>
                     </view>
+                </view>
+            </view>
+        </view>
+
+        <!-- 我的上供卡列表 -->
+        <view v-if="showTributeCards" class="tribute-cards-overlay" @click="showTributeCards = false">
+            <view class="tribute-cards-panel" @click.stop>
+                <view class="tribute-cards-header">
+                    <text class="tribute-cards-title"
+                        >我的上供卡 ({{ onlineGameStore.myPlayer.tributeCards?.length }})</text
+                    >
+                    <text class="tribute-cards-close" @click="showTributeCards = false">✕</text>
+                </view>
+                <view class="tribute-cards-body">
+                    <view v-if="onlineGameStore.myPlayer.tributeCards?.length" class="tribute-cards-grid">
+                        <view
+                            v-for="card in onlineGameStore.myPlayer.tributeCards"
+                            :key="card.id"
+                            class="tribute-card-item"
+                        >
+                            <text class="tribute-card-name">{{ card.name }}</text>
+                            <text v-if="card.effectDesc" class="tribute-card-desc">{{ card.effectDesc }}</text>
+                        </view>
+                    </view>
+                    <view v-else class="empty-list-hint">暂无上供卡</view>
                 </view>
             </view>
         </view>
@@ -943,6 +972,7 @@ const playerStore = usePlayerStore()
 const showLog = ref(false)
 const showArenaModal = ref(false)
 const showLobsterList = ref(false)
+const showTributeCards = ref(false)
 
 // ============ 结算阶段状态 ============
 const pendingSettlement = computed(() => onlineGameStore.pendingSettlement)

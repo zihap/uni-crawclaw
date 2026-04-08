@@ -151,6 +151,8 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         socketService.onAction('serverGameAction', 'roundStarted', handleRoundStarted)
         socketService.onAction('serverGameAction', 'gameEnded', handleGameEnded)
         socketService.onAction('serverGameAction', 'gameAction', handleGameAction)
+        socketService.onAction('serverGameAction', 'tributeChoiceRequired', handleTributeChoiceRequired)
+        socketService.onAction('serverGameAction', 'endgameScoreChoiceRequired', handleEndgameScoreChoiceRequired)
 
         // serverBattleAction 聚合事件
         socketService.onAction('serverBattleAction', 'battleStart', handleBattleStart)
@@ -229,6 +231,85 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         ) {
             if (data.gameState) updateGameState(data.gameState)
         }
+    }
+
+    function handleTributeChoiceRequired(data) {
+        const { choiceType, taskId, playerId } = data?.data || data || {}
+        console.log('[tributeChoiceRequired] choiceType:', choiceType, 'taskId:', taskId)
+
+        if (choiceType === 'buy_advanced_lobster') {
+            uni.showModal({
+                title: '选择龙虾品级',
+                content: '选择要获得的龙虾品级',
+                confirmText: '普通龙虾',
+                cancelText: '进阶龙虾',
+                success: function (res) {
+                    if (!res.confirm && !res.cancel) {
+                        return
+                    }
+                    const grade = res.confirm ? 'normal' : 'grade1'
+                    socketService.clientGameAction('submitTributeChoice', {
+                        taskId: taskId,
+                        choice: { grade: grade }
+                    })
+                },
+                fail: function () {
+                    uni.showToast({ title: '请做出选择', icon: 'none' })
+                }
+            })
+        } else if (choiceType === 'discard_attack') {
+            uni.showModal({
+                title: '选择目标类型',
+                content: '所有其他玩家将弃置1个对应的资源',
+                confirmText: '龙虾',
+                cancelText: '虾笼',
+                success: function (res) {
+                    if (!res.confirm && !res.cancel) {
+                        return
+                    }
+                    const targetType = res.confirm ? 'lobster' : 'cage'
+                    socketService.clientGameAction('submitTributeChoice', {
+                        taskId: taskId,
+                        choice: { action: 'discard', targetType: targetType }
+                    })
+                },
+                fail: function () {
+                    uni.showToast({ title: '请做出选择', icon: 'none' })
+                }
+            })
+        }
+    }
+
+    function handleEndgameScoreChoiceRequired(data) {
+        const { choices, card } = data?.data || data || {}
+        const costResourceType = card?.costResourceType || 'coins'
+        const resourceName = costResourceType === 'coins' ? '金币' : '海草'
+
+        const options = (choices || []).map(function (c) {
+            return '支付' + c.cost + resourceName + '获得' + c.reward + '德'
+        })
+
+        if (options.length === 0) {
+            uni.showToast({ title: '没有可用的选择', icon: 'none' })
+            return
+        }
+
+        uni.showActionSheet({
+            itemList: options,
+            success: function (res) {
+                const selectedChoice = choices?.[res.tapIndex]
+                if (!selectedChoice) {
+                    uni.showToast({ title: '选择无效', icon: 'none' })
+                    return
+                }
+                socketService.clientGameAction('submitEndgameChoice', {
+                    choice: selectedChoice
+                })
+            },
+            fail: function () {
+                uni.showToast({ title: '请做出选择', icon: 'none' })
+            }
+        })
     }
 
     function handleGameStateUpdate(data) {

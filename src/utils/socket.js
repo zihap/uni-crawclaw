@@ -113,7 +113,7 @@ class WebSocketService {
      * - 需要处理网络异常情况
      */
     connect(roomId, playerId) {
-        var self = this
+        const self = this
 
         // 防止重复连接
         if (this.connecting) {
@@ -122,8 +122,8 @@ class WebSocketService {
 
         // 已连接时检查URL是否相同
         if (this._connected && this.socket) {
-            var oldUrl = this._wsUrl
-            var newUrl = WS_URL + '/ws/' + roomId + '/' + playerId
+            const oldUrl = this._wsUrl
+            const newUrl = WS_URL + '/ws/' + roomId + '/' + playerId
             if (oldUrl !== newUrl) {
                 this.disconnect()
             } else {
@@ -136,7 +136,7 @@ class WebSocketService {
         this.isManualClose = false
         this.connecting = true
 
-        var wsUrl = this._wsUrl
+        const wsUrl = this._wsUrl
 
         console.log('Connecting to WebSocket:', wsUrl, 'playerId:', playerId, 'playerId type:', typeof playerId)
 
@@ -183,17 +183,17 @@ class WebSocketService {
 
         this.socket.onMessage(function (res) {
             try {
-                var message = JSON.parse(res.data)
-                var event = message.event
-                var data = message.data
+                const message = JSON.parse(res.data)
+                const event = message.event
+                const data = message.data
                 console.log('WebSocket message:', event, data)
 
                 // 聚合事件分发: 检查是否为 serverRoomAction / serverGameAction / serverBattleAction / serverAreaAction
                 if (event && data && data.actionType) {
-                    var actionCbs = self.actionListeners[event]
+                    const actionCbs = self.actionListeners[event]
                     console.log('[WebSocket] Received:', event, data.actionType, data)
                     if (actionCbs) {
-                        var typeCbs = actionCbs[data.actionType]
+                        const typeCbs = actionCbs[data.actionType]
                         if (typeCbs && typeCbs.length > 0) {
                             typeCbs.forEach(function (cb) {
                                 cb(data)
@@ -222,7 +222,7 @@ class WebSocketService {
      * - 心跳间隔不宜过长（无法及时检测断线）
      */
     _startHeartbeat() {
-        var self = this
+        const self = this
         this._stopHeartbeat()
         this.heartbeatTimer = setInterval(function () {
             if (self._connected) {
@@ -256,7 +256,7 @@ class WebSocketService {
      * - 如果超过最大重连次数，触发reconnectFailed事件
      */
     _scheduleReconnect() {
-        var self = this
+        const self = this
 
         // 超过最大重连次数，停止重连
         if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
@@ -297,9 +297,9 @@ class WebSocketService {
      * - 消息按顺序发送，保证一致性
      */
     _flushPendingEvents() {
-        var self = this
+        const self = this
         while (this.pendingEvents.length > 0) {
-            var event = this.pendingEvents.shift()
+            const event = this.pendingEvents.shift()
             this._send(event.name, event.data)
         }
     }
@@ -321,7 +321,7 @@ class WebSocketService {
      */
     _send(event, data) {
         if (this._connected && this.socket) {
-            var message = JSON.stringify({ event: event, data: data })
+            const message = JSON.stringify({ event: event, data: data })
             try {
                 this.socket.send({
                     data: message,
@@ -377,7 +377,7 @@ class WebSocketService {
      * 将事件分发给所有订阅的回调函数
      */
     _emit(event, data) {
-        var cbs = this.listeners[event]
+        const cbs = this.listeners[event]
         if (cbs) {
             if (Array.isArray(cbs)) {
                 cbs.forEach(function (cb) {
@@ -634,7 +634,7 @@ class WebSocketService {
  * import socketService from '@/services/socket'
  * ```
  */
-var socketService = new WebSocketService()
+const socketService = new WebSocketService()
 
 export { socketService }
 export default { socketService }
