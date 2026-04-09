@@ -2203,8 +2203,8 @@
 
 /* 上供卡资源项 */
 .tribute-cards-item {
-    background: linear-gradient(135deg, #2d1f4e 0%, #3d2a5e 100%);
-    border: 1px solid #6b4c9a;
+    background: rgba(102, 126, 234, 0.2);
+    transform: scale(0.95);
 }
 
 /* 长按上供卡弹出的列表 */
