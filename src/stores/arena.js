@@ -26,14 +26,20 @@ export const useBattleStore = defineStore('battle', () => {
     const applySkillMethod = (playerIndex, methodName, fallback, ...args) => {
         const player = battleData.value?.players[playerIndex]
         if (!player) return fallback
-        const skill = getSkill(player.lobsterId)
+        let skill = getSkill(player.lobsterGrade)
+        if (player.lobsterSkill) {
+            skill = player.lobsterSkill
+        }
         return skill?.[methodName] ? skill[methodName](fallback, ...args) : fallback
     }
 
     function getDiceValue(playerIndex) {
         const player = battleData.value?.players[playerIndex]
         if (!player) return Math.floor(Math.random() * 6) + 1
-        const skill = getSkill(player.lobsterId)
+        let skill = getSkill(player.lobsterGrade)
+        if (player.lobsterSkill) {
+            skill = player.lobsterSkill
+        }
         if (skill?.getDiceValue) return skill.getDiceValue()
         return Math.floor(Math.random() * getDiceSides(playerIndex)) + 1
     }
@@ -54,11 +60,11 @@ export const useBattleStore = defineStore('battle', () => {
         color: data.color || defaultColor,
         lobsterName: data.lobsterName,
         lobsterId: data.lobsterId,
-        lobsterGrade: data.grade,
+        lobsterGrade: data.lobsterGrade,
         lobsterDesc: data.lobsterDesc,
-        lobsterSkill: data.skill,
+        lobsterSkill: data.lobsterSkill,
         position: startPosition,
-        started: getSkill(data.lobsterId)?.startStarted || false
+        started: data.lobsterSkill?.startStarted || false
     })
 
     const buildInitialBattleLog = (p1Data, p2Data) => {
@@ -161,11 +167,11 @@ export const useBattleStore = defineStore('battle', () => {
         addLog(`${p1Data.name} 掷出 ${p1} 点${p1DiceDesc}`)
         addLog(`${p2Data.name} 掷出 ${p2} 点${p2DiceDesc}`)
 
-        if (p1 >= 6 && !getSkill(p1Data.lobsterId)?.startStarted) {
+        if (p1 >= 6 && !p1Data.lobsterSkill?.startStarted) {
             p1Data.started = true
             addLog(`${p1Data.name} 掷出>=6点，龙虾标记为可移动状态！`)
         }
-        if (p2 >= 6 && !getSkill(p2Data.lobsterId)?.startStarted) {
+        if (p2 >= 6 && !p2Data.lobsterSkill?.startStarted) {
             p2Data.started = true
             addLog(`${p2Data.name} 掷出>=6点，龙虾标记为可移动状态！`)
         }
@@ -183,7 +189,7 @@ export const useBattleStore = defineStore('battle', () => {
 
         addLog(`轮到 ${battleData.value.players[firstPlayer].name} 掷骰子`)
 
-        const nextSkill = getSkill(battleData.value.players[firstPlayer].lobsterId)
+        const nextSkill = battleData.value.players[firstPlayer].lobsterSkill
         if (nextSkill?.canReroll && nextSkill?.description) {
             addLog(`[${nextSkill.description}] 可重新投掷一次`)
         }
@@ -196,7 +202,7 @@ export const useBattleStore = defineStore('battle', () => {
     function rollDice(diceValue, seaweedBonus = 0) {
         const roller = battleData.value.currentPlayer
         const player = battleData.value.players[roller]
-        const skill = getSkill(player.lobsterId)
+        const skill = player.lobsterSkill
 
         if (skill?.canReroll) {
             if (pendingDiceValue.value === null) {
@@ -282,7 +288,7 @@ export const useBattleStore = defineStore('battle', () => {
 
         const player = battleData.value.players[roller]
         const diceSides = getDiceSides(roller)
-        const skill = getSkill(player.lobsterId)
+        const skill = player.lobsterSkill
         let finalDiceValue = modifyDiceValue(roller, diceValue)
 
         const diceSidesDesc = diceSides !== 6 ? `(${diceSides}面骰)` : ''
@@ -355,8 +361,8 @@ export const useBattleStore = defineStore('battle', () => {
         const p2 = battleData.value.players[1]
         const rollerPlayer = battleData.value.players[roller]
         const opponentPlayer = roller === 0 ? p2 : p1
-        const rollerSkill = getSkill(rollerPlayer.lobsterId)
-        const opponentSkill = getSkill(opponentPlayer.lobsterId)
+        const rollerSkill = rollerPlayer.lobsterSkill
+        const opponentSkill = opponentPlayer.lobsterSkill
 
         const isCovered = p1.position === p2.position
         if (isCovered) {
@@ -404,7 +410,7 @@ export const useBattleStore = defineStore('battle', () => {
             addLog(`💰 ${winner.name} 获得2金币奖励！`)
         } else if (choice === 'gradeUpgrade') {
             const newGrade = getNextLobsterGrade(winner.lobsterId)
-            winner.lobsterId = newGrade
+            winner.lobsterGrade = newGrade
             winner.lobsterName = getLobsterGradeName(newGrade)
             addLog(`⭐ ${winner.name} 的${winner.lobsterName}升级成功！`)
         }

@@ -21,8 +21,7 @@ def create_lobster(grade: str = 'normal') -> dict:
     """创建一只龙虾对象"""
     return {
         'id': ''.join(random.choices(string.ascii_lowercase + string.digits, k=9)),
-        'grade': grade,
-        'title': None
+        'grade': grade
     }
 
 

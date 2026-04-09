@@ -89,7 +89,11 @@ export const useOnlineGameStore = defineStore('online-game', () => {
 
     // ============ 结算阶段UI状态 ============
     const pendingSettlement = ref(null) // { areaType, playerId, actionCount, player, prices, availableCards, marketLobsterCount }
+    
+    // ============ 上供区UI状态 ============
+    const pendingTribute = ref(null) // { player, slotIndex, taverns, tributeTasks, resolve }
 
+    const pendingBattleBonusChoice = ref(null)
     // ============ 同回合龙虾出战记录 ============
     const usedLobstersThisRound = ref({}) // { playerId: [lobsterId, ...] }
 
@@ -356,7 +360,6 @@ export const useOnlineGameStore = defineStore('online-game', () => {
     }
 
     function handleAreaWaitingUI(data) {
-        console.log('[handleAreaWaitingUI] Received:', JSON.stringify(data))
         if (data.waitingForBattleBonusChoice) {
             currentPhase.value = 'settlement'
             pendingBattleBonusChoice.value = {
@@ -608,7 +611,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         const player = playerStore.players.find((p) => p.id === playerId)
         if (!player) return []
         const usedIds = new Set(getUsedLobsterIds(playerId))
-        const validLobsters = player.lobsters?.filter((l) => l?.id && l.id !== 'normal' && !usedIds.has(l.id)) || []
+        const validLobsters = player.lobsters?.filter((l) => l?.grade && l.grade !== 'normal' && !usedIds.has(l.grade)) || []
         const titleCards = player.titleCards?.filter((t) => t?.id && !usedIds.has(t.id)) || []
         return [...validLobsters, ...titleCards]
     }

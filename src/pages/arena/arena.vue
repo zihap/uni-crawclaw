@@ -292,7 +292,6 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useBattleStore } from '@stores/arena.js'
 import { useOnlineGameStore } from '@stores/online-game.js'
 import { usePlayerStore } from '@stores/player.js'
-import { getSkill } from '@data/cards.js'
 import socketModule from '@utils/socket.js'
 
 const socketService = socketModule.socketService || socketModule
@@ -340,10 +339,10 @@ const canUseSeaweed = computed(() => {
     if (battleStore.canReroll) return false
     if (battleData.value?.rollDiceTimestamp) return false
     const player = battleData.value?.players[battleData.value?.currentPlayer]
-    if (player?.lobsterId === 'grade3') return false
+    if (player?.lobsterGrade === 'grade3') return false
     const opponentIndex = 1 - battleData.value?.currentPlayer
     const opponent = battleData.value?.players[opponentIndex]
-    if (opponent && getSkill(opponent.lobsterId)?.blockSeaweed) return false
+    if (opponent && player?.lobsterSkill?.blockSeaweed) return false
     return true
 })
 
@@ -351,7 +350,7 @@ const seaweedBonus = computed(() => {
     if (!isSeaweedChecked.value) return 0
     const player = battleData.value?.players[battleData.value?.currentPlayer]
     let base
-    switch (player?.lobsterId) {
+    switch (player?.lobsterGrade) {
         case 'grade2':
             base = 1
             break
@@ -361,7 +360,7 @@ const seaweedBonus = computed(() => {
         default:
             base = 3
     }
-    const bonus = getSkill(player?.lobsterId)?.seaweedDiceBonus || 0
+    const bonus = player?.lobsterSkill?.seaweedDiceBonus || 0
     return base + bonus
 })
 
@@ -370,7 +369,7 @@ const seaweedBonus = computed(() => {
 const battleData = computed(() => battleStore.battleData)
 
 const winnerCanUpgrade = computed(() => {
-    const grade = battleData.value?.winner?.lobsterId
+    const grade = battleData.value?.winner?.lobsterGrade
     return grade === 'normal' || grade === 'grade3' || grade === 'grade2' || grade === 'grade1'
 })
 
@@ -387,9 +386,7 @@ const DICE_IMAGE_MAP = {
 }
 
 const currentDiceImage = computed(() => {
-    const player = battleData.value?.players[battleData.value?.currentPlayer]
-    if (!player?.lobsterId) return DICE_IMAGE_MAP[6]
-    return DICE_IMAGE_MAP[battleStore.getDiceSides(battleData.value.currentPlayer)] || DICE_IMAGE_MAP[6]
+    return DICE_IMAGE_MAP[battleStore.getDiceSides(battleData.value?.currentPlayer)] || DICE_IMAGE_MAP[6]
 })
 
 // ============ 棋盘 & 龙虾可见性 ============

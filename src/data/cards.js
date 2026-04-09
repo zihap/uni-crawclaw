@@ -22,11 +22,9 @@ export const tributeCards = cardConfig.tributeCards
 
 export const marketplaceCards = cardConfig.marketplaceCards
 
-export function getSkill(lobsterId) {
-    const card = titleCards.find((c) => c.id === lobsterId)
-    if (lobsterId === 'grade3') return { getDiceSides: () => 6 }
-    else if (lobsterId === 'grade2') return { getDiceSides: () => 8 }
-    else if (lobsterId === 'grade1') return { getDiceSides: () => 10 }
-    else if (lobsterId === 'royal') return { getDiceSides: () => 10 }
-    else return card?.skill || null
+export function getSkill(lobsterGrade) {
+    if (lobsterGrade === 'grade3') return { getDiceSides: () => 6 }
+    else if (lobsterGrade === 'grade2') return { getDiceSides: () => 8 }
+    else if (lobsterGrade === 'grade1') return { getDiceSides: () => 10 }
+    else if (lobsterGrade === 'royal') return { getDiceSides: () => 10 }
 }

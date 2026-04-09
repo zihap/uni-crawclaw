@@ -225,10 +225,12 @@ const myLobsters = computed(() => {
 const challengerLobsterInfo = computed(() => {
     const lobster = store.challengerSelectedLobster || store.challengerLobster
     if (!lobster) return null
-    const grade = lobster.grade || lobster.lobsterId || lobster.id
-    const skill = getSkill(grade)
+    let skill = getSkill(lobster.grade)
+    if (lobster.skill) {
+        skill = lobster.skill
+    }
     return {
-        name: lobster.name || getLobsterGradeName(grade),
+        name: lobster.name || getLobsterGradeName(lobster.grade),
         skillDesc: skill?.description || ''
     }
 })
@@ -236,10 +238,12 @@ const challengerLobsterInfo = computed(() => {
 const defenderLobsterInfo = computed(() => {
     const lobster = store.defenderSelectedLobster || store.defenderLobster
     if (!lobster) return null
-    const grade = lobster.grade || lobster.lobsterId || lobster.id
-    const skill = getSkill(grade)
+    let skill = getSkill(lobster.grade)
+    if (lobster.skill) {
+        skill = lobster.skill
+    }
     return {
-        name: lobster.name || getLobsterGradeName(grade),
+        name: lobster.name || getLobsterGradeName(lobster.grade),
         skillDesc: skill?.description || ''
     }
 })
