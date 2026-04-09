@@ -662,6 +662,32 @@
             <text>竞技场</text>
         </view>
 
+        <!-- 战斗奖励选择弹窗 -->
+        <view class="modal-overlay" v-if="pendingBattleBonusChoice">
+            <view class="modal-content battle-bonus-modal">
+                <view class="modal-header">
+                    <text class="modal-title">战斗奖励选择</text>
+                    <text class="modal-subtitle">你拥有战斗胜利光环，选择一项作为战斗奖励</text>
+                </view>
+                <view class="modal-body">
+                    <view class="bonus-choices">
+                        <view class="bonus-option" @click="chooseBattleBonus('coins')">
+                            <text class="bonus-icon">🪙</text>
+                            <text class="bonus-label">1 金币</text>
+                        </view>
+                        <view class="bonus-option" @click="chooseBattleBonus('seaweed')">
+                            <text class="bonus-icon">🌿</text>
+                            <text class="bonus-label">1 海草</text>
+                        </view>
+                        <view class="bonus-option" @click="chooseBattleBonus('lobster')">
+                            <text class="bonus-icon">🦞</text>
+                            <text class="bonus-label">1 普通龙虾</text>
+                        </view>
+                    </view>
+                </view>
+            </view>
+        </view>
+
         <!-- 上供区结算弹窗 -->
         <view class="modal-overlay" v-if="pendingSettlement?.areaType === 'tribute'">
             <view class="modal-content tribute-modal">
@@ -978,6 +1004,9 @@ const showTributeCards = ref(false)
 const pendingSettlement = computed(() => onlineGameStore.pendingSettlement)
 // 强制监听 pendingSettlement 变化以确保响应式更新
 const settlementActionCount = computed(() => pendingSettlement.value?.actionCount ?? 0)
+
+// 战斗奖励选择状态
+const pendingBattleBonusChoice = computed(() => onlineGameStore.pendingBattleBonusChoice)
 
 watch(settlementActionCount, (newVal, oldVal) => {
     console.log('[Seafood Market] Action count changed:', oldVal, '->', newVal)
@@ -1786,6 +1815,11 @@ const confirmNakedTribute = () => {
 const skipTributeAction = () => {
     onlineGameStore.sendSettlementAction('skip')
     onlineGameStore.clearPendingSettlement()
+}
+
+// 战斗奖励选择
+const chooseBattleBonus = (choice) => {
+    onlineGameStore.sendBattleBonusChoice(choice)
 }
 
 // ============ 竞技场逻辑 ============

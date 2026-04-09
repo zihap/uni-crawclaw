@@ -9,6 +9,7 @@ from utils.constants import FISHING_BAG_ITEMS, SLOT_TEMPLATES, MARKET_PRICES, CH
 from utils.events import ServerEvents, ServerAreaActionTypes, ServerBattleActionTypes
 from utils.logger import log_info, log_debug
 from utils.helpers import send_error, make_action_message, create_lobster as _make_lobster, calculate_market_prices, make_settlement_state
+from services.tribute_card_effects import check_market_rule, check_breed_bonus, check_tribute_discount, check_battle_bonus, check_adjacent_action, get_adjacent_rewards, apply_aura_effect
 
 
 def _create_lobster(grade='normal'):
@@ -136,6 +137,18 @@ async def _resolve_seafood_market_step(game_state: dict, manager, room_id):
 
             if reward.get('coins'):
                 player['coins'] += reward['coins']
+            
+            # 应用相邻位置的奖励
+            if check_adjacent_action(player):
+                total_slots = len(slots)
+                adjacent_reward = get_adjacent_rewards('seafood_market', current_slot_index, total_slots)
+                for res_type, res_value in adjacent_reward.items():
+                    if res_type == 'coins':
+                        player['coins'] = player.get('coins', 0) + res_value
+                    elif res_type == 'cages':
+                        player['cages'] = player.get('cages', 0) + res_value
+                    elif res_type == 'seaweed':
+                        player['seaweed'] = player.get('seaweed', 0) + res_value
 
             if action_count > 0:
                 prices = calculate_market_prices(area_data['marketLobsterCount'])
@@ -184,8 +197,20 @@ async def _resolve_breeding_step(game_state: dict, manager, room_id):
                 player['seaweed'] = player.get('seaweed', 0) + reward['seaweed']
             if reward.get('coins'):
                 player['coins'] = player.get('coins', 0) + reward['coins']
+            
+            # 应用相邻位置的奖励
+            if check_adjacent_action(player):
+                total_slots = len(slots)
+                adjacent_reward = get_adjacent_rewards('breeding', current_slot_index, total_slots)
+                for res_type, res_value in adjacent_reward.items():
+                    if res_type == 'coins':
+                        player['coins'] = player.get('coins', 0) + res_value
+                    elif res_type == 'seaweed':
+                        player['seaweed'] = player.get('seaweed', 0) + res_value
+                    elif res_type == 'cages':
+                        player['cages'] = player.get('cages', 0) + res_value
 
-            # 如果没有克升级的龙虾，跳过UI交互
+            # 如果没有可升级的龙虾，跳过UI交互
             if len(player['lobsters']) == 0:
                 current_slot_index += 1
                 continue
@@ -249,6 +274,29 @@ async def _resolve_tribute_step(game_state: dict, manager, room_id):
             return 'waiting_ui'
 
         game_state['_lastBattleStartSent'] = current_battle_key
+
+        players_need_choice = []
+        for battle in game_state.get('battleQueue', []):
+            challenger = game_state['players'].get(battle['challengerId'])
+            defender = game_state['players'].get(battle['defenderId'])
+            if challenger and check_battle_bonus(challenger):
+                if challenger['id'] not in players_need_choice:
+                    players_need_choice.append(challenger['id'])
+            if defender and check_battle_bonus(defender):
+                if defender['id'] not in players_need_choice:
+                    players_need_choice.append(defender['id'])
+
+        if players_need_choice:
+            game_state['pendingBattleBonusChoices'] = players_need_choice
+            game_state['settlementState'] = make_settlement_state('tribute')
+            await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
+                make_action_message(ServerAreaActionTypes.AREA_WAITING_UI, {
+                    'areaType': 'tribute',
+                    'waitingForBattleBonusChoice': True,
+                    'playersNeedChoice': players_need_choice,
+                    'battleQueue': game_state['battleQueue']
+                }))
+            return 'waiting_ui'
 
         game_state['settlementState'] = make_settlement_state('tribute')
 
@@ -446,6 +494,18 @@ async def _process_shrimp_catching_action(game_state: dict, action_type: str, ac
                     p['isStartingPlayer'] = False
                 player['isStartingPlayer'] = True
             reward_given = True
+            
+            # 应用相邻位置的奖励
+            if check_adjacent_action(player):
+                area_data = game_state['areas']['shrimp_catching']
+                slots = area_data['slots']
+                total_slots = len(slots)
+                adjacent_reward = get_adjacent_rewards('shrimp_catching', current_slot_index, total_slots)
+                for res_type, res_value in adjacent_reward.items():
+                    if res_type == 'coins':
+                        player['coins'] = player.get('coins', 0) + res_value
+                    elif res_type == 'cages':
+                        player['cages'] = player.get('cages', 0) + res_value
 
         remaining_actions -= 1
 
@@ -576,17 +636,34 @@ async def _process_seafood_market_action(game_state: dict, action_type: str, act
     area_data = game_state['areas']['seafood_market']
     prices = calculate_market_prices(area_data['marketLobsterCount'])
 
+    market_rule = check_market_rule(player)
+    buy_price = market_rule['buyPrice'] if market_rule else prices['buyLobster']
+
     success = False
 
     if action_type == 'buy_lobster':
-        if player['coins'] >= prices['buyLobster'] and area_data['marketLobsterCount'] > 0:
-            player['coins'] -= prices['buyLobster']
-            area_data['marketLobsterCount'] -= 1
-            player['lobsters'].append(_create_lobster('normal'))
-            success = True
+        if market_rule is None:
+            # 正常逻辑：金币足够且市场有龙虾
+            if player['coins'] >= buy_price and area_data['marketLobsterCount'] > 0:
+                player['coins'] -= buy_price
+                area_data['marketLobsterCount'] -= 1
+                player['lobsters'].append(_create_lobster('normal'))
+                success = True
+            else:
+                await send_error(websocket, '金币不足或市场无龙虾')
         else:
-            await send_error(websocket, '金币不足或市场无龙虾')
+            # 有市场规则光环时 buy_price 已经是1
+            if player['coins'] >= buy_price and area_data['marketLobsterCount'] > 0:
+                player['coins'] -= buy_price
+                area_data['marketLobsterCount'] -= 1
+                player['lobsters'].append(_create_lobster('normal'))
+                success = True
+            else:
+                await send_error(websocket, '金币不足或市场无龙虾')
     elif action_type == 'sell_lobster':
+        if market_rule and not market_rule.get('canSell', True):
+            await send_error(websocket, '不能再卖龙虾给集市')
+            return 'error'
         if len(player['lobsters']) > 0:
             player['lobsters'].pop(0)
             player['coins'] += prices['sellLobster']
@@ -688,13 +765,28 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
 
         lobster = player['lobsters'][lobster_index]
         old_grade = lobster['grade']
+        has_breed_bonus = check_breed_bonus(player)
+
+        def apply_extra_upgrade():
+            if not has_breed_bonus or lobster['grade'] == 'royal':
+                return
+            current = lobster['grade']
+            upgrade_map = {
+                'grade3': 'grade2',
+                'grade2': 'grade1',
+                'grade1': 'royal',
+            }
+            if current in upgrade_map:
+                lobster['grade'] = upgrade_map[current]
 
         if use_seaweed and player.get('seaweed', 0) >= 1:
             player['seaweed'] -= 1
             if old_grade == 'normal':
                 lobster['grade'] = 'grade2'
+                apply_extra_upgrade()
             elif old_grade == 'grade3':
                 lobster['grade'] = 'grade1'
+                apply_extra_upgrade()
             elif old_grade == 'grade2':
                 if player['cages'] > 0:
                     player['cages'] -= 1
@@ -705,6 +797,7 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
                 else:
                     await send_error(websocket, '需要虾笼或3金币')
                     return 'error'
+                apply_extra_upgrade()
             else:
                 await send_error(websocket, '当前品级无法使用海草升级')
                 return 'error'
@@ -714,8 +807,10 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
         else:
             if old_grade == 'normal':
                 lobster['grade'] = 'grade3'
+                apply_extra_upgrade()
             elif old_grade == 'grade3':
                 lobster['grade'] = 'grade2'
+                apply_extra_upgrade()
             elif old_grade == 'grade2':
                 if player['cages'] > 0:
                     player['cages'] -= 1
@@ -726,6 +821,7 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
                 else:
                     await send_error(websocket, '需要虾笼或3金币')
                     return 'error'
+                apply_extra_upgrade()
             elif old_grade == 'grade1':
                 if player['cages'] > 0:
                     player['cages'] -= 1
@@ -736,6 +832,7 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
                 else:
                     await send_error(websocket, '需要虾笼或3金币')
                     return 'error'
+                apply_extra_upgrade()
 
         remaining_actions -= 1
         game_state['settlementState']['remainingActions'] = remaining_actions
@@ -998,6 +1095,21 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             total_seaweed = sum(c.get('requirements', {}).get('seaweed', 0) for c, _ in cards_to_process)
             total_cages = sum(c.get('requirements', {}).get('cages', 0) for c, _ in cards_to_process)
 
+            tribute_discount = check_tribute_discount(player)
+            if tribute_discount:
+                if tribute_discount.get('coinDiscount'):
+                    total_coins = max(0, total_coins - tribute_discount['coinDiscount'])
+
+            all_lobster_reqs = {}
+            for card, _ in cards_to_process:
+                lr = card.get('requirements', {}).get('lobsters', {})
+                for grade, count in lr.items():
+                    all_lobster_reqs[grade] = all_lobster_reqs.get(grade, 0) + count
+
+            if tribute_discount and tribute_discount.get('lobsterDiscount'):
+                if 'normal' in all_lobster_reqs and all_lobster_reqs['normal'] > 0:
+                    all_lobster_reqs['normal'] = max(0, all_lobster_reqs['normal'] - tribute_discount['lobsterDiscount'])
+
             if player.get('coins', 0) < total_coins:
                 await send_error(websocket, '金币不足')
                 return 'error'
@@ -1007,12 +1119,6 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             if player.get('cages', 0) < total_cages:
                 await send_error(websocket, '虾笼不足')
                 return 'error'
-
-            all_lobster_reqs = {}
-            for card, _ in cards_to_process:
-                lr = card.get('requirements', {}).get('lobsters', {})
-                for grade, count in lr.items():
-                    all_lobster_reqs[grade] = all_lobster_reqs.get(grade, 0) + count
 
             selected_lobster_ids = action_payload.get('selectedLobsterIds', [])
             if all_lobster_reqs:
@@ -1091,11 +1197,37 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                 player['wang'] = player.get('wang', 0) + reward.get('wang', 0)
 
                 from services.tribute_card_effects import apply_instant_effect
-                apply_instant_effect(player, card, game_state)
+                instant_result = apply_instant_effect(player, card, game_state)
+
+                if instant_result.get('needChoice'):
+                    from utils.events import ServerEvents, ServerGameActionTypes
+                    from utils.helpers import make_action_message
+                    game_state['pendingTributeChoice'] = {
+                        'playerId': player['id'],
+                        'taskId': card.get('id'),
+                        'choiceType': instant_result.get('choiceType'),
+                        'options': instant_result.get('options')
+                    }
+                    await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
+                        make_action_message(ServerGameActionTypes.TRIBUTE_CHOICE_REQUIRED, {
+                            'choiceType': instant_result.get('choiceType'),
+                            'taskId': card.get('id'),
+                            'playerId': player['id'],
+                            'options': instant_result.get('options')
+                        }))
+                    return 'waiting_choice'
 
                 if 'tributeCards' not in player:
                     player['tributeCards'] = []
                 player['tributeCards'].append(card)
+
+                aura_result = apply_aura_effect(player, card)
+                if aura_result:
+                    if 'permaBuffs' not in player:
+                        player['permaBuffs'] = []
+                    for buff_key in aura_result:
+                        if aura_result[buff_key] and buff_key not in player['permaBuffs']:
+                            player['permaBuffs'].append(buff_key)
 
             bonus_choice = action_payload.get('bonusTributeChoice')
             if bonus_choice == 'de':

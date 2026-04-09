@@ -151,7 +151,7 @@
             "reward": {
                 "wang": 2
             },
-            "effectDesc": "一回合1次，你的里长可以改为执行相邻行动格的行动并拿取相邻格的资源",
+            "effectDesc": "你的里长可以拿取相邻格的奖励资源",
             "effectType": "aura_adjacent_action"
         },
         {

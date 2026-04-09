@@ -16,6 +16,7 @@ from utils.helpers import send_error, get_player, update_resources, make_action_
 from utils.logger import log_info, log_debug
 from utils.game_state import arena_betting_state
 from services.game import broadcast_game_state, start_area_settlement, complete_settlement
+from services.tribute_card_effects import check_bet_bonus
 
 
 async def _check_tribute_battles_complete(game_state, websocket, room_id, rooms, manager):
@@ -131,8 +132,14 @@ async def handle_battle_end(websocket, room_id, player_id, rooms, manager, paylo
                     if bet['amount'] > 0 and bet.get('targetFighterId') == winner_id:
                         bettor = get_player(game_state, pid)
                         if bettor:
-                            await update_resources(bettor, {'coins': bet['amount'] * 2}, broadcast_fn=bf)
-                        bet_results[str(pid)] = {'won': True, 'reward': bet['amount'] * 2}
+                            bet_amount = bet['amount']
+                            # aura_bet_bonus: 押注成功额外获得1金币
+                            has_bet_bonus = check_bet_bonus(bettor)
+                            reward = bet_amount * 2 + (1 if has_bet_bonus else 0)
+                            await update_resources(bettor, {'coins': reward}, broadcast_fn=bf)
+                            bet_results[str(pid)] = {'won': True, 'reward': reward}
+                        else:
+                            bet_results[str(pid)] = {'won': False, 'reward': 0}
                     else:
                         bet_results[str(pid)] = {'won': False, 'reward': 0}
 
@@ -329,6 +336,53 @@ async def handle_no_lobster_forfeit(websocket, room_id, player_id, rooms, manage
     await _check_tribute_battles_complete(game_state, websocket, room_id, rooms, manager)
 
 
+async def handle_battle_bonus_choice(websocket, room_id, player_id, rooms, manager, payload):
+    """处理战斗奖励资源选择"""
+    game_state = rooms.get(room_id)
+    if not game_state:
+        return
+
+    player = get_player(game_state, player_id)
+    if not player:
+        return
+
+    pending_choices = game_state.get('pendingBattleBonusChoices', [])
+    if player_id not in pending_choices:
+        await send_error(websocket, '你没有待选择的战斗奖励')
+        return
+
+    choice = payload.get('choice')
+    if choice not in ('coins', 'seaweed', 'lobster'):
+        await send_error(websocket, '无效的资源选择')
+        return
+
+    if choice == 'coins':
+        player['coins'] += 1
+    elif choice == 'seaweed':
+        player['seaweed'] = player.get('seaweed', 0) + 1
+    elif choice == 'lobster':
+        from utils.helpers import create_lobster
+        player['lobsters'].append(create_lobster('normal'))
+
+    pending_choices.remove(player_id)
+    if pending_choices:
+        game_state['pendingBattleBonusChoices'] = pending_choices
+        await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
+            make_action_message(ServerAreaActionTypes.AREA_WAITING_UI, {
+                'areaType': 'tribute',
+                'waitingForBattleBonusChoice': True,
+                'playersNeedChoice': pending_choices,
+                'battleQueue': game_state.get('battleQueue', [])
+            }))
+    else:
+        del game_state['pendingBattleBonusChoices']
+        del game_state['_lastBattleStartSent']
+        await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
+            make_action_message(ServerBattleActionTypes.BATTLE_START, {
+                'battleQueue': game_state.get('battleQueue', [])
+            }))
+
+
 def _make_battle_action_router(handlers: dict):
     """创建战斗行动路由函数"""
     async def handle_battle_action_router(websocket, room_id, player_id, rooms, manager, payload):
@@ -349,6 +403,7 @@ def get_battle_action_handlers():
         ClientBattleActionTypes.LOBSTER_SELECTED: handle_lobster_selected,
         ClientBattleActionTypes.SPECTATOR_BET: handle_spectator_bet,
         ClientBattleActionTypes.NO_LOBSTER_FORFEIT: handle_no_lobster_forfeit,
+        ClientBattleActionTypes.BATTLE_BONUS_CHOICE: handle_battle_bonus_choice,
     }
 
 

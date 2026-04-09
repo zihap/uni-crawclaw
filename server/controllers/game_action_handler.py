@@ -22,8 +22,8 @@ from utils.events import ClientGameActionTypes, ServerEvents, ServerGameActionTy
 from utils.helpers import send_error, has_resources, update_resources, get_player, make_action_message, make_broadcast_fn, make_settlement_state
 from utils.logger import log_info, log_debug
 from services.game import broadcast_game_state, start_area_settlement, complete_settlement
-from services.area import resolve_area_step, process_area_action
-from services.tribute_card_effects import apply_instant_effect, apply_aura_effect, get_endgame_choices, apply_endgame_choice
+from services.area import process_area_action
+from services.tribute_card_effects import apply_aura_effect, get_endgame_choices, apply_endgame_choice, check_cage_trade
 
 
 async def handle_use_seaweed(websocket, room_id, player_id, rooms, manager, payload):
@@ -304,6 +304,8 @@ async def handle_buy_item(websocket, room_id, player_id, rooms, manager, payload
     bf = make_broadcast_fn(manager.send_to_room, room_id)
     success = False
 
+    has_cage_trade = check_cage_trade(player)
+    
     if item_type == 'lobster' and player['coins'] >= prices['buyLobster']:
         await update_resources(player, {'coins': -prices['buyLobster'], 'normal': 1}, broadcast_fn=bf)
         success = True
@@ -311,7 +313,8 @@ async def handle_buy_item(websocket, room_id, player_id, rooms, manager, payload
         await update_resources(player, {'coins': -prices['buySeaweed'], 'seaweed': 1}, broadcast_fn=bf)
         success = True
     elif item_type == 'cage' and player['coins'] >= prices['buyCage']:
-        await update_resources(player, {'coins': -prices['buyCage'], 'cages': 1}, broadcast_fn=bf)
+        buy_price = prices['buyCage'] - (has_cage_trade['buyDiscount'] if has_cage_trade else 0)
+        await update_resources(player, {'coins': -buy_price, 'cages': 1}, broadcast_fn=bf)
         success = True
     elif item_type == 'headman' and player['coins'] >= prices['hireHeadman']:
         await update_resources(player, {'coins': -prices['hireHeadman'], 'liZhang': 1}, broadcast_fn=bf)
@@ -343,6 +346,8 @@ async def handle_sell_item(websocket, room_id, player_id, rooms, manager, payloa
     bf = make_broadcast_fn(manager.send_to_room, room_id)
     success = False
 
+    has_cage_trade = check_cage_trade(player)
+
     if item_type == 'lobster' and has_resources(player, {'normal': 1}):
         await update_resources(player, {'normal': -1, 'coins': prices['sellLobster']}, broadcast_fn=bf)
         success = True
@@ -350,7 +355,8 @@ async def handle_sell_item(websocket, room_id, player_id, rooms, manager, payloa
         await update_resources(player, {'seaweed': -1, 'coins': prices['sellSeaweed']}, broadcast_fn=bf)
         success = True
     elif item_type == 'cage' and player['cages'] > 0:
-        await update_resources(player, {'cages': -1, 'coins': prices['sellCage']}, broadcast_fn=bf)
+        sell_price = prices['sellCage'] + (has_cage_trade['sellBonus'] if has_cage_trade else 0)
+        await update_resources(player, {'cages': -1, 'coins': sell_price}, broadcast_fn=bf)
         success = True
 
     if success:
@@ -550,8 +556,16 @@ async def handle_submit_tribute_choice(websocket, room_id, player_id, rooms, man
 
     if choice_type == 'buy_advanced_lobster':
         grade = choice.get('grade', 'normal')
-        if grade == 'normal':
-            player['lobsters'].append(create_lobster('normal'))
+        cost = choice.get('cost', 0)
+        player_coins = player.get('coins', 0)
+        if player_coins < cost:
+            await send_error(websocket, '金币不足')
+            return
+        player['coins'] -= cost
+        if grade == 'grade3':
+            player['lobsters'].append(create_lobster('grade3'))
+        elif grade == 'grade2':
+            player['lobsters'].append(create_lobster('grade2'))
         elif grade == 'grade1':
             player['lobsters'].append(create_lobster('grade1'))
     elif choice_type == 'discard_attack':

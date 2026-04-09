@@ -90,9 +90,6 @@ export const useOnlineGameStore = defineStore('online-game', () => {
     // ============ 结算阶段UI状态 ============
     const pendingSettlement = ref(null) // { areaType, playerId, actionCount, player, prices, availableCards, marketLobsterCount }
 
-    // ============ 上供区UI状态 ============
-    const pendingTribute = ref(null) // { player, slotIndex, taverns, tributeTasks, resolve }
-
     // ============ 同回合龙虾出战记录 ============
     const usedLobstersThisRound = ref({}) // { playerId: [lobsterId, ...] }
 
@@ -238,19 +235,26 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         console.log('[tributeChoiceRequired] choiceType:', choiceType, 'taskId:', taskId)
 
         if (choiceType === 'buy_advanced_lobster') {
-            uni.showModal({
-                title: '选择龙虾品级',
-                content: '选择要获得的龙虾品级',
-                confirmText: '普通龙虾',
-                cancelText: '进阶龙虾',
+            const options = data?.options || [
+                { cost: 1, grade: 'grade3' },
+                { cost: 2, grade: 'grade2' },
+                { cost: 3, grade: 'grade1' }
+            ]
+            const gradeNames = { grade3: '三品', grade2: '二品', grade1: '一品' }
+            const optionTexts = options.map(function (o) {
+                return '支付' + o.cost + '金币 -> ' + gradeNames[o.grade]
+            })
+            uni.showActionSheet({
+                itemList: optionTexts,
                 success: function (res) {
-                    if (!res.confirm && !res.cancel) {
+                    const selected = options[res.tapIndex]
+                    if (!selected) {
+                        uni.showToast({ title: '选择无效', icon: 'none' })
                         return
                     }
-                    const grade = res.confirm ? 'normal' : 'grade1'
                     socketService.clientGameAction('submitTributeChoice', {
                         taskId: taskId,
-                        choice: { grade: grade }
+                        choice: { grade: selected.grade, cost: selected.cost }
                     })
                 },
                 fail: function () {
@@ -349,6 +353,14 @@ export const useOnlineGameStore = defineStore('online-game', () => {
 
     function handleAreaWaitingUI(data) {
         console.log('[handleAreaWaitingUI] Received:', JSON.stringify(data))
+        if (data.waitingForBattleBonusChoice) {
+            currentPhase.value = 'settlement'
+            pendingBattleBonusChoice.value = {
+                playersNeedChoice: data.playersNeedChoice || [],
+                battleQueue: data.battleQueue || []
+            }
+            return
+        }
         if (data.areaType) {
             currentPhase.value = 'settlement'
             // 非上供区等待UI时，清空竞技场队列，防止旧数据干扰
@@ -560,6 +572,14 @@ export const useOnlineGameStore = defineStore('online-game', () => {
 
     function clearPendingTribute() {
         pendingTribute.value = null
+    }
+
+    function sendBattleBonusChoice(choice) {
+        if (!['coins', 'seaweed', 'lobster'].includes(choice)) {
+            uni.showToast({ title: '无效的选择', icon: 'none' })
+            return
+        }
+        socketService.clientBattleAction('battleBonusChoice', { choice })
     }
 
     // ============ 龙虾出战管理 ============
@@ -810,7 +830,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         sendSettlementAction,
         clearPendingSettlement,
         clearPendingTribute,
-        pendingTribute,
+        sendBattleBonusChoice,
 
         // 放置阶段
         cancelHeadmanAction

@@ -45,6 +45,7 @@ class ClientBattleActionTypes:
     LOBSTER_SELECTED = 'lobsterSelected'
     SPECTATOR_BET = 'spectatorBet'
     NO_LOBSTER_FORFEIT = 'noLobsterForfeit'
+    BATTLE_BONUS_CHOICE = 'battleBonusChoice'
 
 
 class ClientGameActionTypes:
@@ -119,6 +120,8 @@ class ServerGameActionTypes:
     ROUND_STARTED = 'roundStarted'
     GAME_STATE_UPDATE = 'gameStateUpdate'
     GAME_ACTION = 'gameAction'
+    TRIBUTE_CHOICE_REQUIRED = 'tributeChoiceRequired'
+    ENDGAME_SCORE_CHOICE = 'endgameScoreChoice'
 
 
 class ServerBattleActionTypes:
