@@ -33,9 +33,14 @@ def cleanup_phase(game_state: dict):
         market_area['marketLobsterCount'] = 0
 
     for player in game_state['players']:
+        player['tributesThisRound'] = 0  # 重置进贡次数
         base_headmen = 3
         hired_count = len(player.get('hiredLaborersBonus', []))
         player['liZhang'] = base_headmen + hired_count
+        # 处理闹市卡“客栈”的专属里长
+        if player.get('inn_headman'):
+            player['liZhang'] += 1
+            player['inn_headman'] = False
 
     for player in game_state['players']:
         player['coins'] += 2 + player.get('bonusGold', 0)
@@ -44,6 +49,11 @@ def cleanup_phase(game_state: dict):
         for tavern in game_state['taverns']:
             tavern['cards'] = []
             tavern['occupants'] = []
+
+    # 【新增逻辑】：新回合开始前，仅重置本局固定的闹市卡的使用状态
+    if 'downtownCards' in game_state:
+        for card in game_state['downtownCards']:
+            card['usedThisRound'] = False
 
     update_market_prices(game_state)
 
@@ -150,7 +160,7 @@ async def broadcast_game_state(room_id: str, rooms: dict, manager):
             'currentArea': game_state.get('currentArea', 0),
             'areas': game_state.get('areas', {}),
             'status': game_state['status'],
-            'gameTitleCards': game_state.get('gameTitleCards', []) # 广播称号卡池
+            'gameTitleCards': game_state.get('gameTitleCards', [])
         }
         await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
             make_action_message(ServerGameActionTypes.GAME_STATE_UPDATE, **data))
@@ -173,6 +183,10 @@ async def start_game(room_id: str, rooms: dict, manager):
             starting_player_idx = idx
             break
 
+        # 初始化新的状态追踪
+        player['tributesThisRound'] = 0
+        player['inn_headman'] = False
+
     game_state['currentPlayerIndex'] = starting_player_idx
 
     for p in game_state['players']:
@@ -185,7 +199,7 @@ async def start_game(room_id: str, rooms: dict, manager):
             game_state['areas'][area_name]['slots'] = [None] * slot_count
 
     draw_tribute_tasks(game_state)
-    draw_downtown_cards(game_state)
+    draw_downtown_cards(game_state)  # 游戏开始时只执行这一次
     draw_title_cards(game_state)
 
     log_debug(f"start_game: Sending gameStarted to room {room_id}")
@@ -286,8 +300,8 @@ async def complete_settlement(room_id, game_state, rooms, manager):
         p['royalCountThisRound'] = 0
 
     draw_tribute_tasks(game_state)
-    draw_downtown_cards(game_state)
-    draw_title_cards(game_state) # 新的一回合，抽取2张新称号卡
+    # 【重点修复】：已删除 draw_downtown_cards(game_state) ，不再每回合刷新卡牌！
+    draw_title_cards(game_state)
 
     await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
         make_action_message(ServerAreaActionTypes.SETTLEMENT_COMPLETE, {

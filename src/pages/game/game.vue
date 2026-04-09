@@ -663,8 +663,8 @@
                     <!-- 第一步：选择卡牌 -->
                     <view class="marketplace-cards">
                         <view
-                            v-for="card in gameStore.gameMarketplaceCards"
-                            :key="card.id"
+                                v-for="(card, idx) in (currentPendingMarketplace.availableCards || gameStore.gameMarketplaceCards)"
+                                :key="card.id || idx"
                             class="mp-card"
                             :class="{
                                 used: card.usedThisRound,

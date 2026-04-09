@@ -8,6 +8,7 @@ import random
 import string
 import json
 import os
+import copy
 from typing import Dict
 from .constants import AREAS, MARKET_PRICES, TRIBUTE_TASKS, DOWNTOWN_CARDS, SLOT_TEMPLATES, AREA_SLOT_COUNTS
 
@@ -113,26 +114,31 @@ def create_player(player_id: int, name: str, is_host: bool = False, user_id: str
 
         'permaBuffs': [],
 
-        'titleCards': [], # 修复：玩家初始不应拥有所有称号卡
+        'titleCards': [],
 
         'ready': False,
         'isHost': is_host,
         'isStartingPlayer': position == 0,
 
         'tempBubbles': 0,
-        'hiredLaborersBonus': []
+        'hiredLaborersBonus': [],
+
+        # 闹市区新增状态记录
+        'tributesThisRound': 0,
+        'inn_headman': False
     }
 
 
 def draw_tribute_tasks(game_state: dict):
     """抽取上供卡到游戏状态"""
-    shuffled = TRIBUTE_TASKS.copy()
+    shuffled = copy.deepcopy(TRIBUTE_TASKS)
     random.shuffle(shuffled)
     game_state['tributeTasks'] = shuffled[:3]
-    game_state['downtownCards'] = shuffled[3:6]
+
+    # 【重点修复】：删除了以前错误覆盖 downtownCards 的代码 (game_state['downtownCards'] = shuffled[3:6])
 
     if 'taverns' in game_state:
-        tavern_cards = shuffled[6:]
+        tavern_cards = shuffled[3:] # 剩下的全分给酒楼
         card_idx = 0
         for tavern in game_state['taverns']:
             while len(tavern['cards']) < 2 and card_idx < len(tavern_cards):
@@ -141,10 +147,14 @@ def draw_tribute_tasks(game_state: dict):
 
 
 def draw_downtown_cards(game_state: dict):
-    """抽取闹市卡到游戏状态"""
-    shuffled = DOWNTOWN_CARDS.copy()
+    """抽取闹市卡到游戏状态（保证整局游戏只在第1回合调用一次）"""
+    shuffled = copy.deepcopy(DOWNTOWN_CARDS)
     random.shuffle(shuffled)
     game_state['downtownCards'] = shuffled[:3]
+    # 初始化状态
+    for card in game_state['downtownCards']:
+        card['usedThisRound'] = False
+
 
 def draw_title_cards(game_state: dict):
     """抽取2张称号卡到本回合奖励池（丢弃上一回合未获取的称号卡）"""
@@ -160,5 +170,5 @@ def draw_title_cards(game_state: dict):
             game_state['gameTitleCards'].append(game_state['titleCardDeck'].pop(0))
 
 
-# 竞技场投注状态: { "roomId_battleId": { challengerId, defenderId, challengerLobster, defenderLobster, spectators, bets, started, completed } }
+# 竞技场投注状态
 arena_betting_state = {}

@@ -92,12 +92,6 @@ export const useGameStore = defineStore('game', () => {
     const slotOccupancy = ref({})
 
     /*
-     * 已放置的里长记录
-     * 用于追踪每个里长的放置信息
-     */
-    // const placedLiZhang = ref([])
-
-    /*
      * 当前放置顺序的玩家列表
      * 从起始玩家开始，按顺时针顺序
      */
@@ -212,21 +206,24 @@ export const useGameStore = defineStore('game', () => {
         pendingMarketplace.value = null
         pendingSeafoodMarket.value = null
         pendingTribute.value = null
-        pendingBattle.value = null // 【新增初始化】
+        pendingBattle.value = null
 
         // 重置放置机制状态
         slotOccupancy.value = {}
-        // placedLiZhang.value = []
         placementOrder.value = []
         currentPlacementIndex.value = 0
 
-        // 初始化玩家（赋予初始回合金 0）
+        // 初始化玩家
         playerStore.initPlayers(playerCount)
-        players.value.forEach((p) => (p.roundIncomeCoins = 0))
+        players.value.forEach((p) => {
+            p.roundIncomeCoins = 0
+            p.tributesThisRound = 0
+            p.inn_headman = false
+        })
 
         // 初始化卡牌
         gameTributeCards.value = shuffleArray([...tributeCards])
-        titleCardDeck.value = shuffleArray([...titleCards]) // 称号卡防重复逻辑
+        titleCardDeck.value = shuffleArray([...titleCards])
 
         addLog(`游戏初始化完成，${playerCount}名玩家`, 'success')
     }
@@ -433,17 +430,13 @@ export const useGameStore = defineStore('game', () => {
             const playerId = getSlotStatus('shrimp_catching', slotIndex).playerId
             if (null === playerId) continue
             const player = playerStore.getPlayerById(playerId)
-            if (!player) {
-                addLog(`玩家${playerId}不存在，跳过捕虾行动`, 'warning')
-                continue
-            }
+            if (!player) continue
 
-            // 计算行动格奖励
             const rewardResult = calculateShrimpCatchingReward(
-                player,
-                slotIndex,
-                playerStore.players,
-                playerStore.startingPlayerIndex
+                    player,
+                    slotIndex,
+                    playerStore.players,
+                    playerStore.startingPlayerIndex
             )
             if (rewardResult.success && rewardResult.message) {
                 addLog(`${player.name}${rewardResult.message}`, 'info')
@@ -454,14 +447,14 @@ export const useGameStore = defineStore('game', () => {
             if (slotConfig) {
                 const actionCount = slotConfig.actions
                 const result = await executeShrimpCatching(
-                    player,
-                    actionCount,
-                    wildLobsterPool.value,
-                    (indicatorType, indicatorResult) => {
-                        if (indicatorResult.success) {
-                            addLog(`${player.name}${indicatorResult.message}`, 'info')
+                        player,
+                        actionCount,
+                        wildLobsterPool.value,
+                        (indicatorType, indicatorResult) => {
+                            if (indicatorResult.success) {
+                                addLog(`${player.name}${indicatorResult.message}`, 'info')
+                            }
                         }
-                    }
                 )
 
                 if (result.success) {
@@ -476,12 +469,11 @@ export const useGameStore = defineStore('game', () => {
             seafoodMarketLobsters.value += remainingLobsters
             if (seafoodMarketLobsters.value > 8) seafoodMarketLobsters.value = 8
             addLog(
-                `捕虾区剩余 ${remainingLobsters} 只幼虾流入海鲜市场，当前流通虾数：${seafoodMarketLobsters.value}`,
-                'info'
+                    `捕虾区剩余 ${remainingLobsters} 只幼虾流入海鲜市场，当前流通虾数：${seafoodMarketLobsters.value}`,
+                    'info'
             )
         }
-        wildLobsterPool.value = [] // 清空野生水池
-
+        wildLobsterPool.value = []
         addLog('捕虾区结算完成', 'success')
     }
 
@@ -538,8 +530,8 @@ export const useGameStore = defineStore('game', () => {
             logMsg += `花费 ${prices.lobster} 金币买入了 1 只普通龙虾`
         } else if (actionType === 'sell_lobster') {
             player.lobsters.sort(
-                (a, b) =>
-                    Object.values(LOBSTER_GRADES).indexOf(a.grade) - Object.values(LOBSTER_GRADES).indexOf(b.grade)
+                    (a, b) =>
+                            Object.values(LOBSTER_GRADES).indexOf(a.grade) - Object.values(LOBSTER_GRADES).indexOf(b.grade)
             )
             player.lobsters.splice(0, 1)
             player.coins += prices.lobster
@@ -572,7 +564,7 @@ export const useGameStore = defineStore('game', () => {
         } else if (actionType === 'hire') {
             const slot = HIRE_LIZHANG_SLOTS[slotIndex]
             player.coins -= 6
-            hiredLiZhangSlots.value[slotIndex] = player.id // 永久占据坑位
+            hiredLiZhangSlots.value[slotIndex] = player.id
 
             logMsg += `花费 6 金币雇佣了 ${slotIndex + 1} 号位的额外里长`
             if (slot.reward.seaweed) {
@@ -662,8 +654,8 @@ export const useGameStore = defineStore('game', () => {
                 const defender = playerStore.getPlayerById(defenderId)
 
                 addLog(
-                    `⚔️ 席位争夺爆发！[${challenger.name}] 向上位席位的 [${defender.name}] 发起生死挑战！`,
-                    'warning'
+                        `⚔️ 席位争夺爆发！[${challenger.name}] 向上位席位的 [${defender.name}] 发起生死挑战！`,
+                        'warning'
                 )
 
                 const winnerId = await new Promise((resolve) => {
@@ -747,6 +739,7 @@ export const useGameStore = defineStore('game', () => {
 
             // 执行献祭移除
             player.lobsters.splice(nakedCostLobsterIndex, 1)
+            player.tributesThisRound = (player.tributesThisRound || 0) + 1
 
             logMsg += `进行了【裸交】，献祭了 ${getLobsterGradeName(sacrificedLobster.grade)}`
 
@@ -796,10 +789,10 @@ export const useGameStore = defineStore('game', () => {
                     for (const [gradeKey, count] of Object.entries(card.requirements.lobsters)) {
                         for (let i = 0; i < count; i++) {
                             const reqGradeVal = Object.values(LOBSTER_GRADES).indexOf(
-                                LOBSTER_GRADES[gradeKey.toUpperCase()]
+                                    LOBSTER_GRADES[gradeKey.toUpperCase()]
                             )
                             const matchIdx = player.lobsters.findIndex(
-                                (l) => Object.values(LOBSTER_GRADES).indexOf(l.grade) >= reqGradeVal
+                                    (l) => Object.values(LOBSTER_GRADES).indexOf(l.grade) >= reqGradeVal
                             )
                             if (matchIdx !== -1) player.lobsters.splice(matchIdx, 1)
                         }
@@ -812,6 +805,7 @@ export const useGameStore = defineStore('game', () => {
             if (card.reward.wang) player.wang += card.reward.wang
 
             logMsg += `完成了【${card.name}】上供`
+            player.tributesThisRound = (player.tributesThisRound || 0) + 1
 
             // 特殊卡牌的【获得时】瞬间效果结算
             if (card.effectType === 'instant_breed_3') {
@@ -835,7 +829,7 @@ export const useGameStore = defineStore('game', () => {
         if (!tavern.occupants.includes(player.id)) {
             tavern.occupants.push(player.id)
             const points = [3, 2, 1, 0][tavern.occupants.length - 1] || 0
-            player.roundIncomeCoins = (player.roundIncomeCoins || 0) + 1 // 增加回合金
+            player.roundIncomeCoins = (player.roundIncomeCoins || 0) + 1
 
             logMsg += `。成功夺得席位，获得 ${points} 点席位分，回合金永久 +1`
             // 席位分这里可以在最后总分结算时体现，或者直接给到一个单独的积分统计里
@@ -866,12 +860,47 @@ export const useGameStore = defineStore('game', () => {
                 addLog(`${player.name}${rewardResult.message}`, 'info')
             }
 
-            // 校验是否还有未使用的闹市卡
-            const availableCards = gameMarketplaceCards.value.filter((c) => !c.usedThisRound)
-            if (availableCards.length === 0) {
+            const rawAvailableCards = gameMarketplaceCards.value.filter((c) => !c.usedThisRound)
+            if (rawAvailableCards.length === 0) {
                 addLog(`${player.name}准备执行闹市行动，但本回合所有闹市卡均已被使用`, 'warning')
                 continue
             }
+
+            // 动态改写驿站和学堂为 exchange 提供UI复用
+            const availableCards = rawAvailableCards.map(card => {
+                const c = JSON.parse(JSON.stringify(card));
+                if (c.action?.type === 'post_station') {
+                    const tributesCount = player.tributesThisRound || 0;
+                    if (tributesCount > 0) {
+                        c.action.type = 'exchange';
+                        c.auto = false;
+                        const options = [];
+                        for (let i = 0; i <= tributesCount; i++) {
+                            const deVal = i;
+                            const wangVal = tributesCount - i;
+                            const rew = {};
+                            if (deVal > 0) rew.de = deVal;
+                            if (wangVal > 0) rew.wang = wangVal;
+                            options.push({cost: {}, reward: rew});
+                        }
+                        c.action.options = options;
+                    } else {
+                        c.auto = true;
+                    }
+                } else if (c.action?.type === 'academy') {
+                    if (player.de === player.wang) {
+                        c.action.type = 'exchange';
+                        c.auto = false;
+                        c.action.options = [
+                            {cost: {}, reward: {de: 1}},
+                            {cost: {}, reward: {wang: 1}}
+                        ];
+                    } else {
+                        c.auto = true;
+                    }
+                }
+                return c;
+            });
 
             addLog(`${player.name}开始执行闹市行动`, 'info')
 
@@ -879,11 +908,15 @@ export const useGameStore = defineStore('game', () => {
             await new Promise((resolve) => {
                 pendingMarketplace.value = {
                     player,
+                    availableCards,
                     resolve: async (result) => {
                         pendingMarketplace.value = null
                         if (result && result.card) {
-                            // 执行对应卡牌逻辑
-                            await processMarketplaceAction(player, result.card, result.optionIndex)
+                            // 实际结算时还是回溯原卡牌类型
+                            const originalCard = gameMarketplaceCards.value.find(c => c.id === result.card.id);
+                            if (originalCard) {
+                                await processMarketplaceAction(player, originalCard, result.optionIndex)
+                            }
                         } else {
                             addLog(`${player.name}放弃了闹市行动`, 'info')
                         }
@@ -900,12 +933,12 @@ export const useGameStore = defineStore('game', () => {
      * 采用全动态读取解析，不再硬编码名字，完美兼容任意拓展的兑换卡片！
      */
     const processMarketplaceAction = async (player, card, optionIndex) => {
-        card.usedThisRound = true // 标记本回合已使用
+        card.usedThisRound = true
         let logMsg = `${player.name}执行了【${card.name}】闹市卡：`
 
         // 通用的资源兑换逻辑
         if (card.action?.type === 'exchange') {
-            const options = card.action?.options || [] // 兜底空数组防报错
+            const options = card.action?.options || []
             const opt = options[optionIndex]
 
             if (!opt) {
@@ -917,9 +950,9 @@ export const useGameStore = defineStore('game', () => {
             for (const [resType, resAmount] of Object.entries(opt.cost)) {
                 if (resType === 'lobsters') {
                     player.lobsters.sort(
-                        (a, b) =>
-                            Object.values(LOBSTER_GRADES).indexOf(a.grade) -
-                            Object.values(LOBSTER_GRADES).indexOf(b.grade)
+                            (a, b) =>
+                                    Object.values(LOBSTER_GRADES).indexOf(a.grade) -
+                                    Object.values(LOBSTER_GRADES).indexOf(b.grade)
                     )
                     player.lobsters.splice(0, resAmount)
                 } else {
@@ -942,21 +975,61 @@ export const useGameStore = defineStore('game', () => {
 
             // 生成通用日志文本
             const getResName = (k) =>
-                ({
-                    coins: '金币',
-                    seaweed: '海草',
-                    cages: '虾笼',
-                    lobsters: '只龙虾',
-                    de: '德',
-                    wang: '望'
-                })[k] || k
+                    ({
+                        coins: '金币',
+                        seaweed: '海草',
+                        cages: '虾笼',
+                        lobsters: '只龙虾',
+                        de: '德',
+                        wang: '望'
+                    })[k] || k
             const costStrs = Object.entries(opt.cost)
-                .map(([k, v]) => `${v}${getResName(k)}`)
-                .join('和')
+                    .map(([k, v]) => `${v}${getResName(k)}`)
+                    .join('和')
             const rewardStrs = Object.entries(opt.reward)
-                .map(([k, v]) => `${v}${getResName(k)}`)
-                .join('和')
-            logMsg += `消耗${costStrs}，获得${rewardStrs}`
+                    .map(([k, v]) => `${v}${getResName(k)}`)
+                    .join('和')
+            logMsg += `消耗${costStrs || '无'}，获得${rewardStrs}`
+
+        } else if (card.action?.type === 'post_station') {
+            const tributesCount = player.tributesThisRound || 0;
+            if (tributesCount > 0) {
+                const deVal = optionIndex;
+                const wangVal = tributesCount - optionIndex;
+                player.de += deVal;
+                player.wang += wangVal;
+                logMsg += `因为本回合完成了 ${tributesCount} 张进贡卡，获得 ${deVal} 德和 ${wangVal} 望`;
+            } else {
+                logMsg += `本回合未完成进贡卡，无奖励`;
+            }
+
+        } else if (card.action?.type === 'breeding_4') {
+            logMsg += `触发斗场，获得4次培养机会`;
+            addLog(logMsg, 'success');
+
+            if (player.lobsters.length === 0) {
+                addLog(`${player.name}没有龙虾可以培养，浪费了斗场卡的效果`, 'warning');
+                return;
+            }
+            // 挂起引擎，等待养蛊区交互弹窗完成
+            await new Promise((resolve) => {
+                pendingBreeding.value = {
+                    player,
+                    actionCount: 4,
+                    resolve: () => {
+                        pendingBreeding.value = null
+                        resolve()
+                    }
+                }
+            })
+            return
+
+        } else if (card.action?.type === 'black_market') {
+            const newLobster = createLobster()
+            newLobster.grade = LOBSTER_GRADES.GRADE2
+            player.lobsters.push(newLobster)
+            logMsg += `直接获取1只二品龙虾`
+
         } else if (card.action?.type === 'academy') {
             if (player.de < player.wang) {
                 player.de++
@@ -965,63 +1038,46 @@ export const useGameStore = defineStore('game', () => {
                 player.wang++
                 logMsg += `德望轨最低的是望，提升1望`
             } else {
-                player.wang++
-                logMsg += `德望轨一样低，默认提升1望`
+                if (optionIndex === 0) {
+                    player.de++;
+                    logMsg += `德望轨一样低，选择了提升1德`;
+                } else {
+                    player.wang++;
+                    logMsg += `德望轨一样低，选择了提升1望`;
+                }
             }
+
         } else if (card.action?.type === 'charity') {
-            logMsg += `触发善堂群体惩罚！`
-            addLog(logMsg, 'warning')
+            logMsg += `触发善堂！`
+            addLog(logMsg, 'success')
 
             const minDe = Math.min(...players.value.map((p) => p.de))
             const minWang = Math.min(...players.value.map((p) => p.wang))
 
             players.value.forEach((p) => {
                 if (p.de === minDe) {
-                    const lostLobsters = Math.min(2, p.lobsters.length)
-                    if (lostLobsters > 0) {
-                        p.lobsters.sort(
-                            (a, b) =>
-                                Object.values(LOBSTER_GRADES).indexOf(a.grade) -
-                                Object.values(LOBSTER_GRADES).indexOf(b.grade)
-                        )
-                        p.lobsters.splice(0, lostLobsters)
-                        addLog(`${p.name}因德轨最低，损失了${lostLobsters}只龙虾`, 'error')
-                    }
+                    p.lobsters.push(createLobster(), createLobster());
+                    addLog(`${p.name}因德轨最低，获得了2只普通龙虾`, 'success')
                 }
                 if (p.wang === minWang) {
-                    const lostCoins = Math.min(2, p.coins)
-                    if (lostCoins > 0) {
-                        p.coins -= lostCoins
-                        addLog(`${p.name}因望轨最低，损失了${lostCoins}金币`, 'error')
-                    }
-                }
-            })
-            return // 提前结束，防止外层重复输出 log
-        } else if (card.action?.type === 'breeding') {
-            logMsg += `触发善学，获得3次培养机会`
-            addLog(logMsg, 'success')
-
-            if (player.lobsters.length === 0) {
-                addLog(`${player.name}没有龙虾可以培养，浪费了善学卡的效果`, 'warning')
-                return
-            }
-            // 挂起引擎，无缝衔接等待养蛊区交互弹窗完成
-            await new Promise((resolve) => {
-                pendingBreeding.value = {
-                    player,
-                    actionCount: 3,
-                    resolve: () => {
-                        pendingBreeding.value = null
-                        resolve()
-                    }
+                    p.coins += 2
+                    addLog(`${p.name}因望轨最低，获得了2枚金币`, 'success')
                 }
             })
             return
-        } else if (card.action?.type === 'freebie') {
-            const newLobster = createLobster()
-            newLobster.grade = LOBSTER_GRADES.NORMAL
-            player.lobsters.push(newLobster)
-            logMsg += `直接获取1只普通龙虾`
+
+        } else if (card.action?.type === 'bazaar') {
+            player.seaweed += 1;
+            player.coins += 1;
+            player.cages += 1;
+            const newLobster = createLobster();
+            newLobster.grade = LOBSTER_GRADES.NORMAL;
+            player.lobsters.push(newLobster);
+            logMsg += `获取了 1海草 1金币 1虾笼 和 1只普通龙虾`;
+
+        } else if (card.action?.type === 'inn') {
+            player.inn_headman = true;
+            logMsg += `获得客栈的专属里长，将在下回合自动多出 1 个放置名额`;
         }
 
         addLog(logMsg, 'success')
@@ -1050,11 +1106,11 @@ export const useGameStore = defineStore('game', () => {
         if (currentRound.value === 1) {
             // 第一回合初始化抽出并绑定使用状态
             gameMarketplaceCards.value = shuffleArray([...marketplaceCards])
-                .slice(0, 3)
-                .map((c) => ({
-                    ...c,
-                    usedThisRound: false
-                }))
+                    .slice(0, 3)
+                    .map((c) => ({
+                        ...c,
+                        usedThisRound: false
+                    }))
             addLog('闹市区：抽取3张本局游戏固定的闹市卡', 'info')
         } else {
             // 每回合重置闹市卡使用状态
@@ -1093,7 +1149,6 @@ export const useGameStore = defineStore('game', () => {
 
         // 5. 闹市区结算
         await executeMarketplaceSettlement()
-
         addLog('结算阶段完成', 'success')
     }
 
@@ -1112,6 +1167,8 @@ export const useGameStore = defineStore('game', () => {
         // 给所有玩家添加金币，并为雇佣了额外里长的玩家增加额外放置名额
         playerStore.addCoinsToAllPlayers()
         players.value.forEach((p) => {
+            p.tributesThisRound = 0; // 重置该回合献祭的卡牌统计
+
             if (p.roundIncomeCoins > 0) {
                 p.coins += p.roundIncomeCoins
                 addLog(`${p.name} 获得了 ${p.roundIncomeCoins} 枚酒楼回合金`, 'success')
@@ -1119,7 +1176,12 @@ export const useGameStore = defineStore('game', () => {
 
             const hiredCount = hiredLiZhangSlots.value.filter((id) => id === p.id).length
             if (hiredCount > 0) {
-                p.liZhang += hiredCount // 将永久雇佣工位加到下一回合的可用工位中
+                p.liZhang += hiredCount
+            }
+
+            if (p.inn_headman) {
+                p.liZhang += 1;
+                p.inn_headman = false;
             }
         })
 

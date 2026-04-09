@@ -123,52 +123,79 @@ _CARD_CONFIG_DEFAULT = {
     ],
     'marketplaceCards': [
         {
-            'id': 'marketplace_1',
-            'name': '府衙',
-            'action': {
-                'type': 'exchange',
-                'options': [
-                    {'cost': {'lobsters': 1}, 'reward': {'wang': 1}},
-                    {'cost': {'lobsters': 3}, 'reward': {'wang': 2}}
+            "id": "marketplace_1",
+            "name": "府衙",
+            "action": {
+                "type": "exchange",
+                "options": [
+                    {"cost": {"lobsters": 1}, "reward": {"wang": 1}},
+                    {"cost": {"lobsters": 3}, "reward": {"wang": 2}}
                 ]
             },
-            'description': '玩家支付1只龙虾换1望，或者3只龙虾换2望'
+            "description": "玩家支付1只龙虾换1望，或者支付3只龙虾换2望",
+            "auto": False
         },
         {
-            'id': 'marketplace_2',
-            'name': '书院',
-            'action': {
-                'type': 'exchange',
-                'options': [
-                    {'cost': {'seaweed': 2}, 'reward': {'de': 1}},
-                    {'cost': {'coins': 5}, 'reward': {'de': 2}}
+            "id": "marketplace_2",
+            "name": "县衙",
+            "action": {
+                "type": "exchange",
+                "options": [
+                    {"cost": {"coins": 2}, "reward": {"de": 1}},
+                    {"cost": {"coins": 5}, "reward": {"de": 2}}
                 ]
             },
-            'description': '支付2根海草换1德，或5金币换2德'
+            "description": "玩家支付2金币换1德，或者支付5金币换2德",
+            "auto": False
         },
         {
-            'id': 'marketplace_3',
-            'name': '码头',
-            'action': {
-                'type': 'exchange',
-                'options': [
-                    {'cost': {'coins': 3}, 'reward': {'lobsters': 2}},
-                    {'cost': {'cages': 1}, 'reward': {'seaweed': 3}}
-                ]
-            },
-            'description': '3金币换2只龙虾，或1个虾笼换3根海草'
+            "id": "marketplace_3",
+            "name": "驿站",
+            "action": {"type": "post_station"},
+            "description": "本回合游戏中每完成一张进贡卡，都可以直接额外获得1德或者1望",
+            "auto": True
         },
         {
-            'id': 'marketplace_4',
-            'name': '钱庄',
-            'action': {
-                'type': 'exchange',
-                'options': [
-                    {'cost': {'lobsters': 1}, 'reward': {'coins': 2}},
-                    {'cost': {'de': 1}, 'reward': {'coins': 5}}
-                ]
-            },
-            'description': '1只龙虾换2金币，或1德换5金币'
+            "id": "marketplace_4",
+            "name": "斗场",
+            "action": {"type": "breeding_4"},
+            "description": "直接进行4次培养龙虾升级",
+            "auto": True
+        },
+        {
+            "id": "marketplace_5",
+            "name": "黑市",
+            "action": {"type": "black_market"},
+            "description": "直接获得一只2品龙虾",
+            "auto": True
+        },
+        {
+            "id": "marketplace_6",
+            "name": "学堂",
+            "action": {"type": "academy"},
+            "description": "你的德望轨最低者提升一格（如果德望值一样，则自己选择+1德或者+1望）",
+            "auto": True
+        },
+        {
+            "id": "marketplace_7",
+            "name": "善堂",
+            "action": {"type": "charity"},
+            "description": "德轨最低的玩家直接获得2只普通龙虾，望轨最低的玩家直接获得2个金币",
+            "auto": True
+        },
+        {
+            "id": "marketplace_8",
+            "name": "市集",
+            "action": {"type": "bazaar"},
+            "description": "直接获取1根海草+1个金币+1只普通龙虾+1个虾笼",
+            "auto": True
+        },
+        {
+            "id": "marketplace_9",
+            "name": "客栈",
+            "action": {"type": "inn"},
+            "description": "本卡上会有一个专属里长，获得后在下一回合增加1个放置名额",
+            "auto": True
         }
     ]
 }

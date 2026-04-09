@@ -5,6 +5,7 @@
 
 import json
 import random
+import copy
 from utils.constants import FISHING_BAG_ITEMS, SLOT_TEMPLATES, MARKET_PRICES, CHALLENGE_SLOT_DONE, GRADE_VALUES
 from utils.events import ServerEvents, ServerAreaActionTypes, ServerBattleActionTypes
 from utils.logger import log_info, log_debug
@@ -37,7 +38,7 @@ def draw_from_bag() -> str:
 async def resolve_area_step(game_state: dict, area_index: int, manager, room_id):
     """
     根据区域索引结算对应区域（异步版本，支持UI交互）
-    
+
     返回:
         'auto_next' - 自动进入下一区域（无需UI交互）
         'waiting_ui' - 等待前端UI交互
@@ -59,7 +60,7 @@ async def resolve_area_step(game_state: dict, area_index: int, manager, room_id)
         return await _resolve_tribute_step(game_state, manager, room_id)
     elif area_name == 'marketplace':
         return await _resolve_marketplace_step(game_state, manager, room_id)
-    
+
     return 'auto_next'
 
 
@@ -137,7 +138,7 @@ async def _resolve_seafood_market_step(game_state: dict, manager, room_id):
 
             if reward.get('coins'):
                 player['coins'] += reward['coins']
-            
+
             # 应用相邻位置的奖励
             if check_adjacent_action(player):
                 total_slots = len(slots)
@@ -190,32 +191,46 @@ async def _resolve_breeding_step(game_state: dict, manager, room_id):
             # 从模板读取 actionCount 和 reward
             template = templates[current_slot_index]
             action_count = template['actionCount'] if template else 1
+
+            # 临时斗场行动接入（来自闹市区）
+            is_arena_override = settlement_state.get('overrideActionCount') is not None
+            if is_arena_override:
+                action_count = settlement_state.get('overrideActionCount')
+
             reward = template.get('reward', {})
 
-            # 发放奖励
-            if reward.get('seaweed'):
-                player['seaweed'] = player.get('seaweed', 0) + reward['seaweed']
-            if reward.get('coins'):
-                player['coins'] = player.get('coins', 0) + reward['coins']
-            
-            # 应用相邻位置的奖励
-            if check_adjacent_action(player):
-                total_slots = len(slots)
-                adjacent_reward = get_adjacent_rewards('breeding', current_slot_index, total_slots)
-                for res_type, res_value in adjacent_reward.items():
-                    if res_type == 'coins':
-                        player['coins'] = player.get('coins', 0) + res_value
-                    elif res_type == 'seaweed':
-                        player['seaweed'] = player.get('seaweed', 0) + res_value
-                    elif res_type == 'cages':
-                        player['cages'] = player.get('cages', 0) + res_value
+            # 发放奖励 (斗场切入时不重复发奖励)
+            if not is_arena_override:
+                if reward.get('seaweed'):
+                    player['seaweed'] = player.get('seaweed', 0) + reward['seaweed']
+                if reward.get('coins'):
+                    player['coins'] = player.get('coins', 0) + reward['coins']
+
+                # 应用相邻位置的奖励
+                if check_adjacent_action(player):
+                    total_slots = len(slots)
+                    adjacent_reward = get_adjacent_rewards('breeding', current_slot_index, total_slots)
+                    for res_type, res_value in adjacent_reward.items():
+                        if res_type == 'coins':
+                            player['coins'] = player.get('coins', 0) + res_value
+                        elif res_type == 'seaweed':
+                            player['seaweed'] = player.get('seaweed', 0) + res_value
+                        elif res_type == 'cages':
+                            player['cages'] = player.get('cages', 0) + res_value
 
             # 如果没有可升级的龙虾，跳过UI交互
             if len(player['lobsters']) == 0:
+                if is_arena_override:
+                    # 斗场结束，返回闹市区处理
+                    game_state['settlementState'] = make_settlement_state('marketplace', current_slot_index, 1, player_id)
+                    game_state['settlementState']['currentSlotIndex'] += 1
+                    game_state['settlementState']['waitingForPlayer'] = None
+                    return 'action_complete'
                 current_slot_index += 1
                 continue
 
-            game_state['settlementState'] = make_settlement_state('breeding', current_slot_index, action_count, player_id)
+            if not is_arena_override:
+                game_state['settlementState'] = make_settlement_state('breeding', current_slot_index, action_count, player_id)
 
             await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
                 make_action_message(ServerAreaActionTypes.AREA_WAITING_UI, {
@@ -277,8 +292,8 @@ async def _resolve_tribute_step(game_state: dict, manager, room_id):
 
         players_need_choice = []
         for battle in game_state.get('battleQueue', []):
-            challenger = next((p for p in game_state['players'] if p['id'] == battle['challengerId']), None)
-            defender = next((p for p in game_state['players'] if p['id'] == battle['defenderId']), None)
+            challenger = game_state['players'].get(battle['challengerId'])
+            defender = game_state['players'].get(battle['defenderId'])
             if challenger and check_battle_bonus(challenger):
                 if challenger['id'] not in players_need_choice:
                     players_need_choice.append(challenger['id'])
@@ -323,11 +338,11 @@ async def _resolve_tribute_actions(game_state: dict, manager, room_id):
 
     while current_slot_index < len(slots):
         player_id = slots[current_slot_index]
-        
+
         if player_id is not None:
             template = templates[current_slot_index]
             action_count = template['actionCount'] if template else 1
-            
+
             player = game_state['players'][player_id]
 
             game_state['settlementState'] = make_settlement_state('tribute', current_slot_index, action_count, player_id)
@@ -353,11 +368,10 @@ async def _resolve_tribute_actions(game_state: dict, manager, room_id):
 async def _resolve_marketplace_step(game_state: dict, manager, room_id):
     """
     结算闹市区（需要UI交互）
+    动态改写驿站和学堂的选项供前端复用选择器
     """
     area_data = game_state['areas']['marketplace']
     slots = area_data['slots']
-    templates = SLOT_TEMPLATES['marketplace']
-    current_round = game_state.get('currentRound', 1)
 
     settlement_state = game_state.get('settlementState', {})
     current_slot_index = settlement_state.get('currentSlotIndex', 0)
@@ -367,14 +381,50 @@ async def _resolve_marketplace_step(game_state: dict, manager, room_id):
         if player_id is not None:
             player = game_state['players'][player_id]
 
-            available_cards = [
+            raw_available_cards = [
                 card for card in game_state.get('downtownCards', [])
                 if not card.get('usedThisRound', False)
             ]
 
-            if len(available_cards) == 0:
+            if len(raw_available_cards) == 0:
                 current_slot_index += 1
                 continue
+
+            # 动态生成选项
+            available_cards = []
+            for card in raw_available_cards:
+                c = copy.deepcopy(card)
+                inner_type = c.get('action', {}).get('type')
+
+                if inner_type == 'post_station':
+                    tributes_count = player.get('tributesThisRound', 0)
+                    if tributes_count > 0:
+                        c['action']['type'] = 'exchange'
+                        c['auto'] = False
+                        options = []
+                        for i in range(tributes_count + 1):
+                            de_val = i
+                            wang_val = tributes_count - i
+                            rew = {}
+                            if de_val > 0: rew['de'] = de_val
+                            if wang_val > 0: rew['wang'] = wang_val
+                            options.append({'cost': {}, 'reward': rew})
+                        c['action']['options'] = options
+                    else:
+                        c['auto'] = True
+
+                elif inner_type == 'academy':
+                    if player.get('de', 0) == player.get('wang', 0):
+                        c['action']['type'] = 'exchange'
+                        c['auto'] = False
+                        c['action']['options'] = [
+                            {'cost': {}, 'reward': {'de': 1}},
+                            {'cost': {}, 'reward': {'wang': 1}}
+                        ]
+                    else:
+                        c['auto'] = True
+
+                available_cards.append(c)
 
             game_state['settlementState'] = make_settlement_state('marketplace', current_slot_index, 1, player_id)
 
@@ -397,13 +447,12 @@ async def _resolve_marketplace_step(game_state: dict, manager, room_id):
 async def process_area_action(game_state: dict, action_type: str, action_payload: dict, manager, room_id, websocket):
     """
     处理结算阶段的前端交互操作
-    
+
     返回:
         'action_complete' - 当前区域所有行动完成
         'continue_ui' - 继续等待UI交互（同一玩家还有行动）
         'error' - 操作失败
     """
-
     settlement_state = game_state.get('settlementState', {})
     area_type = settlement_state.get('areaType')
     player_id = settlement_state.get('waitingForPlayer')
@@ -425,7 +474,7 @@ async def process_area_action(game_state: dict, action_type: str, action_payload
         return await _process_tribute_action(game_state, action_type, action_payload, player, manager, room_id, websocket)
     elif area_type == 'marketplace':
         return await _process_marketplace_action(game_state, action_type, action_payload, player, manager, room_id, websocket)
-    
+
     return 'error'
 
 
@@ -494,7 +543,7 @@ async def _process_shrimp_catching_action(game_state: dict, action_type: str, ac
                     p['isStartingPlayer'] = False
                 player['isStartingPlayer'] = True
             reward_given = True
-            
+
             # 应用相邻位置的奖励
             if check_adjacent_action(player):
                 area_data = game_state['areas']['shrimp_catching']
@@ -833,11 +882,18 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
         game_state['settlementState']['remainingActions'] = remaining_actions
 
         if remaining_actions <= 0:
-            game_state['settlementState']['waitingForPlayer'] = None
-            # 增加 currentSlotIndex 以继续下一个玩家
-            current_idx = game_state['settlementState'].get('currentSlotIndex', 0)
-            game_state['settlementState']['currentSlotIndex'] = current_idx + 1
-            return 'action_complete'
+            is_arena_override = settlement_state.get('overrideActionCount') is not None
+            if is_arena_override:
+                # 若来自闹市区斗场临时切入，返回闹市区流转
+                game_state['settlementState'] = make_settlement_state('marketplace', settlement_state.get('currentSlotIndex'), 1, player['id'])
+                game_state['settlementState']['currentSlotIndex'] += 1
+                game_state['settlementState']['waitingForPlayer'] = None
+                return 'action_complete'
+            else:
+                game_state['settlementState']['waitingForPlayer'] = None
+                current_idx = game_state['settlementState'].get('currentSlotIndex', 0)
+                game_state['settlementState']['currentSlotIndex'] = current_idx + 1
+                return 'action_complete'
         else:
             await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
                 make_action_message(ServerAreaActionTypes.AREA_WAITING_UI, {
@@ -848,6 +904,13 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
                 }))
             return 'continue_ui'
     elif action_type == 'skip':
+        is_arena_override = settlement_state.get('overrideActionCount') is not None
+        if is_arena_override:
+            game_state['settlementState'] = make_settlement_state('marketplace', settlement_state.get('currentSlotIndex'), 1, player['id'])
+            game_state['settlementState']['currentSlotIndex'] += 1
+            game_state['settlementState']['waitingForPlayer'] = None
+            return 'action_complete'
+
         game_state['settlementState']['waitingForPlayer'] = None
         game_state['settlementState']['remainingActions'] = 0
         # 增加 slot 索引，继续下一个玩家
@@ -941,25 +1004,64 @@ async def _process_marketplace_action(game_state: dict, action_type: str, action
                 elif res_type == 'cages':
                     player['cages'] += res_amount
 
+        elif action_type_inner == 'post_station':
+            tributes_count = player.get('tributesThisRound', 0)
+            if tributes_count > 0:
+                if option_index < 0 or option_index > tributes_count:
+                    await send_error(websocket, '无效的选项')
+                    return 'error'
+                de_val = option_index
+                wang_val = tributes_count - option_index
+                player['de'] = player.get('de', 0) + de_val
+                player['wang'] = player.get('wang', 0) + wang_val
+
+        elif action_type_inner == 'breeding_4':
+            if len(player['lobsters']) > 0:
+                current_slot_index = settlement_state.get('currentSlotIndex', 0)
+                game_state['settlementState'] = make_settlement_state('breeding', current_slot_index, 4, player['id'])
+                game_state['settlementState']['overrideActionCount'] = 4 # 打上特殊标记，结算完回滚
+                await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
+                    make_action_message(ServerAreaActionTypes.AREA_WAITING_UI, {
+                        'areaType': 'breeding',
+                        'playerId': player['id'],
+                        'actionCount': 4,
+                        'player': _serialize_player(player),
+                    }))
+                return 'continue_ui'
+
+        elif action_type_inner == 'black_market':
+            player['lobsters'].append(_create_lobster('grade2'))
+
         elif action_type_inner == 'academy':
-            if player['de'] < player['wang']:
+            if player.get('de', 0) < player.get('wang', 0):
                 player['de'] += 1
-            else:
+            elif player.get('wang', 0) < player.get('de', 0):
                 player['wang'] += 1
+            else:
+                if option_index == 0:
+                    player['de'] += 1
+                else:
+                    player['wang'] += 1
 
         elif action_type_inner == 'charity':
-            min_de = min(p['de'] for p in game_state['players'])
-            min_wang = min(p['wang'] for p in game_state['players'])
+            min_de = min(p.get('de', 0) for p in game_state['players'])
+            min_wang = min(p.get('wang', 0) for p in game_state['players'])
 
             for p in game_state['players']:
-                if p['de'] == min_de:
-                    lost = min(2, len(p['lobsters']))
-                    for _ in range(lost):
-                        p['lobsters'].pop(0)
-                if p['wang'] == min_wang:
-                    lost = min(2, len(p['lobsters']))
-                    for _ in range(lost):
-                        p['lobsters'].pop(0)
+                if p.get('de', 0) == min_de:
+                    p['lobsters'].append(_create_lobster('normal'))
+                    p['lobsters'].append(_create_lobster('normal'))
+                if p.get('wang', 0) == min_wang:
+                    p['coins'] += 2
+
+        elif action_type_inner == 'bazaar':
+            player['seaweed'] = player.get('seaweed', 0) + 1
+            player['coins'] = player.get('coins', 0) + 1
+            player['cages'] = player.get('cages', 0) + 1
+            player['lobsters'].append(_create_lobster('normal'))
+
+        elif action_type_inner == 'inn':
+            player['inn_headman'] = True
 
         game_state['settlementState']['waitingForPlayer'] = None
         # 增加 slot 索引，继续下一个玩家
@@ -1062,6 +1164,8 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             if 'tavernCompletions' not in player:
                 player['tavernCompletions'] = {}
             player['tavernCompletions'][tavern_id] = order
+
+            player['tributesThisRound'] = player.get('tributesThisRound', 0) + 1
 
         else:
             card_ids = action_payload.get('cardIds', [])
@@ -1246,6 +1350,8 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             if 'tavernCompletions' not in player:
                 player['tavernCompletions'] = {}
             player['tavernCompletions'][tavern_id] = order
+
+            player['tributesThisRound'] = player.get('tributesThisRound', 0) + len(cards_to_process)
 
         remaining = game_state['settlementState'].get('remainingActions', 1)
         if remaining > 1:
