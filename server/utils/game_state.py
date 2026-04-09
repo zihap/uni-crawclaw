@@ -59,6 +59,8 @@ def create_game_state() -> dict:
 
         'tributeTasks': [],
         'downtownCards': [],
+        'titleCardDeck': [], # 称号卡牌堆
+        'gameTitleCards': [], # 奖励池中当前回合展示的2张称号卡
         'taverns': [
             {'id': i, 'name': f'酒楼{i+1}', 'cards': [], 'occupants': []}
             for i in range(6)
@@ -111,7 +113,7 @@ def create_player(player_id: int, name: str, is_host: bool = False, user_id: str
 
         'permaBuffs': [],
 
-        'titleCards': _ALL_TITLE_CARDS.copy(),
+        'titleCards': [], # 修复：玩家初始不应拥有所有称号卡
 
         'ready': False,
         'isHost': is_host,
@@ -143,6 +145,19 @@ def draw_downtown_cards(game_state: dict):
     shuffled = DOWNTOWN_CARDS.copy()
     random.shuffle(shuffled)
     game_state['downtownCards'] = shuffled[:3]
+
+def draw_title_cards(game_state: dict):
+    """抽取2张称号卡到本回合奖励池（丢弃上一回合未获取的称号卡）"""
+    if 'titleCardDeck' not in game_state or not game_state['titleCardDeck']:
+        import random
+        deck = _ALL_TITLE_CARDS.copy()
+        random.shuffle(deck)
+        game_state['titleCardDeck'] = deck
+
+    game_state['gameTitleCards'] = []
+    for _ in range(2):
+        if len(game_state['titleCardDeck']) > 0:
+            game_state['gameTitleCards'].append(game_state['titleCardDeck'].pop(0))
 
 
 # 竞技场投注状态: { "roomId_battleId": { challengerId, defenderId, challengerLobster, defenderLobster, spectators, bets, started, completed } }

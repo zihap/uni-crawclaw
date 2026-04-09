@@ -2083,15 +2083,25 @@ const checkTributeReq = (req, player) => {
     if (req.lobsters) {
         const gradeValues = { normal: 0, grade3: 1, grade2: 2, grade1: 3, royal: 4 }
         let tempLobsters = [...(player.lobsters || []), ...(player.titleCards || [])]
+
         for (const [gradeKey, count] of Object.entries(req.lobsters)) {
             let foundCount = 0
+            const reqGradeVal = gradeValues[gradeKey] ?? 0
+
             for (let i = 0; i < count; i++) {
-                const reqGradeVal = gradeValues[gradeKey] ?? 0
                 const matchIdx = tempLobsters.findIndex((l) => {
                     if (l.name && !l.grade) return 4 >= reqGradeVal
                     const lv = l.title ? 4 : (gradeValues[l.grade] ?? 0)
                     return lv >= reqGradeVal
                 })
+
+                if (matchIdx === -1) return false
+                tempLobsters.splice(matchIdx, 1)
+                foundCount++
+            }
+        }
+    }
+    return true
 }
 
 const confirmNakedTribute = () => {

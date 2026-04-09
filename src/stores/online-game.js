@@ -191,6 +191,8 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         if (data.tributeTasks) tributeTasks.value = data.tributeTasks
         if (data.downtownCards) downtownCards.value = data.downtownCards
         if (data.lastPlacement !== undefined) lastPlacement.value = data.lastPlacement
+        // 加入称号卡池同步
+        if (data.gameTitleCards !== undefined) gameTitleCards.value = data.gameTitleCards
         gameState.value = data
     }
 
@@ -219,12 +221,12 @@ export const useOnlineGameStore = defineStore('online-game', () => {
     function handleGameAction(data) {
         const actionType = data.actionType
         if (
-            actionType === 'signalsExchanged' ||
-            actionType === 'itemBought' ||
-            actionType === 'itemSold' ||
-            actionType === 'lobsterCultivated' ||
-            actionType === 'tributeSubmitted' ||
-            actionType === 'downtownActionExecuted'
+                actionType === 'signalsExchanged' ||
+                actionType === 'itemBought' ||
+                actionType === 'itemSold' ||
+                actionType === 'lobsterCultivated' ||
+                actionType === 'tributeSubmitted' ||
+                actionType === 'downtownActionExecuted'
         ) {
             if (data.gameState) updateGameState(data.gameState)
         }
@@ -326,6 +328,8 @@ export const useOnlineGameStore = defineStore('online-game', () => {
             currentArea.value = areaNames[data.currentArea] || ''
         }
         if (data.status) status.value = data.status
+        // 加入称号卡池同步
+        if (data.gameTitleCards !== undefined) gameTitleCards.value = data.gameTitleCards
     }
 
     function handleSettlementComplete(data) {
@@ -535,6 +539,8 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         if (data.tributeTasks) tributeTasks.value = data.tributeTasks
         if (data.downtownCards) downtownCards.value = data.downtownCards
         if (data.lastPlacement !== undefined) lastPlacement.value = data.lastPlacement
+        // 加入称号卡池同步
+        if (data.gameTitleCards !== undefined) gameTitleCards.value = data.gameTitleCards
         gameState.value = data
     }
 
@@ -765,11 +771,11 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         downtownCards,
         gameState,
         lastPlacement,
+        gameTitleCards, // 导出称号卡以供模板响应式使用
 
         // 游戏资源状态
         wildLobsterPool,
         seafoodMarketLobsters,
-        gameTitleCards,
         gameTributeCards,
         gameMarketplaceCards,
         taverns,

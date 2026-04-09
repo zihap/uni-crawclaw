@@ -759,80 +759,75 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
     if action_type == 'cultivateLobster':
         lobster_index = action_payload.get('lobsterIndex')
         use_seaweed = action_payload.get('useSeaweed', False)
+        royal_cost_type = action_payload.get('royalCostType')
+        royal_reward_type = action_payload.get('royalRewardType', 'de')
+        selected_title_id = action_payload.get('selectedTitleId')
+
         if lobster_index is None or lobster_index >= len(player['lobsters']):
             await send_error(websocket, '无效的龙虾选择')
             return 'error'
 
         lobster = player['lobsters'][lobster_index]
         old_grade = lobster['grade']
-        has_breed_bonus = check_breed_bonus(player)
 
-        def apply_extra_upgrade():
-            if not has_breed_bonus or lobster['grade'] == 'royal':
-                return
-            current = lobster['grade']
-            upgrade_map = {
-                'grade3': 'grade2',
-                'grade2': 'grade1',
-                'grade1': 'royal',
-            }
-            if current in upgrade_map:
-                lobster['grade'] = upgrade_map[current]
+        def get_next_grade(g):
+            mapping = {'normal': 'grade3', 'grade3': 'grade2', 'grade2': 'grade1', 'grade1': 'royal', 'royal': 'royal'}
+            return mapping.get(g, g)
 
-        if use_seaweed and player.get('seaweed', 0) >= 1:
-            player['seaweed'] -= 1
-            if old_grade == 'normal':
-                lobster['grade'] = 'grade2'
-                apply_extra_upgrade()
-            elif old_grade == 'grade3':
-                lobster['grade'] = 'grade1'
-                apply_extra_upgrade()
-            elif old_grade == 'grade2':
-                if player['cages'] > 0:
-                    player['cages'] -= 1
-                    lobster['grade'] = 'royal'
-                elif player['coins'] >= 3:
-                    player['coins'] -= 3
-                    lobster['grade'] = 'royal'
-                else:
-                    await send_error(websocket, '需要虾笼或3金币')
-                    return 'error'
-                apply_extra_upgrade()
-            else:
-                await send_error(websocket, '当前品级无法使用海草升级')
+        target_grade = get_next_grade(old_grade)
+
+        if use_seaweed:
+            if player.get('seaweed', 0) < 1:
+                await send_error(websocket, '海草不足')
                 return 'error'
-        elif use_seaweed:
-            await send_error(websocket, '海草数量不足')
-            return 'error'
-        else:
+            # 海草额外加1品，如果原品级是三品及以上，会跨阶
             if old_grade == 'normal':
-                lobster['grade'] = 'grade3'
-                apply_extra_upgrade()
+                target_grade = 'grade2'
             elif old_grade == 'grade3':
-                lobster['grade'] = 'grade2'
-                apply_extra_upgrade()
-            elif old_grade == 'grade2':
-                if player['cages'] > 0:
-                    player['cages'] -= 1
-                    lobster['grade'] = 'grade1'
-                elif player['coins'] >= 3:
-                    player['coins'] -= 3
-                    lobster['grade'] = 'grade1'
-                else:
-                    await send_error(websocket, '需要虾笼或3金币')
+                target_grade = 'grade1'
+            else:
+                target_grade = 'royal'
+
+        is_upgrading_to_royal = (old_grade != 'royal' and target_grade == 'royal')
+
+        if is_upgrading_to_royal:
+            if royal_cost_type == 'cage':
+                if player.get('cages', 0) < 1:
+                    await send_error(websocket, '虾笼不足')
                     return 'error'
-                apply_extra_upgrade()
-            elif old_grade == 'grade1':
-                if player['cages'] > 0:
-                    player['cages'] -= 1
-                    lobster['grade'] = 'royal'
-                elif player['coins'] >= 3:
-                    player['coins'] -= 3
-                    lobster['grade'] = 'royal'
-                else:
-                    await send_error(websocket, '需要虾笼或3金币')
+                player['cages'] -= 1
+            elif royal_cost_type == 'coin':
+                if player.get('coins', 0) < 3:
+                    await send_error(websocket, '金币不足')
                     return 'error'
-                apply_extra_upgrade()
+                player['coins'] -= 3
+            else:
+                await send_error(websocket, '支付皇家费用失败')
+                return 'error'
+
+            # Apply Reward
+            if royal_reward_type == 'de':
+                player['de'] = player.get('de', 0) + 1
+            elif royal_reward_type == 'wang':
+                player['wang'] = player.get('wang', 0) + 1
+
+            # Apply Title Card
+            if selected_title_id:
+                game_titles = game_state.get('gameTitleCards', [])
+                for i, tc in enumerate(game_titles):
+                    if tc.get('id') == selected_title_id:
+                        lobster['title'] = game_titles.pop(i)
+                        break
+
+        if use_seaweed:
+            player['seaweed'] -= 1
+
+        lobster['grade'] = target_grade
+
+        # Apply aura extra upgrade
+        has_breed_bonus = check_breed_bonus(player)
+        if has_breed_bonus and lobster['grade'] != 'royal':
+            lobster['grade'] = get_next_grade(lobster['grade'])
 
         remaining_actions -= 1
         game_state['settlementState']['remainingActions'] = remaining_actions

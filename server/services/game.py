@@ -7,7 +7,7 @@ from typing import Dict
 import time
 from utils.constants import AREAS, MARKET_PRICES, CHALLENGE_SLOT_DONE
 from utils.events import ServerEvents, ServerRoomActionTypes, ServerGameActionTypes, ServerAreaActionTypes
-from utils.game_state import draw_tribute_tasks, draw_downtown_cards
+from utils.game_state import draw_tribute_tasks, draw_downtown_cards, draw_title_cards
 from utils.logger import log_info, log_debug
 from utils.helpers import make_action_message, calculate_market_prices
 from services.tribute_card_effects import get_endgame_choices
@@ -149,7 +149,8 @@ async def broadcast_game_state(room_id: str, rooms: dict, manager):
             'currentPlayerIndex': game_state.get('currentPlayerIndex', 0),
             'currentArea': game_state.get('currentArea', 0),
             'areas': game_state.get('areas', {}),
-            'status': game_state['status']
+            'status': game_state['status'],
+            'gameTitleCards': game_state.get('gameTitleCards', []) # 广播称号卡池
         }
         await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
             make_action_message(ServerGameActionTypes.GAME_STATE_UPDATE, **data))
@@ -185,6 +186,7 @@ async def start_game(room_id: str, rooms: dict, manager):
 
     draw_tribute_tasks(game_state)
     draw_downtown_cards(game_state)
+    draw_title_cards(game_state)
 
     log_debug(f"start_game: Sending gameStarted to room {room_id}")
     log_debug(f"  game_state['status'] = {game_state['status']}")
@@ -285,6 +287,7 @@ async def complete_settlement(room_id, game_state, rooms, manager):
 
     draw_tribute_tasks(game_state)
     draw_downtown_cards(game_state)
+    draw_title_cards(game_state) # 新的一回合，抽取2张新称号卡
 
     await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
         make_action_message(ServerAreaActionTypes.SETTLEMENT_COMPLETE, {
