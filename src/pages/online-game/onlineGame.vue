@@ -18,6 +18,21 @@
             </button>
         </view>
 
+        <view class="resource-toast-container">
+            <view v-for="msg in resourceMessages" :key="msg.id" class="res-toast">
+                <image class="res-avatar" :src="msg.avatar" mode="aspectFill"/>
+                <text class="res-text-main">【{{ msg.playerName }}】的{{ msg.resName }}：</text>
+                <view class="res-math">
+                    <text class="res-old">{{ msg.oldVal }}</text>
+                    <text v-if="msg.step >= 2" class="res-delta" :class="{ negative: msg.deltaVal < 0 }">
+                        {{ msg.deltaStr }}
+                    </text>
+                    <text v-if="msg.step >= 3" class="res-equals">=</text>
+                    <text v-if="msg.step >= 3" class="res-new">{{ msg.newVal }}</text>
+                </view>
+            </view>
+        </view>
+
         <view class="shrimp-draw-messages">
             <view v-for="msg in shrimpDrawMessages" :key="msg.id" class="shrimp-draw-msg">
                 <text class="shrimp-draw-msg-text">{{ msg.text }}</text>
@@ -1019,6 +1034,108 @@ const showArenaModal = ref(false)
 const showLobsterList = ref(false)
 const showTributeCards = ref(false)
 
+// ============ 全局资源变动监听与强视觉动效 ============
+const RES_NAMES = {
+    coins: '金币',
+    seaweed: '海草',
+    cages: '虾笼',
+    de: '德',
+    wang: '望',
+    lobsters: '龙虾'
+}
+const previousResources = ref({})
+const resourceMessages = ref([])
+let isResTrackerInitialized = false
+
+watch(() => playerStore.players, (newPlayers) => {
+    if (!newPlayers || newPlayers.length === 0) return
+
+    // 1. 初次加载游戏时只做快照，不触发乱入动画
+    if (!isResTrackerInitialized) {
+        newPlayers.forEach(p => {
+            previousResources.value[p.id] = {
+                coins: p.coins || 0,
+                seaweed: p.seaweed || 0,
+                cages: p.cages || 0,
+                de: p.de || 0,
+                wang: p.wang || 0,
+                lobsters: p.lobsters ? p.lobsters.length : 0
+            }
+        })
+        isResTrackerInitialized = true
+        return
+    }
+
+    // 2. 对比差异，推送动画
+    newPlayers.forEach(p => {
+        if (!previousResources.value[p.id]) {
+            previousResources.value[p.id] = {
+                coins: p.coins || 0,
+                seaweed: p.seaweed || 0,
+                cages: p.cages || 0,
+                de: p.de || 0,
+                wang: p.wang || 0,
+                lobsters: p.lobsters ? p.lobsters.length : 0
+            }
+            return
+        }
+
+        const prev = previousResources.value[p.id]
+        const currLobsters = p.lobsters ? p.lobsters.length : 0
+
+        const checks = [
+            {key: 'coins', curr: p.coins || 0},
+            {key: 'seaweed', curr: p.seaweed || 0},
+            {key: 'cages', curr: p.cages || 0},
+            {key: 'de', curr: p.de || 0},
+            {key: 'wang', curr: p.wang || 0},
+            {key: 'lobsters', curr: currLobsters}
+        ]
+
+        checks.forEach(({key, curr}) => {
+            const old = prev[key]
+            if (curr !== old) {
+                const delta = curr - old
+                pushResourceMessage(p, key, old, delta, curr)
+                prev[key] = curr
+            }
+        })
+    })
+}, {deep: true})
+
+const pushResourceMessage = (player, resKey, oldVal, delta, newVal) => {
+    const id = Date.now() + Math.random() // 唯一ID
+    const msg = {
+        id,
+        playerName: player.name,
+        avatar: player.avatar || '/static/images/player2_default.png',
+        resName: RES_NAMES[resKey] + '数',
+        oldVal,
+        deltaVal: delta,
+        deltaStr: delta > 0 ? `+${delta}` : `${delta}`,
+        newVal,
+        step: 1 // 控制显示阶段的步进器
+    }
+    resourceMessages.value.push(msg)
+
+    // 阶段2：显示加减变数
+    setTimeout(() => {
+        const m = resourceMessages.value.find(x => x.id === id)
+        if (m) m.step = 2
+    }, 500)
+
+    // 阶段3：显示等于和结果，触发强力的弹跳闪烁动效
+    setTimeout(() => {
+        const m = resourceMessages.value.find(x => x.id === id)
+        if (m) m.step = 3
+    }, 1200)
+
+    // 移除气泡
+    setTimeout(() => {
+        resourceMessages.value = resourceMessages.value.filter(x => x.id !== id)
+    }, 4500)
+}
+
 // ============ 结算阶段状态 ============
 const pendingSettlement = computed(() => onlineGameStore.pendingSettlement)
 // 强制监听 pendingSettlement 变化以确保响应式更新
@@ -2017,7 +2134,6 @@ onMounted(() => {
         return
     }
 
-    // 先恢复队列，再初始化（避免 initOnlineMode 清空队列）
     const hadQueue = restoreArenaQueue(roomId)
 
     initGameState(options)
@@ -2036,6 +2152,136 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* ======== 资源变动动效样式 ======== */
+.resource-toast-container {
+    position: fixed;
+    top: 18%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    pointer-events: none;
+    width: 85%;
+    align-items: center;
+}
+
+.res-toast {
+    background: rgba(15, 15, 35, 0.95);
+    border: 2px solid rgba(78, 205, 196, 0.6);
+    border-radius: 40px;
+    padding: 10px 24px 10px 10px;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7), 0 0 15px rgba(78, 205, 196, 0.3);
+    animation: toastSlideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.res-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    margin-right: 12px;
+    border: 2px solid #ffd700;
+}
+
+.res-text-main {
+    font-size: 18px;
+    color: #fff;
+    margin-right: 12px;
+    font-weight: bold;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.res-math {
+    display: flex;
+    align-items: center;
+    font-size: 24px;
+    font-weight: 900;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.res-old {
+    color: #a0a0b0;
+}
+
+.res-delta {
+    margin: 0 10px;
+    color: #ffd700;
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.res-delta.negative {
+    color: #ff6b6b;
+}
+
+.res-equals {
+    color: #fff;
+    margin-right: 10px;
+    animation: fadeIn 0.2s ease-in forwards;
+}
+
+.res-new {
+    color: #4ecdc4;
+    display: inline-block;
+    animation: finalPop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes toastSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes popIn {
+    0% {
+        transform: scale(0);
+        opacity: 0;
+    }
+    80% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes finalPop {
+    0% {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(2.0);
+        opacity: 1;
+        text-shadow: 0 0 20px #4ecdc4, 0 0 40px #4ecdc4;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+        text-shadow: 0 0 8px #4ecdc4;
+    }
+}
+
+
+/* ======== 竞技场唤醒按钮样式 ======== */
 .arena-reopen-btn {
     position: fixed;
     bottom: 120px;
@@ -2544,13 +2790,11 @@ onUnmounted(() => {
     gap: 12px;
 }
 
-/* 添加皇家龙虾奖励选择和称号选择的样式支持 */
 .title-cards {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
 }
-
 .title-card {
     padding: 8px 12px;
     background: rgba(255, 215, 0, 0.05);
@@ -2560,7 +2804,6 @@ onUnmounted(() => {
     font-size: 12px;
     transition: all 0.2s;
 }
-
 .title-card.active {
     background: rgba(255, 215, 0, 0.2);
     border-color: #ffd700;
@@ -3129,11 +3372,5 @@ onUnmounted(() => {
 
 .tribute-modal .btn-warning:disabled {
     opacity: 0.5;
-}
-
-.tribute-modal .error-hint {
-    color: #e94560;
-    font-size: 12px;
-    text-shadow: 0 0 8px rgba(233, 69, 96, 0.3);
 }
 </style>
