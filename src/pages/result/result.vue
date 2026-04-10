@@ -14,8 +14,13 @@
 
         <scroll-view scroll-y class="leaderboard-section animate-fade-up">
             <view class="leaderboard-title">对局结算排行榜</view>
-            <view v-for="(player, index) in sortedPlayers" :key="player.id" class="player-card">
-                <view class="player-row" @click="toggleExpand(player.id)">
+
+            <view v-for="(player, index) in sortedPlayers" :key="player.id" class="player-item-wrapper">
+                <view
+                        class="player-main-card"
+                        :class="{ 'is-expanded': expandedRows[player.id] }"
+                        @click="toggleExpand(player.id)"
+                >
                     <view class="rank-badge" :class="`rank-${index + 1}`">{{ index + 1 }}</view>
                     <image class="player-avatar" src="/static/images/player2_default.png" mode="aspectFill"/>
                     <text class="player-name">{{ player.name }}</text>
@@ -25,33 +30,35 @@
                     </view>
                 </view>
 
-                <view class="score-details" v-if="expandedRows[player.id]">
-                    <view class="detail-item">
-                        <text class="detail-label">1. 核心乘积分</text>
-                        <text class="detail-formula">
-                            (德{{ player.deTrack.value }} * 望{{ player.wangTrack.value }}
-                            + 德突破奖励{{ player.deTrack.bonus }}
-                            + 望突破奖励{{ player.wangTrack.bonus }}
-                            = {{ player.coreScore }})
-                        </text>
-                    </view>
+                <view class="player-details-drawer" v-if="expandedRows[player.id]">
+                    <view class="drawer-content">
+                        <view class="detail-item">
+                            <text class="detail-label">1. 核心乘积分</text>
+                            <text class="detail-formula">
+                                (德{{ player.deTrack.value }} * 望{{ player.wangTrack.value }}
+                                + 德突破{{ player.deTrack.bonus }}
+                                + 望突破{{ player.wangTrack.bonus }}
+                                = {{ player.coreScore }})
+                            </text>
+                        </view>
 
-                    <view class="detail-item">
-                        <text class="detail-label">2. 进贡席位分</text>
-                        <text class="detail-formula">
-                            ({{ player.tavernDetails.join(' + ') }} = {{ player.tavernTotal }})
-                        </text>
-                    </view>
+                        <view class="detail-item">
+                            <text class="detail-label">2. 进贡席位分</text>
+                            <text class="detail-formula">
+                                ({{ player.tavernDetails.join(' + ') }} = {{ player.tavernTotal }})
+                            </text>
+                        </view>
 
-                    <view class="detail-item">
-                        <text class="detail-label">3. 资源转换分</text>
-                        <text class="detail-formula">
-                            (金币折算{{ player.res.coins }}
-                            + 海草折算{{ player.res.seaweed }}
-                            + 虾笼折算{{ player.res.cages }}
-                            + 龙虾折算{{ player.res.lobsters }}
-                            = {{ player.resTotal }})
-                        </text>
+                        <view class="detail-item">
+                            <text class="detail-label">3. 资源转换分</text>
+                            <text class="detail-formula">
+                                (金币折算{{ player.res.coins }}
+                                + 海草折算{{ player.res.seaweed }}
+                                + 虾笼折算{{ player.res.cages }}
+                                + 龙虾折算{{ player.res.lobsters }}
+                                = {{ player.resTotal }})
+                            </text>
+                        </view>
                     </view>
                 </view>
             </view>
@@ -273,24 +280,33 @@ onMounted(() => {
     width: 100%;
 }
 
-.player-card {
+/* ======== 排行榜全新布局样式 ======== */
+.player-item-wrapper {
+    margin-bottom: 12px;
+}
+
+.player-main-card {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(78, 205, 196, 0.2);
     border-radius: 12px;
-    margin-bottom: 12px;
-    overflow: hidden;
-    transition: all 0.3s;
-}
-
-.player-row {
     display: flex;
     align-items: center;
     padding: 15px;
     position: relative;
+    z-index: 2; /* 保证主卡片层级在抽屉上方 */
+    transition: all 0.3s ease;
 }
 
-.player-row:active {
+.player-main-card:active {
     background: rgba(255, 255, 255, 0.1);
+}
+
+/* 展开时的主卡片高亮状态 */
+.player-main-card.is-expanded {
+    border-color: #4ecdc4;
+    background: rgba(78, 205, 196, 0.15);
+    border-bottom-left-radius: 4px; /* 让下方变平直与抽屉连接 */
+    border-bottom-right-radius: 4px;
 }
 
 .rank-badge {
@@ -357,20 +373,43 @@ onMounted(() => {
     font-size: 12px;
     transition: transform 0.3s;
 }
-
 .expand-icon.expanded {
     transform: rotate(180deg);
     color: #4ecdc4;
 }
 
-.score-details {
-    padding: 0 15px 15px;
-    background: rgba(0, 0, 0, 0.2);
-    border-top: 1px dashed rgba(255, 255, 255, 0.05);
+/* 下方弹出的单独抽屉面板 */
+.player-details-drawer {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(78, 205, 196, 0.3);
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    margin: 0 12px; /* 左右微微缩进，有子层级的视觉感 */
+    padding: 15px;
+    animation: slideDown 0.25s ease-out forwards;
+    transform-origin: top;
+    position: relative;
+    z-index: 1;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.drawer-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .detail-item {
-    margin-top: 10px;
     display: flex;
     flex-direction: column;
 }
