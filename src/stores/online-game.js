@@ -209,16 +209,17 @@ export const useOnlineGameStore = defineStore('online-game', () => {
 
     function handleGameEnded(data) {
         status.value = 'ended'
-        if (data.winner) {
-            uni.showModal({
-                title: '游戏结束',
-                content: `${data.winner.name} 获得胜利！`,
-                showCancel: false,
-                success: () => {
-                    reset()
-                    uni.redirectTo({ url: '/pages/index/index' })
-                }
+        // 提取最终游戏状态
+        const finalGameState = data.gameState || gameState.value
+        if (finalGameState) {
+            // 将完整的游戏状态编码传递给结算页进行最终跑分运算
+            const gameStateStr = encodeURIComponent(JSON.stringify(finalGameState))
+            uni.redirectTo({
+                url: `/pages/result/result?gameState=${gameStateStr}`
             })
+        } else {
+            uni.showToast({title: '结算数据丢失', icon: 'error'})
+            setTimeout(() => uni.redirectTo({url: '/pages/index/index'}), 2000)
         }
     }
 

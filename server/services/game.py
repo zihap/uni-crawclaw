@@ -220,6 +220,7 @@ async def complete_settlement(room_id, game_state, rooms, manager):
     cleanup_phase(game_state)
 
     if game_state['currentRound'] >= game_state['maxRounds']:
+        # （...此处保留原有的 endgameChoice 逻辑...）
         players_need_endgame_choice = []
         for player in game_state['players']:
             tribute_cards = player.get('tributeCards', [])
@@ -258,11 +259,60 @@ async def complete_settlement(room_id, game_state, rooms, manager):
 
         game_state['status'] = 'ended'
 
+        # ======== 【修改部分：全新复杂算分逻辑注入服务端】 ========
+        def calculate_final_score(player, taverns):
+            value_map = [1, 2, 3, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 9, 10]
+
+            def get_bonus(idx):
+                if idx >= 14: return 5
+                if idx >= 13: return 4
+                if idx >= 11: return 3
+                if idx >= 9: return 2
+                if idx >= 7: return 1
+                return 0
+
+            # 1. 核心乘积分
+            de_idx = min(max(player.get('de', 0), 0), 15)
+            wang_idx = min(max(player.get('wang', 0), 0), 15)
+            core_score = (value_map[de_idx] * value_map[wang_idx]) + get_bonus(de_idx) + get_bonus(wang_idx)
+
+            # 2. 进贡席位分
+            tavern_score = 0
+            for t in taverns:
+                occupants = t.get('occupants', [])
+                if player['id'] in occupants:
+                    rank = occupants.index(player['id'])
+                    if rank < 4:
+                        tavern_score += [3, 2, 1, 0][rank]
+
+            # 3. 资源转换分
+            coins_score = player.get('coins', 0) // 2
+            seaweed_score = player.get('seaweed', 0) // 3
+            cages_score = player.get('cages', 0) * 2
+
+            lobsters_score = 0
+            for l in player.get('lobsters', []):
+                g = l.get('grade')
+                if g == 'normal': lobsters_score += 1
+                elif g == 'grade3': lobsters_score += 2
+                elif g == 'grade2': lobsters_score += 3
+                elif g == 'grade1': lobsters_score += 5
+                elif g == 'royal': lobsters_score += 8
+
+            # 单独游离的称号视为8分
+            for tc in player.get('titleCards', []):
+                lobsters_score += 8
+
+            res_score = coins_score + seaweed_score + cages_score + lobsters_score
+            return core_score + tavern_score + res_score + player.get('bonusPoints', 0)
+
+        # 依据新算法寻找最高分赢家
         winner = sorted(
             game_state['players'],
-            key=lambda x: (x.get('de', 0) * x.get('wang', 0) + x.get('bonusPoints', 0), x.get('coins', 0)),
+            key=lambda x: calculate_final_score(x, game_state.get('taverns', [])),
             reverse=True
         )[0]
+        # =======================================================
 
         await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
             make_action_message(ServerAreaActionTypes.SETTLEMENT_COMPLETE, {
