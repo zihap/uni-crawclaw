@@ -23,8 +23,8 @@ export const tributeCards = cardConfig.tributeCards
 export const marketplaceCards = cardConfig.marketplaceCards
 
 export function getSkill(lobsterGrade) {
-    if (lobsterGrade === 'grade3') return { getDiceSides: () => 6 }
-    else if (lobsterGrade === 'grade2') return { getDiceSides: () => 8 }
-    else if (lobsterGrade === 'grade1') return { getDiceSides: () => 10 }
-    else if (lobsterGrade === 'royal') return { getDiceSides: () => 10 }
+    if (lobsterGrade === 'grade3') return { 'diceSides': 6 }
+    else if (lobsterGrade === 'grade2') return { 'diceSides': 8 }
+    else if (lobsterGrade === 'grade1') return { 'diceSides': 10 }
+    else if (lobsterGrade === 'royal') return { 'diceSides': 10 }
 }

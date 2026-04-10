@@ -292,8 +292,8 @@ async def _resolve_tribute_step(game_state: dict, manager, room_id):
 
         players_need_choice = []
         for battle in game_state.get('battleQueue', []):
-            challenger = game_state['players'].get(battle['challengerId'])
-            defender = game_state['players'].get(battle['defenderId'])
+            challenger = next((p for p in game_state['players'] if p['id'] == battle['challengerId']), None)
+            defender = next((p for p in game_state['players'] if p['id'] == battle['defenderId']), None)
             if challenger and check_battle_bonus(challenger):
                 if challenger['id'] not in players_need_choice:
                     players_need_choice.append(challenger['id'])
