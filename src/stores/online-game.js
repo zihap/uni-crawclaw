@@ -611,7 +611,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         const player = playerStore.players.find((p) => p.id === playerId)
         if (!player) return []
         const usedIds = new Set(getUsedLobsterIds(playerId))
-        const validLobsters = player.lobsters?.filter((l) => l?.grade && l.grade !== 'normal' && !usedIds.has(l.grade)) || []
+        const validLobsters = player.lobsters?.filter((l) => l?.grade && l.grade !== 'normal' && !usedIds.has(l.id)) || []
         const titleCards = player.titleCards?.filter((t) => t?.id && !usedIds.has(t.id)) || []
         return [...validLobsters, ...titleCards]
     }

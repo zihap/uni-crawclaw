@@ -21,18 +21,6 @@ export const useBattleStore = defineStore('battle', () => {
         return battleData.value?.currentPlayer === myPlayerIndex.value && battleData.value?.phase === 'rolling'
     })
 
-    // ============ 技能方法统一 ============
-
-    const applySkillMethod = (playerIndex, methodName, fallback, ...args) => {
-        const player = battleData.value?.players[playerIndex]
-        if (!player) return fallback
-        let skill = getSkill(player.lobsterGrade)
-        if (player.lobsterSkill) {
-            skill = player.lobsterSkill
-        }
-        return skill?.[methodName] ? skill[methodName](fallback, ...args) : fallback
-    }
-
     function getDiceValue(playerIndex) {
         const player = battleData.value?.players[playerIndex]
         if (!player) return Math.floor(Math.random() * 6) + 1
@@ -40,12 +28,16 @@ export const useBattleStore = defineStore('battle', () => {
         if (player.lobsterSkill) {
             skill = player.lobsterSkill
         }
-        if (skill?.getDiceValue) return skill.getDiceValue()
-        return Math.floor(Math.random() * getDiceSides(playerIndex)) + 1
+        return Math.floor(Math.random() * skill?.diceSides) + 1
     }
 
     function getDiceSides(playerIndex) {
-        return applySkillMethod(playerIndex, 'diceSides', 6)
+        const player = battleData.value?.players[playerIndex]
+        let skill = getSkill(player?.lobsterGrade)
+        if (player.lobsterSkill) {
+            skill = player.lobsterSkill
+        }
+        return skill?.diceSides || 6
     }
 
     // ============ 战斗数据构建 ============
