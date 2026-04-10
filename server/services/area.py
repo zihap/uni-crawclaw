@@ -865,7 +865,8 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
                 game_titles = game_state.get('gameTitleCards', [])
                 for i, tc in enumerate(game_titles):
                     if tc.get('id') == selected_title_id:
-                        lobster['title'] = game_titles.pop(i)
+                        player['titleCards'].append(game_titles.pop(i))
+                        player['lobsters'].pop(lobster_index)
                         break
 
         if use_seaweed:

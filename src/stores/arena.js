@@ -45,11 +45,7 @@ export const useBattleStore = defineStore('battle', () => {
     }
 
     function getDiceSides(playerIndex) {
-        return applySkillMethod(playerIndex, 'getDiceSides', 6)
-    }
-
-    function modifyDiceValue(playerIndex, value) {
-        return applySkillMethod(playerIndex, 'modifyDice', value)
+        return applySkillMethod(playerIndex, 'diceSides', 6)
     }
 
     // ============ 战斗数据构建 ============
@@ -289,11 +285,13 @@ export const useBattleStore = defineStore('battle', () => {
         const player = battleData.value.players[roller]
         const diceSides = getDiceSides(roller)
         const skill = player.lobsterSkill
-        let finalDiceValue = modifyDiceValue(roller, diceValue)
+        let finalDiceValue = diceValue
+        if (skill?.modifyRule && diceValue <= skill?.modifyRule?.threshold) {
+            finalDiceValue = skill?.modifyRule?.to
+        }
 
         const diceSidesDesc = diceSides !== 6 ? `(${diceSides}面骰)` : ''
-        let skillDesc =
-            finalDiceValue !== diceValue && skill?.description
+        let skillDesc = skill?.description
                 ? ` [${skill.description}触发，${diceValue}→${finalDiceValue}]`
                 : ''
 
@@ -574,7 +572,6 @@ export const useBattleStore = defineStore('battle', () => {
         isMyTurn,
         getDiceValue,
         getDiceSides,
-        modifyDiceValue,
         initBattle,
         rollInitiativeDice,
         applyInitiative,
