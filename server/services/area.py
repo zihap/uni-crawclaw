@@ -10,7 +10,7 @@ from utils.constants import FISHING_BAG_ITEMS, SLOT_TEMPLATES, MARKET_PRICES, CH
 from utils.events import ServerEvents, ServerAreaActionTypes, ServerBattleActionTypes
 from utils.logger import log_info, log_debug
 from utils.helpers import send_error, make_action_message, create_lobster as _make_lobster, calculate_market_prices, make_settlement_state
-from services.tribute_card_effects import check_market_rule, check_breed_bonus, check_tribute_discount, check_battle_bonus, check_adjacent_action, get_adjacent_rewards, apply_aura_effect
+from services.tribute_card_effects import check_market_rule, check_breed_bonus, check_tribute_discount, check_battle_bonus, check_adjacent_action, check_cage_trade, get_adjacent_rewards, apply_aura_effect
 
 
 def _create_lobster(grade='normal'):
@@ -304,13 +304,13 @@ async def _resolve_tribute_step(game_state: dict, manager, room_id):
         if players_need_choice:
             game_state['pendingBattleBonusChoices'] = players_need_choice
             game_state['settlementState'] = make_settlement_state('tribute')
-            await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
-                make_action_message(ServerAreaActionTypes.AREA_WAITING_UI, {
-                    'areaType': 'tribute',
-                    'waitingForBattleBonusChoice': True,
-                    'playersNeedChoice': players_need_choice,
-                    'battleQueue': game_state['battleQueue']
-                }))
+            for player_id in players_need_choice:
+                await manager.send_to_player(room_id, player_id, ServerEvents.SERVER_AREA_ACTION,
+                    make_action_message(ServerAreaActionTypes.AREA_WAITING_UI, {
+                        'areaType': 'tribute',
+                        'waitingForBattleBonusChoice': True,
+                        'battleQueue': game_state['battleQueue']
+                    }))
             return 'waiting_ui'
 
         game_state['settlementState'] = make_settlement_state('tribute')
@@ -723,16 +723,22 @@ async def _process_seafood_market_action(game_state: dict, action_type: str, act
         else:
             await send_error(websocket, '没有龙虾可卖')
     elif action_type == 'buy_cage':
-        if player['coins'] >= prices['buyCage']:
-            player['coins'] -= prices['buyCage']
+        cage_trade = check_cage_trade(player)
+        buy_discount = cage_trade.get('buyDiscount', 0) if cage_trade else 0
+        buy_price = max(0, prices['buyCage'] - buy_discount)
+        if player['coins'] >= buy_price:
+            player['coins'] -= buy_price
             player['cages'] += 1
             success = True
         else:
             await send_error(websocket, '金币不足')
     elif action_type == 'sell_cage':
         if player['cages'] > 0:
+            cage_trade = check_cage_trade(player)
+            sell_bonus = cage_trade.get('sellBonus', 0) if cage_trade else 0
+            sell_price = prices['sellCage'] + sell_bonus
             player['cages'] -= 1
-            player['coins'] += prices['sellCage']
+            player['coins'] += sell_price
             success = True
         else:
             await send_error(websocket, '没有虾笼可卖')
@@ -1308,13 +1314,21 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                         'choiceType': instant_result.get('choiceType'),
                         'options': instant_result.get('options')
                     }
-                    await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-                        make_action_message(ServerGameActionTypes.TRIBUTE_CHOICE_REQUIRED, {
-                            'choiceType': instant_result.get('choiceType'),
-                            'taskId': card.get('id'),
-                            'playerId': player['id'],
-                            'options': instant_result.get('options')
-                        }))
+                    choice_type = instant_result.get('choiceType')
+                    if choice_type == 'buy_advanced_lobster':
+                        await manager.send_to_player(room_id, player['id'], ServerEvents.SERVER_GAME_ACTION,
+                            make_action_message(ServerGameActionTypes.TRIBUTE_CHOICE_REQUIRED, {
+                                'choiceType': choice_type,
+                                'taskId': card.get('id'),
+                                'options': instant_result.get('options')
+                            }))
+                    else:
+                        await manager.send_to_player(room_id, player['id'], ServerEvents.SERVER_GAME_ACTION,
+                            make_action_message(ServerGameActionTypes.TRIBUTE_CHOICE_REQUIRED, {
+                                'choiceType': choice_type,
+                                'taskId': card.get('id'),
+                                'options': instant_result.get('options')
+                            }))
                     return 'waiting_choice'
 
                 if 'tributeCards' not in player:

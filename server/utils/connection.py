@@ -97,3 +97,19 @@ class ConnectionManager:
                     await ws.send_json({"event": event, "data": data})
                 except Exception:
                     pass
+
+    async def send_to_except_player(self, room_id: str, except_player_id: int, event: str, data: dict):
+        """发送给房间内除指定玩家外的所有人"""
+        if room_id in self.active_connections:
+            disconnected = []
+            except_player_id_str = str(except_player_id)
+            for player_id, ws in self.active_connections[room_id].items():
+                if player_id == except_player_id_str:
+                    continue
+                try:
+                    await ws.send_json({"event": event, "data": data})
+                except Exception:
+                    disconnected.append(player_id)
+            for player_id in disconnected:
+                self.active_connections[room_id].pop(player_id, None)
+                log_debug(f"Removed disconnected player {player_id} from room {room_id}")

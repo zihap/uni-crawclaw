@@ -207,8 +207,8 @@ export const useOnlineGameStore = defineStore('online-game', () => {
                 url: `/pages/result/result?gameState=${gameStateStr}`
             })
         } else {
-            uni.showToast({title: '结算数据丢失', icon: 'error'})
-            setTimeout(() => uni.redirectTo({url: '/pages/index/index'}), 2000)
+            uni.showToast({ title: '结算数据丢失', icon: 'error' })
+            setTimeout(() => uni.redirectTo({ url: '/pages/index/index' }), 2000)
         }
     }
 
@@ -486,7 +486,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         if (data.gameState?.players) {
             playerStore.syncPlayers(data.gameState.players)
         }
-        if (reason === "no_available_lobsters") {
+        if (reason === 'no_available_lobsters') {
             if (arenaBattleQueue.value.length > 0) {
                 arenaBattleQueue.value.shift()
                 const currentRoomId = roomId.value

@@ -243,11 +243,9 @@ async def complete_settlement(room_id, game_state, rooms, manager):
             card = first_player['card']
             choices = get_endgame_choices(player, card)
 
-            await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
+            await manager.send_to_player(room_id, first_player['playerId'], ServerEvents.SERVER_GAME_ACTION,
                 make_action_message(ServerGameActionTypes.GAME_ACTION, {
                     'actionType': 'endgameScoreChoiceRequired',
-                    'playerId': first_player['playerId'],
-                    'playerName': first_player['playerName'],
                     'data': {
                         'card': card,
                         'choices': choices
