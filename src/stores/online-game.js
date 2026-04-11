@@ -89,13 +89,11 @@ export const useOnlineGameStore = defineStore('online-game', () => {
 
     // ============ 结算阶段UI状态 ============
     const pendingSettlement = ref(null) // { areaType, playerId, actionCount, player, prices, availableCards, marketLobsterCount }
-    
+
     // ============ 上供区UI状态 ============
     const pendingTribute = ref(null) // { player, slotIndex, taverns, tributeTasks, resolve }
 
     const pendingBattleBonusChoice = ref(null)
-    // ============ 同回合龙虾出战记录 ============
-    const usedLobstersThisRound = ref({}) // { playerId: [lobsterId, ...] }
 
     // ============ 计算属性 ============
     const myPlayer = computed(() => {
@@ -165,7 +163,6 @@ export const useOnlineGameStore = defineStore('online-game', () => {
 
         // serverAreaAction 聚合事件
         socketService.onAction('serverAreaAction', 'areaSettlementStart', handleAreaSettlementStart)
-        socketService.onAction('serverAreaAction', 'areaActionComplete', handleAreaActionComplete)
         socketService.onAction('serverAreaAction', 'settlementComplete', handleSettlementComplete)
         socketService.onAction('serverAreaAction', 'areaWaitingUI', handleAreaWaitingUI)
 
@@ -174,13 +171,6 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         socketService.on('error', (data) => {
             uni.showToast({ title: data.message || '发生错误', icon: 'none' })
         })
-    }
-
-    const hasValidLobsters = (player) => {
-        if (!player) return false
-        const validLobsters = player.lobsters?.filter((l) => l?.id && l.id !== 'normal') || []
-        const hasTitleCards = player.titleCards?.length > 0
-        return validLobsters.length > 0 || hasTitleCards
     }
 
     function handleGameStarted(data) {
@@ -203,7 +193,6 @@ export const useOnlineGameStore = defineStore('online-game', () => {
     function handleRoundStarted(data) {
         if (data.round) currentRound.value = data.round
         currentPhase.value = 'placement'
-        resetUsedLobsters()
         if (data.gameState) updateGameState(data.gameState)
     }
 
@@ -226,12 +215,12 @@ export const useOnlineGameStore = defineStore('online-game', () => {
     function handleGameAction(data) {
         const actionType = data.actionType
         if (
-                actionType === 'signalsExchanged' ||
-                actionType === 'itemBought' ||
-                actionType === 'itemSold' ||
-                actionType === 'lobsterCultivated' ||
-                actionType === 'tributeSubmitted' ||
-                actionType === 'downtownActionExecuted'
+            actionType === 'signalsExchanged' ||
+            actionType === 'itemBought' ||
+            actionType === 'itemSold' ||
+            actionType === 'lobsterCultivated' ||
+            actionType === 'tributeSubmitted' ||
+            actionType === 'downtownActionExecuted'
         ) {
             if (data.gameState) updateGameState(data.gameState)
         }
@@ -313,7 +302,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
                     uni.showToast({ title: '选择无效', icon: 'none' })
                     return
                 }
-                socketService.clientGameAction('submitEndgameChoice', {
+                socketService.clientGameAction('endgameScoreChoice', {
                     choice: selectedChoice
                 })
             },
@@ -351,13 +340,6 @@ export const useOnlineGameStore = defineStore('online-game', () => {
             currentArenaBattle.value = null
         }
         if (data.gameState) updateGameState(data.gameState)
-    }
-
-    function handleAreaActionComplete(data) {
-        if (data.gameState) updateGameState(data.gameState)
-        if (data.nextArea) {
-            currentArea.value = data.nextArea
-        }
     }
 
     function handleAreaWaitingUI(data) {
@@ -436,26 +418,15 @@ export const useOnlineGameStore = defineStore('online-game', () => {
             const challenger = playerStore.players.find((p) => p.id === battle.challengerId)
             const defender = playerStore.players.find((p) => p.id === battle.defenderId)
 
-            if (!hasValidLobsters(challenger)) {
-                addLog(`${challenger?.name || '挑战者'}没有可参战的龙虾（普通龙虾除外），无法进行战斗`, 'warning')
-                continue
-            }
-            if (!hasValidLobsters(defender)) {
-                addLog(`${defender?.name || '被挑战者'}没有可参战的龙虾（普通龙虾除外），无法进行战斗`, 'warning')
-                continue
-            }
-
             arenaBattleQueue.value.push({
                 challengerId: battle.challengerId,
                 defenderId: battle.defenderId,
                 slotIndex: battle.challengeSlot
             })
 
-            addLog(`${challenger.name} 挑战 ${defender.name}！`, 'success')
+            addLog(`${challenger?.name} 挑战 ${defender?.name || '被挑战者'}！`, 'success')
         }
-
         if (arenaBattleQueue.value.length > 0) {
-            addLog(`竞技场有${arenaBattleQueue.value.length}场战斗需要进行`, 'info')
             setCurrentArenaBattle(0)
         } else {
             addLog('竞技场没有需要进行的战斗', 'info')
@@ -511,7 +482,19 @@ export const useOnlineGameStore = defineStore('online-game', () => {
     }
 
     function handleBattleEnded(data) {
-        const { winnerId, upgradeFrom, upgradeTo, winnerLobsterId } = data
+        const { winnerId, upgradeFrom, upgradeTo, winnerLobsterId, reason } = data
+        if (data.gameState?.players) {
+            playerStore.syncPlayers(data.gameState.players)
+        }
+        if (reason === "no_available_lobsters") {
+            if (arenaBattleQueue.value.length > 0) {
+                arenaBattleQueue.value.shift()
+                const currentRoomId = roomId.value
+                if (currentRoomId) {
+                    uni.setStorageSync(`arenaBattleQueue_${currentRoomId}`, arenaBattleQueue.value)
+                }
+            }
+        }
         if (winnerId !== null && upgradeFrom && upgradeTo) {
             const winner = playerStore.getPlayerById(winnerId)
             if (winner && winner.lobsters) {
@@ -592,35 +575,6 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         socketService.clientBattleAction('battleBonusChoice', { choice })
     }
 
-    // ============ 龙虾出战管理 ============
-
-    const markLobsterUsed = (playerId, lobsterId) => {
-        const pid = String(playerId)
-        if (!usedLobstersThisRound.value[pid]) {
-            usedLobstersThisRound.value[pid] = []
-        }
-        if (!usedLobstersThisRound.value[pid].includes(lobsterId)) {
-            usedLobstersThisRound.value[pid].push(lobsterId)
-        }
-    }
-
-    const getUsedLobsterIds = (playerId) => {
-        return usedLobstersThisRound.value[String(playerId)] || []
-    }
-
-    const getAvailableLobstersForBattle = (playerId) => {
-        const player = playerStore.players.find((p) => p.id === playerId)
-        if (!player) return []
-        const usedIds = new Set(getUsedLobsterIds(playerId))
-        const validLobsters = player.lobsters?.filter((l) => l?.grade && l.grade !== 'normal' && !usedIds.has(l.id)) || []
-        const titleCards = player.titleCards?.filter((t) => t?.id && !usedIds.has(t.id)) || []
-        return [...validLobsters, ...titleCards]
-    }
-
-    const resetUsedLobsters = () => {
-        usedLobstersThisRound.value = {}
-    }
-
     function cleanupListeners() {
         socketService.off('connect')
         socketService.off('disconnect')
@@ -678,7 +632,6 @@ export const useOnlineGameStore = defineStore('online-game', () => {
         challengerSelectedLobster.value = null
         defenderSelectedLobster.value = null
         spectatorBets.value = {}
-        usedLobstersThisRound.value = {}
         pendingSettlement.value = null
         cleanupListeners()
     }
@@ -749,12 +702,6 @@ export const useOnlineGameStore = defineStore('online-game', () => {
             defender,
             slotIndex: battle.slotIndex
         }
-    }
-
-    const getAvailableLobsters = (playerId) => {
-        const player = playerStore.players.find((p) => p.id === playerId)
-        if (!player) return []
-        return player.lobsters.filter((lobster) => lobster && lobster.grade)
     }
 
     // ============ 导出 ============
@@ -828,12 +775,7 @@ export const useOnlineGameStore = defineStore('online-game', () => {
 
         // 竞技场方法
         setCurrentArenaBattle,
-        getAvailableLobsters,
         setArenaPhase,
-        markLobsterUsed,
-        getUsedLobsterIds,
-        getAvailableLobstersForBattle,
-        resetUsedLobsters,
         resetArenaBattleState,
 
         // 结算阶段

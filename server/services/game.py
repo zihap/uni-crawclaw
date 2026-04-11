@@ -340,6 +340,12 @@ async def complete_settlement(room_id, game_state, rooms, manager):
     game_state['currentArea'] = 0
     game_state['lastPlacement'] = None
     game_state['areas'].get('tribute')['challengeSlots'] = [None] * 3
+    for player in game_state['players']:
+        for lobster in player['lobsters']:
+            lobster['used'] = False
+        for title_card in player['titleCards']:
+            title_card['used'] = False
+
 
     for area_name in AREAS:
         if area_name in game_state['areas']:

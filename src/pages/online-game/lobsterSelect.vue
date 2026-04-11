@@ -29,15 +29,13 @@
                         <view
                             v-for="(lobster, index) in myLobsters"
                             :key="lobster.id"
-                            :class="['lobster-item', { selected: selectedIndex === index, used: lobster.used }]"
+                            :class="['lobster-item', { selected: selectedIndex === index, used: lobster.used || lobster.grade === 'normal'}]"
                             @click="selectLobster(index)"
                         >
                             <view class="lobster-icon">🦞</view>
                             <text class="lobster-name">{{ lobster.name || getLobsterGradeName(lobster.grade) }}</text>
                             <view v-if="lobster.used" class="used-badge">已参战</view>
-                        </view>
-                        <view v-if="myLobsters.length === 0" class="no-lobster">
-                            <text>没有可用的龙虾</text>
+                            <view v-if="lobster.grade === 'normal'" class="used-badge">无法参战</view>
                         </view>
                     </view>
                 </view>
@@ -47,10 +45,10 @@
                 <view v-if="isChallenger || isDefender" class="modal-actions">
                     <button
                         class="action-btn confirm-btn"
-                        :disabled="!canConfirm || hasConfirmed"
-                        @click="handleConfirm"
+                        :disabled="hasConfirmed || (availableLobsters.length > 0 && selectedIndex < 0)"
+                        @click="availableLobsters.length === 0 ? handleForfeit() : handleConfirm()"
                     >
-                        {{ hasConfirmed ? '等待对方...' : '确认选择' }}
+                        {{ hasConfirmed ? '等待对方...' : availableLobsters.length === 0 ? '认输' : '确认选择' }}
                     </button>
                 </view>
             </view>
@@ -171,7 +169,7 @@ const props = defineProps({
     roomId: { type: String, default: '' }
 })
 
-const emit = defineEmits(['bothReady'])
+const emit = defineEmits(['bothReady', 'forfeit'])
 
 const localPhase = ref('selecting')
 const selectedIndex = ref(-1)
@@ -195,31 +193,11 @@ const isFighter = computed(() => isChallenger.value || isDefender.value)
 const myLobsters = computed(() => {
     if (!isFighter.value) return []
     const player = isChallenger.value ? props.challenger : props.defender
-    const usedIds = new Set(store.getUsedLobsterIds(player.id))
-    const allLobsters =
-        player?.lobsters?.filter((l) => {
-            if (!l?.id || l.id === 'normal') return false
-            if (l.grade === 'normal' || !l.grade) return false
-            return true
-        }) || []
-    const allTitleCards = player?.titleCards?.filter((t) => t?.id) || []
-    const validLobsters = []
-    const usedLobsters = []
-    for (const l of allLobsters) {
-        if (usedIds.has(l.id)) {
-            usedLobsters.push({ ...l, used: true })
-        } else {
-            validLobsters.push({ ...l, used: false })
-        }
-    }
-    for (const t of allTitleCards) {
-        if (usedIds.has(t.id)) {
-            usedLobsters.push({ ...t, used: true })
-        } else {
-            validLobsters.push({ ...t, used: false })
-        }
-    }
-    return [...validLobsters, ...usedLobsters]
+    return [...player?.lobsters, ...player?.titleCards]
+})
+
+const availableLobsters = computed(() => {
+    return myLobsters.value.filter((l) => !l.used && l.grade !== 'normal')
 })
 
 const challengerLobsterInfo = computed(() => {
@@ -248,7 +226,7 @@ const defenderLobsterInfo = computed(() => {
     }
 })
 
-const canConfirm = computed(() => selectedIndex.value >= 0)
+const canConfirm = computed(() => selectedIndex.value >= 0 && availableLobsters.value.length > 0)
 
 const canBet = computed(() => {
     const myPlayer = playerStore.getPlayerById(store.playerId)
@@ -313,6 +291,7 @@ const getBetTargetName = (targetFighterId) => {
 
 const selectLobster = (index) => {
     if (myLobsters.value[index]?.used) return
+    if (myLobsters.value[index]?.grade === 'normal') return
     if (!hasConfirmed.value) selectedIndex.value = index
 }
 
@@ -336,8 +315,6 @@ const handleConfirm = () => {
     const context = buildBattleContext()
     if (!context) return
 
-    const actualPlayerId = isChallenger.value ? context.battle.challengerId : context.battle.defenderId
-
     socketService._send('clientBattleAction', {
         action_type: 'lobsterSelected',
         lobster: selectedLobster,
@@ -347,8 +324,6 @@ const handleConfirm = () => {
         spectators: context.spectators
     })
 
-    store.markLobsterUsed(actualPlayerId, selectedLobster.id)
-
     if (isChallenger.value) {
         store.challengerReady = true
         store.challengerSelectedLobster = selectedLobster
@@ -356,6 +331,20 @@ const handleConfirm = () => {
         store.defenderReady = true
         store.defenderSelectedLobster = selectedLobster
     }
+}
+
+const handleForfeit = () => {
+    const winner = isChallenger.value ? 'defender' : 'challenge'
+    const context = buildBattleContext()
+    if (!context) return
+
+    socketService._send('clientBattleAction', {
+        action_type: 'noLobsterForfeit',
+        challengeSlot: context.battle.slotIndex,
+        winner: winner
+    })
+
+    emit('forfeit')
 }
 
 const selectBetTarget = (target) => {
@@ -415,6 +404,13 @@ watch(
 
 onUnmounted(() => {
     stopCountdown()
+    if (store.arenaBattleQueue.length > 0) {
+        store.arenaBattleQueue.shift()
+        const roomId = store.roomId
+        if (roomId) {
+            uni.setStorageSync(`arenaBattleQueue_${roomId}`, store.arenaBattleQueue)
+        }
+    }
 })
 </script>
 
@@ -631,12 +627,6 @@ onUnmounted(() => {
     color: #fff;
     margin-top: 4px;
     display: block;
-}
-
-.no-lobster {
-    text-align: center;
-    padding: 20px;
-    color: #666;
 }
 
 .spectator-view {

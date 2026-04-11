@@ -20,7 +20,7 @@ from services.tribute_card_effects import check_bet_bonus
 
 
 async def _check_tribute_battles_complete(game_state, websocket, room_id, rooms, manager):
-    """检查上供区所有战斗是否完成，若是则触发上供阶段"""
+    """检查上供区战斗是否完成，若是则触发下一场或进入上供阶段"""
     tribute = game_state['areas'].get('tribute')
     if not tribute:
         return False
@@ -72,23 +72,6 @@ def swap_challenge_slot(game_state, challenge_slot):
         slots[challenge_slot], slots[idx] = slots[idx], slots[challenge_slot]
         return True
     return False
-
-async def handle_battle_start(websocket, room_id, player_id, rooms, manager, payload):
-    """战斗开始"""
-    game_state = rooms.get(room_id)
-    if game_state and game_state.get('_lastBattleStartSent'):
-        return
-
-    battle_data = payload.get('battleData')
-
-    if game_state:
-        game_state['_lastBattleStartSent'] = True
-
-    await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
-        make_action_message(ServerBattleActionTypes.BATTLE_START, {
-            'battleData': battle_data,
-            'initiatorId': player_id
-        }))
 
 async def handle_battle_update(websocket, room_id, player_id, rooms, manager, payload):
     """战斗行动"""
@@ -152,37 +135,30 @@ async def handle_battle_end(websocket, room_id, player_id, rooms, manager, paylo
                 break
 
         award_choice = battle_data.get('winnerAwardChoice')
-        upgrade_from = None
-        upgrade_to = None
-        winner_lobster_id = None
+        winner_lobster_id = battle_data.get('winner', {}).get('lobsterId')
+        loser_lobster_id = battle_data.get('loser', {}).get('lobsterId')
+        # 更新龙虾出战状态
+        for player in game_state['players']:
+            for lobster in player['lobsters']:
+                if lobster.get('id') == winner_lobster_id or lobster.get('id') == loser_lobster_id:
+                    lobster['used'] = True
+            for titleCard in player['titleCards']:
+                if titleCard.get('id') == winner_lobster_id or titleCard.get('id') == loser_lobster_id:
+                    titleCard['used'] = True
         if winner_id is not None and award_choice:
             winner = get_player(game_state, winner_id)
             if winner:
+                new_grade, old_grade = None, None
                 deltas = {}
                 if award_choice == 'coins':
                     deltas['coins'] = 2
                 elif award_choice == 'gradeUpgrade':
-                    new_grade = battle_data.get('winner', {}).get('lobsterId')
-                    if new_grade and new_grade in GRADE_UPGRADE:
-                        upgrade_from = GRADE_UPGRADE[new_grade]
-                        upgrade_to = new_grade
-
-                        for key in list(arena_betting_state.keys()):
-                            bs = arena_betting_state[key]
-                            if not key.startswith(f"{room_id}_"):
-                                continue
-                            if str(challenge_slot) in key:
-                                winner_lobster = None
-                                if winner_id == bs.get('challengerId'):
-                                    winner_lobster = bs.get('challengerLobster')
-                                elif winner_id == bs.get('defenderId'):
-                                    winner_lobster = bs.get('defenderLobster')
-                                if winner_lobster and winner_lobster.get('id'):
-                                    winner_lobster_id = winner_lobster['id']
-                                    lobster = next((l for l in winner.get('lobsters', []) if l.get('id') == winner_lobster_id), None)
-                                    if lobster:
-                                        lobster['grade'] = upgrade_to
-                                break
+                    old_grade = battle_data.get('winner', {}).get('lobsterGrade')
+                    if old_grade and old_grade in GRADE_UPGRADE:
+                        new_grade = GRADE_UPGRADE[old_grade]
+                        lobster = next((l for l in winner.get('lobsters', []) if l.get('id') == winner_lobster_id), None)
+                        if lobster:
+                            lobster['grade'] = new_grade
 
                 for pi, field in [(0, 'p1CrossedMidline'), (1, 'p2CrossedMidline')]:
                     if battle_data.get(field):
@@ -195,16 +171,16 @@ async def handle_battle_end(websocket, room_id, player_id, rooms, manager, paylo
                 if deltas:
                     await update_resources(winner, deltas, broadcast_fn=bf)
 
-        await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
-            make_action_message(ServerBattleActionTypes.BATTLE_ENDED, {
-                'winnerId': winner_id,
-                'awardChoice': award_choice,
-                'upgradeFrom': upgrade_from,
-                'upgradeTo': upgrade_to,
-                'winnerLobsterId': winner_lobster_id,
-                'battleData': battle_data,
-                'gameState': game_state
-            }))
+                await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
+                    make_action_message(ServerBattleActionTypes.BATTLE_ENDED, {
+                        'winnerId': winner_id,
+                        'awardChoice': award_choice,
+                        'upgradeFrom': old_grade,
+                        'upgradeTo': new_grade,
+                        'winnerLobsterId': winner_lobster_id,
+                        'battleData': battle_data,
+                        'gameState': game_state
+                    }))
 
         await _check_tribute_battles_complete(game_state, websocket, room_id, rooms, manager)
         return
@@ -309,6 +285,7 @@ async def handle_no_lobster_forfeit(websocket, room_id, player_id, rooms, manage
     if not game_state:
         return
 
+    winner = payload.get('winner')
     challenge_slot = payload.get('challengeSlot')
 
     # 标记该战斗槽位已完成
@@ -319,17 +296,13 @@ async def handle_no_lobster_forfeit(websocket, room_id, player_id, rooms, manage
             challenge_slots[challenge_slot - 3] = CHALLENGE_SLOT_DONE
             log_info(f"[noLobsterForfeit] Marked challenge slot {challenge_slot} as Done")
 
-    if swap_challenge_slot(game_state, challenge_slot):
+    if winner == 'challenge' and swap_challenge_slot(game_state, challenge_slot):
         log_info(f"[noLobsterForfeit] Slot swapped: challenger wins at slot {challenge_slot}")
 
     await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
         make_action_message(ServerBattleActionTypes.BATTLE_ENDED, {
-            'battleData': {
-                'challengeSlot': challenge_slot,
-                'reason': 'no_available_lobsters',
-                'winner': 'challenger'
-            },
-            'senderId': player_id
+            'reason': 'no_available_lobsters',
+            'gameState': game_state
         }))
 
     # 更新上供战斗完成计数并检查是否全部完成
@@ -397,7 +370,6 @@ def _make_battle_action_router(handlers: dict):
 def get_battle_action_handlers():
     """获取战斗行动处理器映射"""
     return {
-        ClientBattleActionTypes.BATTLE_START: handle_battle_start,
         ClientBattleActionTypes.BATTLE_UPDATE: handle_battle_update,
         ClientBattleActionTypes.BATTLE_END: handle_battle_end,
         ClientBattleActionTypes.LOBSTER_SELECTED: handle_lobster_selected,
