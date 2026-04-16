@@ -24,8 +24,8 @@ export const useBattleStore = defineStore('battle', () => {
     function getDiceValue(playerIndex) {
         const player = battleData.value?.players[playerIndex]
         if (!player) return Math.floor(Math.random() * 6) + 1
-        let skill = getSkill(player.lobsterGrade)
-        if (player.lobsterSkill) {
+        let skill = getSkill(player?.lobsterGrade)
+        if (player?.lobsterSkill) {
             skill = player.lobsterSkill
         }
         return Math.floor(Math.random() * skill?.diceSides) + 1
@@ -34,7 +34,7 @@ export const useBattleStore = defineStore('battle', () => {
     function getDiceSides(playerIndex) {
         const player = battleData.value?.players[playerIndex]
         let skill = getSkill(player?.lobsterGrade)
-        if (player.lobsterSkill) {
+        if (player?.lobsterSkill) {
             skill = player.lobsterSkill
         }
         return skill?.diceSides || 6
@@ -50,7 +50,7 @@ export const useBattleStore = defineStore('battle', () => {
         lobsterId: data.lobsterId,
         lobsterGrade: data.lobsterGrade,
         lobsterDesc: data.lobsterDesc,
-        lobsterSkill: data.lobsterSkill,
+        lobsterSkill: data?.lobsterSkill,
         position: startPosition,
         started: data.lobsterSkill?.startStarted || false
     })
@@ -177,7 +177,7 @@ export const useBattleStore = defineStore('battle', () => {
 
         addLog(`轮到 ${battleData.value.players[firstPlayer].name} 掷骰子`)
 
-        const nextSkill = battleData.value.players[firstPlayer].lobsterSkill
+        const nextSkill = battleData.value.players[firstPlayer]?.lobsterSkill
         if (nextSkill?.canReroll && nextSkill?.description) {
             addLog(`[${nextSkill.description}] 可重新投掷一次`)
         }
@@ -190,7 +190,7 @@ export const useBattleStore = defineStore('battle', () => {
     function rollDice(diceValue, seaweedBonus = 0) {
         const roller = battleData.value.currentPlayer
         const player = battleData.value.players[roller]
-        const skill = player.lobsterSkill
+        const skill = player?.lobsterSkill
 
         if (skill?.canReroll) {
             if (pendingDiceValue.value === null) {
@@ -276,7 +276,7 @@ export const useBattleStore = defineStore('battle', () => {
 
         const player = battleData.value.players[roller]
         const diceSides = getDiceSides(roller)
-        const skill = player.lobsterSkill
+        const skill = player?.lobsterSkill
         let finalDiceValue = diceValue
         if (skill?.modifyRule && diceValue <= skill?.modifyRule?.threshold) {
             finalDiceValue = skill?.modifyRule?.to
@@ -338,8 +338,9 @@ export const useBattleStore = defineStore('battle', () => {
 
     // ============ 胜负判定 ============
 
-    const endBattle = (winner, logMessage) => {
+    const endBattle = (winner, loser, logMessage) => {
         battleData.value.winner = winner
+        battleData.value.loser = loser
         battleData.value.phase = 'ended'
         addLog(logMessage)
         broadcastBattleUpdate('battleUpdate')
@@ -351,36 +352,36 @@ export const useBattleStore = defineStore('battle', () => {
         const p2 = battleData.value.players[1]
         const rollerPlayer = battleData.value.players[roller]
         const opponentPlayer = roller === 0 ? p2 : p1
-        const rollerSkill = rollerPlayer.lobsterSkill
-        const opponentSkill = opponentPlayer.lobsterSkill
+        const rollerSkill = rollerPlayer?.lobsterSkill
+        const opponentSkill = opponentPlayer?.lobsterSkill
 
         const isCovered = p1.position === p2.position
         if (isCovered) {
             if (opponentSkill?.onCovered) {
                 const desc = opponentSkill?.description ? ` 的 [${opponentSkill.description}]` : ''
-                return endBattle(opponentPlayer, `🛡️ ${opponentPlayer.name}${desc} 触发！被覆盖反而获胜！`)
+                return endBattle(opponentPlayer, rollerPlayer,  `🛡️ ${opponentPlayer.name}${desc} 触发！被覆盖反而获胜！`)
             }
-            return endBattle(rollerPlayer, `🏆 ${rollerPlayer.name} 的 [${rollerPlayer.lobsterName}] 获胜！`)
+            return endBattle(rollerPlayer, opponentPlayer, `🏆 ${rollerPlayer.name} 的 [${rollerPlayer.lobsterName}] 获胜！`)
         }
 
         const absPositionDiff = Math.abs(p1.position - p2.position)
         const rollerWon = roller === 0 ? p1.position > p2.position : p2.position < p1.position
         if (absPositionDiff === 0 || rollerWon) {
-            return endBattle(rollerPlayer, `🏆 ${rollerPlayer.name} 的 [${rollerPlayer.lobsterName}] 获胜！`)
+            return endBattle(rollerPlayer, opponentPlayer, `🏆 ${rollerPlayer.name} 的 [${rollerPlayer.lobsterName}] 获胜！`)
         }
 
         if (absPositionDiff === 1) {
             if (rollerSkill?.nearWinOnAdjacent) {
                 const desc = rollerSkill?.description ? ` [${rollerSkill.description}]` : ''
                 return endBattle(
-                    rollerPlayer,
+                    rollerPlayer, opponentPlayer,
                     `⚔️ ${rollerPlayer.name} 的 [${rollerPlayer.lobsterName}] 触发${desc}！紧贴对方龙虾，判定获胜！`
                 )
             }
             if (opponentSkill?.nearWinOnAdjacent) {
                 const desc = opponentSkill?.description ? ` [${opponentSkill.description}]` : ''
                 return endBattle(
-                    opponentPlayer,
+                    opponentPlayer, rollerPlayer,
                     `⚔️ ${opponentPlayer.name} 的 [${opponentPlayer.lobsterName}]${desc} 触发！紧贴对方龙虾，判定获胜！`
                 )
             }
@@ -396,12 +397,8 @@ export const useBattleStore = defineStore('battle', () => {
         if (!winner) return
 
         if (choice === 'coins') {
-            winner.coins = (winner.coins || 0) + 2
             addLog(`💰 ${winner.name} 获得2金币奖励！`)
         } else if (choice === 'gradeUpgrade') {
-            const newGrade = getNextLobsterGrade(winner.lobsterId)
-            winner.lobsterGrade = newGrade
-            winner.lobsterName = getLobsterGradeName(newGrade)
             addLog(`⭐ ${winner.name} 的${winner.lobsterName}升级成功！`)
         }
 
@@ -440,13 +437,6 @@ export const useBattleStore = defineStore('battle', () => {
             myPlayerIndex.value
         )
     }
-
-    function broadcastRewardSelected() {
-        battleData.value.lastAction = 'rewardSelected'
-        battleData.value = { ...battleData.value }
-        broadcastBattleUpdate('battleEnd')
-    }
-
     // ============ 数据同步 ============
 
     const syncBattleFields = (syncedData) => {
@@ -524,7 +514,6 @@ export const useBattleStore = defineStore('battle', () => {
 
     function handleBattleAction(data) {
         if (!data.battleData) return
-
         // 跳过自己发送的消息回显
         if (data.senderId !== myPlayerIndex.value) {
             updateFromSync(data.battleData)
@@ -571,7 +560,6 @@ export const useBattleStore = defineStore('battle', () => {
         confirmDice,
         applyDiceResult,
         applyWinnerAward,
-        broadcastRewardSelected,
         quitBattle,
         addLog,
         updateFromSync,

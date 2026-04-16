@@ -39,7 +39,6 @@ class ClientRoomActionTypes:
 
 class ClientBattleActionTypes:
     """clientBattleAction 事件中的 action_type 取值"""
-    BATTLE_START = 'battleStart'
     BATTLE_UPDATE = 'battleUpdate'
     BATTLE_END = 'battleEnd'
     LOBSTER_SELECTED = 'lobsterSelected'
@@ -65,7 +64,6 @@ class ClientGameActionTypes:
     DOWNTOWN_ACTION = 'executeDowntownAction'
     AREA_ACTION = 'areaAction'
     ENDGAME_SCORE_CHOICE = 'endgameScoreChoice'
-    SUBMIT_ENDGAME_CHOICE = 'submitEndgameChoice'
 
 
 # =============================================================================
@@ -139,5 +137,4 @@ class ServerAreaActionTypes:
     """serverAreaAction 事件中的 actionType 取值"""
     AREA_WAITING_UI = 'areaWaitingUI'
     AREA_SETTLEMENT_START = 'areaSettlementStart'
-    AREA_ACTION_COMPLETE = 'areaActionComplete'
     SETTLEMENT_COMPLETE = 'settlementComplete'

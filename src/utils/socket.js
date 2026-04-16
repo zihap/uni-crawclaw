@@ -191,7 +191,6 @@ class WebSocketService {
                 // 聚合事件分发: 检查是否为 serverRoomAction / serverGameAction / serverBattleAction / serverAreaAction
                 if (event && data && data.actionType) {
                     const actionCbs = self.actionListeners[event]
-                    console.log('[WebSocket] Received:', event, data.actionType, data)
                     if (actionCbs) {
                         const typeCbs = actionCbs[data.actionType]
                         if (typeCbs && typeCbs.length > 0) {

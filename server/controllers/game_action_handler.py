@@ -516,11 +516,9 @@ async def handle_endgame_score_choice(websocket, room_id, player_id, rooms, mana
         next_card = next_player['card']
         next_choices = get_endgame_choices(game_state['players'][next_player['playerId']], next_card)
 
-        await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
+        await manager.send_to_player(room_id, next_player['playerId'], ServerEvents.SERVER_GAME_ACTION,
             make_action_message(ServerGameActionTypes.GAME_ACTION, {
                 'actionType': 'endgameScoreChoiceRequired',
-                'playerId': next_player['playerId'],
-                'playerName': next_player['playerName'],
                 'data': {
                     'card': next_card,
                     'choices': next_choices
@@ -602,7 +600,7 @@ async def handle_submit_tribute_choice(websocket, room_id, player_id, rooms, man
 
     await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
         make_action_message(ServerGameActionTypes.GAME_ACTION, {
-            'actionType': 'tributeChoiceSubmitted',
+            'actionType': 'tributeSubmitted',
             'playerId': player_id,
             'data': {'taskId': task_id, 'choice': choice},
             'gameState': game_state

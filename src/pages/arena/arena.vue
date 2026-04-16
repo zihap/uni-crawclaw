@@ -373,11 +373,6 @@ const winnerCanUpgrade = computed(() => {
     return grade === 'normal' || grade === 'grade3' || grade === 'grade2' || grade === 'grade1'
 })
 
-const isWinner = computed(() => {
-    if (battleStore.myPlayerIndex < 0) return true
-    return battleData.value?.winner?.id === savedPlayerId.value
-})
-
 const DICE_IMAGE_MAP = {
     6: '/static/images/dice_d6.png',
     8: '/static/images/dice_d8.png',
@@ -680,9 +675,9 @@ function showLobsterInfo(playerIndex) {
     const player = battleData.value?.players[playerIndex]
     if (!player) return
     lobsterPopupData.value = {
-        lobsterName: player.lobsterName,
-        lobsterDesc: player.lobsterDesc,
-        skillDesc: player.lobsterSkill || ''
+        lobsterName: player?.lobsterName,
+        lobsterDesc: player?.lobsterDesc,
+        skillDesc: player?.lobsterSkill || ''
     }
     showLobsterPopup.value = true
 }
@@ -731,13 +726,6 @@ const resetBattleState = () => {
     resultShown.value = false
     showVictory.value = false
     showDefeat.value = false
-}
-
-const buildReturnUrl = () => {
-    if (savedRoomId.value && savedPlayerId.value !== null) {
-        return `/pages/online-game/onlineGame?roomId=${savedRoomId.value}&playerId=${savedPlayerId.value}`
-    }
-    return '/pages/online-game/onlineGame'
 }
 
 function navigateBackToGame() {

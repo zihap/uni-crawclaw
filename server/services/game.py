@@ -243,11 +243,9 @@ async def complete_settlement(room_id, game_state, rooms, manager):
             card = first_player['card']
             choices = get_endgame_choices(player, card)
 
-            await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
+            await manager.send_to_player(room_id, first_player['playerId'], ServerEvents.SERVER_GAME_ACTION,
                 make_action_message(ServerGameActionTypes.GAME_ACTION, {
                     'actionType': 'endgameScoreChoiceRequired',
-                    'playerId': first_player['playerId'],
-                    'playerName': first_player['playerName'],
                     'data': {
                         'card': card,
                         'choices': choices
@@ -340,6 +338,12 @@ async def complete_settlement(room_id, game_state, rooms, manager):
     game_state['currentArea'] = 0
     game_state['lastPlacement'] = None
     game_state['areas'].get('tribute')['challengeSlots'] = [None] * 3
+    for player in game_state['players']:
+        for lobster in player['lobsters']:
+            lobster['used'] = False
+        for title_card in player['titleCards']:
+            title_card['used'] = False
+
 
     for area_name in AREAS:
         if area_name in game_state['areas']:
