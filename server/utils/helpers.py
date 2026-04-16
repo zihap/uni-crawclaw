@@ -36,25 +36,30 @@ def make_broadcast_fn(broadcast_fn, room_id: str) -> Callable:
 
 def calculate_market_prices(lobster_count: int) -> dict:
     """根据市场龙虾数量计算动态价格"""
-    from utils.constants import MARKET_PRICES
 
+    # 市场流通龙虾数大于5只并且小于等于8只 (即 6, 7, 8)
     if lobster_count > 5:
         return {
-            **MARKET_PRICES,
             'buyLobster': 1, 'sellLobster': 1,
-            'buyCage': 4, 'sellCage': 3
+            'buyCage': 4, 'sellCage': 4,
+            'buySeaweed': 1, 'sellSeaweed': 1,
+            'buySeaweed3': 4, 'sellSeaweed3': 4
         }
+    # 市场流通龙虾数大于3只并且小于等于5只 (即 4, 5)
     elif lobster_count > 3:
         return {
-            **MARKET_PRICES,
             'buyLobster': 2, 'sellLobster': 2,
-            'buyCage': 3, 'sellCage': 2
+            'buyCage': 3, 'sellCage': 3,
+            'buySeaweed': 1, 'sellSeaweed': 1,
+            'buySeaweed3': 4, 'sellSeaweed3': 4
         }
+    # 市场流通龙虾数小于等于3只 (即 0, 1, 2, 3)
     else:
         return {
-            **MARKET_PRICES,
             'buyLobster': 3, 'sellLobster': 3,
-            'buyCage': 2, 'sellCage': 1
+            'buyCage': 2, 'sellCage': 2,
+            'buySeaweed': 1, 'sellSeaweed': 1,
+            'buySeaweed3': 4, 'sellSeaweed3': 4
         }
 
 
