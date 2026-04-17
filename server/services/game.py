@@ -160,7 +160,11 @@ async def broadcast_game_state(room_id: str, rooms: dict, manager):
             'currentArea': game_state.get('currentArea', 0),
             'areas': game_state.get('areas', {}),
             'status': game_state['status'],
-            'gameTitleCards': game_state.get('gameTitleCards', [])
+            'gameTitleCards': game_state.get('gameTitleCards', []),
+            'players': game_state.get('players', []),
+            'hireSlots': game_state.get('hireSlots', [None] * 8),
+            # 【终极修复】：必须补上 lastPlacement！没有它，最后放完的人按钮永远亮不起来！
+            'lastPlacement': game_state.get('lastPlacement')
         }
         await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
             make_action_message(ServerGameActionTypes.GAME_STATE_UPDATE, **data))
@@ -243,9 +247,11 @@ async def complete_settlement(room_id, game_state, rooms, manager):
             card = first_player['card']
             choices = get_endgame_choices(player, card)
 
-            await manager.send_to_player(room_id, first_player['playerId'], ServerEvents.SERVER_GAME_ACTION,
+            await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
                 make_action_message(ServerGameActionTypes.GAME_ACTION, {
                     'actionType': 'endgameScoreChoiceRequired',
+                    'playerId': first_player['playerId'],
+                    'playerName': first_player['playerName'],
                     'data': {
                         'card': card,
                         'choices': choices
@@ -338,12 +344,6 @@ async def complete_settlement(room_id, game_state, rooms, manager):
     game_state['currentArea'] = 0
     game_state['lastPlacement'] = None
     game_state['areas'].get('tribute')['challengeSlots'] = [None] * 3
-    for player in game_state['players']:
-        for lobster in player['lobsters']:
-            lobster['used'] = False
-        for title_card in player['titleCards']:
-            title_card['used'] = False
-
 
     for area_name in AREAS:
         if area_name in game_state['areas']:
@@ -366,6 +366,8 @@ async def complete_settlement(room_id, game_state, rooms, manager):
             'round': game_state['currentRound'],
             'gameState': game_state
         }))
+
+    # 广播最新状态
     await broadcast_game_state(room_id, rooms, manager)
 
 
