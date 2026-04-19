@@ -63,6 +63,29 @@ async def handle_place_headman(websocket, room_id, player_id, rooms, manager, pa
         return
 
     area_name = area_index if isinstance(area_index, str) else AREAS[area_index]
+
+    # =========================================================
+    # 【核心修复】：严格的区域槽位回合限制拦截
+    # =========================================================
+    current_round = game_state.get('currentRound', 1)
+
+    if area_name == 'marketplace':
+        if slot_index == 0 and current_round < 2:
+            await send_error(websocket, '闹市区1号槽位在第2回合才开放')
+            return
+        if slot_index == 1 and current_round < 3:
+            await send_error(websocket, '闹市区2号槽位在第3回合才开放')
+            return
+        if slot_index == 2 and current_round < 4:
+            await send_error(websocket, '闹市区3号槽位在第4回合才开放')
+            return
+
+    if area_name == 'tribute':
+        if slot_index == 5 and current_round < 4:
+            await send_error(websocket, '上供区特殊槽位在第4回合才开放')
+            return
+    # =========================================================
+
     area_data = game_state['areas'].get(area_name)
     if not area_data:
         await send_error(websocket, '区域不存在')
@@ -155,11 +178,6 @@ async def handle_next_player(websocket, room_id, player_id, rooms, manager, payl
 
         game_state['lastPlacement'] = None
 
-        # ========================================================
-        # 【心跳闪烁修复】：如果跳过了没里长的人后，又回到了当前玩家（比如P1连动），
-        # 前端因为 currentPlayerIndex 没变，无法触发回合重置逻辑而卡死。
-        # 这里故意先发一个 -1 让前端刷新状态机，再发真实的索引！
-        # ========================================================
         if next_idx == current_idx:
             game_state['currentPlayerIndex'] = -1
             await broadcast_game_state(room_id, rooms, manager)
