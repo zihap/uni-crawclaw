@@ -69,10 +69,6 @@ def _check_shrimp_end_and_transfer(game_state, current_slot_index):
             log_info(f"[shrimp_catching] 结算完毕，剩余 {remaining_lobsters} 只龙虾流入海鲜市场！")
 
 
-# =============================================================================
-# 异步逐步结算系统（新）
-# =============================================================================
-
 async def resolve_area_step(game_state: dict, area_index: int, manager, room_id):
     from utils.constants import AREAS
     area_name = AREAS[area_index]
@@ -182,7 +178,6 @@ async def _resolve_seafood_market_step(game_state: dict, manager, room_id):
                 prices = calculate_market_prices(area_data['marketLobsterCount'])
                 game_state['settlementState'] = make_settlement_state('seafood_market', current_slot_index, action_count, player_id)
 
-                # 【防卡死注入】：在这里下发 currentRound 和 hireSlots
                 await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
         make_action_message(ServerAreaActionTypes.AREA_WAITING_UI, {
                     'areaType': 'seafood_market',
@@ -585,13 +580,30 @@ async def _process_seafood_market_action(game_state: dict, action_type: str, act
         else: return 'error'
     elif action_type == 'sell_lobster':
         if market_rule and not market_rule.get('canSell', True): return 'error'
-        if len(player['lobsters']) > 0:
-            player['lobsters'].pop(0)
+
+        # =========================================================================
+        # 【核心修复】：如果市场已经满了，禁止卖龙虾！
+        # =========================================================================
+        if area_data.get('marketLobsterCount', 0) >= 8:
+            await send_error(websocket, '市场摊位已满，无法卖出龙虾')
+            return 'error'
+
+        normal_idx = -1
+        for i, l in enumerate(player['lobsters']):
+            if l.get('grade', 'normal') == 'normal':
+                normal_idx = i
+                break
+
+        if normal_idx != -1:
+            player['lobsters'].pop(normal_idx)
             player['coins'] += prices['sellLobster']
             area_data['marketLobsterCount'] += 1
             if area_data['marketLobsterCount'] > 8: area_data['marketLobsterCount'] = 8
             success = True
-        else: return 'error'
+        else:
+            await send_error(websocket, '没有普通龙虾可卖')
+            return 'error'
+
     elif action_type == 'buy_cage':
         if player['coins'] >= prices['buyCage']:
             player['coins'] -= prices['buyCage']
@@ -666,7 +678,6 @@ async def _process_seafood_market_action(game_state: dict, action_type: str, act
         game_state['settlementState']['currentSlotIndex'] = current_idx + 1
         return 'action_complete'
     else:
-        # 【防卡死注入】：下发 currentRound 和 hireSlots
         await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
             make_action_message(ServerAreaActionTypes.AREA_WAITING_UI, {
                 'areaType': 'seafood_market',
@@ -698,6 +709,10 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
 
         lobster = player['lobsters'][lobster_index]
         old_grade = lobster['grade']
+
+        if old_grade == 'royal':
+            await send_error(websocket, '虾王已达最高品级，无法继续培养')
+            return 'error'
 
         def get_next_grade(g):
             mapping = {'normal': 'grade3', 'grade3': 'grade2', 'grade2': 'grade1', 'grade1': 'royal', 'royal': 'royal'}
@@ -758,8 +773,10 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
         else:
             await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
                 make_action_message(ServerAreaActionTypes.AREA_WAITING_UI, {
-                    'areaType': 'breeding', 'playerId': settlement_state.get('waitingForPlayer'),
-                    'actionCount': remaining_actions, 'player': _serialize_player(player),
+                    'areaType': 'breeding',
+                    'playerId': settlement_state.get('waitingForPlayer'),
+                    'actionCount': remaining_actions,
+                    'player': _serialize_player(player),
                 }))
             return 'continue_ui'
     elif action_type == 'skip':
