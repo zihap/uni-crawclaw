@@ -14,12 +14,10 @@ from services.tribute_card_effects import check_market_rule, check_breed_bonus, 
 
 
 def _create_lobster(grade='normal'):
-    """创建一只龙虾对象（保留别名以兼容内部调用）"""
     return _make_lobster(grade)
 
 
 def draw_from_bag(game_state: dict) -> str:
-    """从捕虾盲袋中抽取一个指示物。如果野生池空了，自动剔除纯龙虾牌。"""
     shrimp_area = game_state.get('areas', {}).get('shrimp_catching', {})
     pool = shrimp_area.get('wildLobsterPool', 8)
 
@@ -66,7 +64,6 @@ def _check_shrimp_end_and_transfer(game_state, current_slot_index):
                 update_market_prices(game_state)
             except Exception:
                 pass
-            log_info(f"[shrimp_catching] 结算完毕，剩余 {remaining_lobsters} 只龙虾流入海鲜市场！")
 
 
 async def resolve_area_step(game_state: dict, area_index: int, manager, room_id):
@@ -189,9 +186,7 @@ async def _resolve_seafood_market_step(game_state: dict, manager, room_id):
                     'currentRound': game_state.get('currentRound', 1),
                     'hireSlots': game_state.get('hireSlots', [None]*8)
                 }))
-
                 return 'waiting_ui'
-
         current_slot_index += 1
     return 'auto_next'
 
@@ -581,9 +576,6 @@ async def _process_seafood_market_action(game_state: dict, action_type: str, act
     elif action_type == 'sell_lobster':
         if market_rule and not market_rule.get('canSell', True): return 'error'
 
-        # =========================================================================
-        # 【核心修复】：如果市场已经满了，禁止卖龙虾！
-        # =========================================================================
         if area_data.get('marketLobsterCount', 0) >= 8:
             await send_error(websocket, '市场摊位已满，无法卖出龙虾')
             return 'error'
@@ -911,9 +903,10 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
     if action_type == 'submitTribute':
         is_naked = action_payload.get('isNaked', False)
         tavern_id = action_payload.get('tavernId')
+        card_ids = action_payload.get('cardIds', [])
         card_id = action_payload.get('cardId')
         naked_lobster_index = action_payload.get('nakedLobsterIndex', -1)
-        naked_reward_type = action_payload.get('nakedRewardType', 'de')
+        naked_reward_type = action_payload.get('nakedRewardType')
 
         taverns = game_state.get('taverns', [])
         if tavern_id >= len(taverns): return 'error'
@@ -940,14 +933,21 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                 tc_index = naked_lobster_index - len(player_lobsters)
                 del player_title_cards[tc_index]
 
+            # ==============================================================
+            # 【核心修复】：分离基础裸交奖励与称号带来的额外奖励，防止重复计分
+            # ==============================================================
+            # 1. 发放裸交的基础 1 分
             if naked_reward_type == 'de':
                 player['de'] += 1
-                if lobster.get('title') or lobster.get('name'): player['de'] += 1
-                if action_payload.get('bonusTributeChoice') == 'de': player['de'] += 1
             else:
                 player['wang'] += 1
-                if lobster.get('title') or lobster.get('name'): player['wang'] += 1
-                if action_payload.get('bonusTributeChoice') == 'wang': player['wang'] += 1
+
+            # 2. 如果前端传来了称号带来的额外加成，严格按照前端发来的执行
+            bonus_choice = action_payload.get('bonusTributeChoice')
+            if bonus_choice == 'de':
+                player['de'] += 1
+            elif bonus_choice == 'wang':
+                player['wang'] += 1
 
             if player['id'] not in tavern['occupants']: tavern['occupants'].append(player['id'])
             if 'tavernCompletionOrder' not in game_state: game_state['tavernCompletionOrder'] = {}
@@ -961,7 +961,6 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             player['tributesThisRound'] = player.get('tributesThisRound', 0) + 1
 
         else:
-            card_ids = action_payload.get('cardIds', [])
             if not card_ids and not card_id: return 'error'
             if card_id and not card_ids: card_ids = [card_id]
 
@@ -1093,8 +1092,12 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                         if aura_result[buff_key] and buff_key not in player['permaBuffs']:
                             player['permaBuffs'].append(buff_key)
 
-            if action_payload.get('bonusTributeChoice') == 'de': player['de'] = player.get('de', 0) + 1
-            elif action_payload.get('bonusTributeChoice') == 'wang': player['wang'] = player.get('wang', 0) + 1
+            # ==============================================================
+            # 【核心修复】：对于普通上供，也只认前端传来的称号额外奖励选项
+            # ==============================================================
+            bonus_choice = action_payload.get('bonusTributeChoice')
+            if bonus_choice == 'de': player['de'] = player.get('de', 0) + 1
+            elif bonus_choice == 'wang': player['wang'] = player.get('wang', 0) + 1
 
             if player['id'] not in tavern['occupants'] and len(tavern['occupants']) < 4:
                 tavern['occupants'].append(player['id'])
@@ -1135,7 +1138,6 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
 
 
 def _serialize_player(player: dict) -> dict:
-    """序列化玩家数据用于前端传输"""
     return {
         'id': player['id'],
         'name': player['name'],
