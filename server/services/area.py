@@ -9,6 +9,7 @@ import copy
 from utils.constants import FISHING_BAG_ITEMS, SLOT_TEMPLATES, MARKET_PRICES, CHALLENGE_SLOT_DONE, GRADE_VALUES
 from utils.events import ServerEvents, ServerAreaActionTypes, ServerBattleActionTypes
 from utils.logger import log_info, log_debug
+from services.game import broadcast_game_state
 from utils.helpers import send_error, make_action_message, create_lobster as _make_lobster, calculate_market_prices, make_settlement_state
 from services.tribute_card_effects import check_market_rule, check_breed_bonus, check_tribute_discount, check_battle_bonus, check_adjacent_action, get_adjacent_rewards, apply_aura_effect
 
@@ -1121,6 +1122,75 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             current_slot_index = game_state['settlementState'].get('currentSlotIndex', 0)
             game_state['settlementState']['currentSlotIndex'] = current_slot_index + 1
             game_state['settlementState']['waitingForPlayer'] = None
+        return 'action_complete'
+
+    elif action_type == 'submitTributeChoice':
+        """处理上供即时效果选择"""
+        from utils.helpers import create_lobster
+
+        task_id = action_payload.get('taskId')
+        choice = action_payload.get('choice', {})
+
+        pending = game_state.get('pendingTributeChoice')
+        if not pending or pending.get('playerId') != player['id']:
+            await send_error(websocket, '没有待处理的上供选择')
+            return
+
+        if str(pending.get('taskId')) != str(task_id):
+            await send_error(websocket, '任务ID不匹配')
+            return
+
+        choice_type = pending.get('choiceType')
+        player = game_state['players'][player['id']]
+
+        if choice_type == 'buy_advanced_lobster':
+            grade = choice.get('grade', 'normal')
+            cost = choice.get('cost', 0)
+            player_coins = player.get('coins', 0)
+            if player_coins < cost:
+                await send_error(websocket, '金币不足')
+                return
+            player['coins'] -= cost
+            if grade == 'grade3':
+                player['lobsters'].append(create_lobster('grade3'))
+            elif grade == 'grade2':
+                player['lobsters'].append(create_lobster('grade2'))
+            elif grade == 'grade1':
+                player['lobsters'].append(create_lobster('grade1'))
+        elif choice_type == 'discard_attack':
+            action = choice.get('action', 'discard')
+            if action == 'attack':
+                player['attackTokens'] = player.get('attackTokens', 0) + 1
+            elif action == 'discard':
+                target_type = choice.get('targetType', 'lobster')
+                target_player_id = player['id']
+                for other_player in game_state['players']:
+                    if other_player['id'] == target_player_id:
+                        continue
+                    if target_type == 'lobster':
+                        if other_player.get('lobsters'):
+                            other_player['lobsters'].pop(0)
+                    elif target_type == 'cage':
+                        other_player['cages'] = max(0, other_player.get('cages', 0) - 1)
+
+        aura_task = next((t for t in game_state['tributeTasks'] if str(t['id']) == str(task_id)), None)
+        if aura_task:
+            aura_result = apply_aura_effect(player, aura_task)
+            if aura_result:
+                if 'permaBuffs' not in player:
+                    player['permaBuffs'] = []
+                for buff_key in aura_result:
+                    if aura_result[buff_key]:
+                        player['permaBuffs'].append(buff_key)
+
+            if 'tributeCards' not in player:
+                player['tributeCards'] = []
+            player['tributeCards'].append(aura_task)
+
+        game_state['pendingTributeChoice'] = None
+        current_slot_index = game_state['settlementState'].get('currentSlotIndex', 0)
+        game_state['settlementState']['currentSlotIndex'] = current_slot_index + 1
+        game_state['settlementState']['waitingForPlayer'] = None
         return 'action_complete'
 
     elif action_type == 'skip':

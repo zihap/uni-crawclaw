@@ -126,6 +126,10 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
             # clientRoomAction 路由
             if event == ClientEvents.CLIENT_ROOM_ACTION:
                 if _check_idempotency(player_id, ClientEvents.CLIENT_ROOM_ACTION, payload):
+                    await websocket.send_json({
+                        'event': ServerEvents.ERROR,
+                        'data': {'message': '请求过于频繁，请稍后重试', 'code': 'DUPLICATE_REQUEST'}
+                    })
                     continue
                 action_type = payload.get('action_type')
                 result = None
@@ -140,6 +144,10 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
             # clientBattleAction 路由
             if event == ClientEvents.CLIENT_BATTLE_ACTION:
                 if _check_idempotency(player_id, ClientEvents.CLIENT_BATTLE_ACTION, payload):
+                    await websocket.send_json({
+                        'event': ServerEvents.ERROR,
+                        'data': {'message': '请求过于频繁，请稍后重试', 'code': 'DUPLICATE_REQUEST'}
+                    })
                     continue
                 result = await handle_battle_action(websocket, room_id, player_id, rooms, manager, payload)
                 if result is False:
@@ -149,6 +157,10 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
             # clientGameAction 路由
             if event == ClientEvents.CLIENT_GAME_ACTION:
                 if _check_idempotency(player_id, ClientEvents.CLIENT_GAME_ACTION, payload):
+                    await websocket.send_json({
+                        'event': ServerEvents.ERROR,
+                        'data': {'message': '请求过于频繁，请稍后重试', 'code': 'DUPLICATE_REQUEST'}
+                    })
                     continue
                 result = await handle_game_action(websocket, room_id, player_id, rooms, manager, payload)
                 if result is False:

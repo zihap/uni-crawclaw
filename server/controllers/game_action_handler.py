@@ -563,85 +563,6 @@ async def handle_endgame_score_choice(websocket, room_id, player_id, rooms, mana
     await broadcast_game_state(room_id, rooms, manager)
 
 
-async def handle_submit_tribute_choice(websocket, room_id, player_id, rooms, manager, payload):
-    """处理上供即时效果选择"""
-    from utils.helpers import create_lobster
-
-    task_id = payload.get('taskId')
-    choice = payload.get('choice', {})
-
-    game_state = rooms.get(room_id)
-    if not game_state:
-        return
-
-    pending = game_state.get('pendingTributeChoice')
-    if not pending or pending.get('playerId') != player_id:
-        await send_error(websocket, '没有待处理的上供选择')
-        return
-
-    if str(pending.get('taskId')) != str(task_id):
-        await send_error(websocket, '任务ID不匹配')
-        return
-
-    choice_type = pending.get('choiceType')
-    player = game_state['players'][player_id]
-
-    if choice_type == 'buy_advanced_lobster':
-        grade = choice.get('grade', 'normal')
-        cost = choice.get('cost', 0)
-        player_coins = player.get('coins', 0)
-        if player_coins < cost:
-            await send_error(websocket, '金币不足')
-            return
-        player['coins'] -= cost
-        if grade == 'grade3':
-            player['lobsters'].append(create_lobster('grade3'))
-        elif grade == 'grade2':
-            player['lobsters'].append(create_lobster('grade2'))
-        elif grade == 'grade1':
-            player['lobsters'].append(create_lobster('grade1'))
-    elif choice_type == 'discard_attack':
-        action = choice.get('action', 'discard')
-        if action == 'attack':
-            player['attackTokens'] = player.get('attackTokens', 0) + 1
-        elif action == 'discard':
-            target_type = choice.get('targetType', 'lobster')
-            target_player_id = player['id']
-            for other_player in game_state['players']:
-                if other_player['id'] == target_player_id:
-                    continue
-                if target_type == 'lobster':
-                    if other_player.get('lobsters'):
-                        other_player['lobsters'].pop(0)
-                elif target_type == 'cage':
-                    other_player['cages'] = max(0, other_player.get('cages', 0) - 1)
-
-    aura_task = next((t for t in game_state['tributeTasks'] if str(t['id']) == str(task_id)), None)
-    if aura_task:
-        aura_result = apply_aura_effect(player, aura_task)
-        if aura_result:
-            if 'permaBuffs' not in player:
-                player['permaBuffs'] = []
-            for buff_key in aura_result:
-                if aura_result[buff_key]:
-                    player['permaBuffs'].append(buff_key)
-
-        if 'tributeCards' not in player:
-            player['tributeCards'] = []
-        player['tributeCards'].append(aura_task)
-
-    game_state['pendingTributeChoice'] = None
-
-    await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-        make_action_message(ServerGameActionTypes.GAME_ACTION, {
-            'actionType': 'tributeChoiceSubmitted',
-            'playerId': player_id,
-            'data': {'taskId': task_id, 'choice': choice},
-            'gameState': game_state
-        }))
-    await broadcast_game_state(room_id, rooms, manager)
-
-
 def _make_game_action_router(handlers: dict):
     """创建游戏行动路由函数"""
     async def handle_game_action_router(websocket, room_id, player_id, rooms, manager, payload):
@@ -666,7 +587,6 @@ def get_game_action_handlers():
         ClientGameActionTypes.BUY_ITEM: handle_buy_item,
         ClientGameActionTypes.SELL_ITEM: handle_sell_item,
         ClientGameActionTypes.CULTIVATE_LOBSTER: handle_cultivate_lobster,
-        ClientGameActionTypes.SUBMIT_TRIBUTE_CHOICE: handle_submit_tribute_choice,
         ClientGameActionTypes.DOWNTOWN_ACTION: handle_downtown_action,
         ClientGameActionTypes.AREA_ACTION: handle_area_action,
         ClientGameActionTypes.ENDGAME_SCORE_CHOICE: handle_endgame_score_choice,
