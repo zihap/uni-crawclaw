@@ -243,7 +243,7 @@ async def handle_rpg_battle_action(websocket, room_id, player_id, rooms, manager
                     p_entity = get_player(game_state, p['id'])
                     if p_entity:
                         await update_resources(p_entity, {'wang': 1}, broadcast_fn=bf)
-                        battle['lastLog'] += f"<br/>🎖️ 【{p['name']}】在狂暴下撑过了3次攻击，毅力惊人，获得 <color=#ffaa00>1点望</color> 奖励！"
+                        battle['lastLog'] += f"<br/>🎖️ 【{p['name']}】在狂暴下撑过了3次攻击，毅力惊人，<br/>获得 <color=#ffaa00>1点望</color> 奖励！"
 
             battle['lastLog'] += f"<br/>🏆 战斗结束！请胜者【{battle['winnerName']}】选择胜利奖励！"
         else:
