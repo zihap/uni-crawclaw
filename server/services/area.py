@@ -977,6 +977,24 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                 if not card: return 'error'
                 cards_to_process.append((card, card_index))
 
+            bonus_choice = action_payload.get('bonusTributeChoice')
+            if bonus_choice == 'de': player['de'] = player.get('de', 0) + 1
+            elif bonus_choice == 'wang': player['wang'] = player.get('wang', 0) + 1
+
+            if player['id'] not in tavern['occupants'] and len(tavern['occupants']) < 4:
+                tavern['occupants'].append(player['id'])
+
+            # 占据上供席位，用于最终分数计算
+            if 'tavernCompletionOrder' not in game_state: game_state['tavernCompletionOrder'] = {}
+            tavern_id_str = str(tavern_id)
+            if tavern_id_str not in game_state['tavernCompletionOrder']: game_state['tavernCompletionOrder'][tavern_id_str] = []
+            game_state['tavernCompletionOrder'][tavern_id_str].append(player['id'])
+            order = len(game_state['tavernCompletionOrder'][tavern_id_str])
+
+            if 'tavernCompletions' not in player: player['tavernCompletions'] = {}
+            player['tavernCompletions'][tavern_id] = order
+            player['tributesThisRound'] = player.get('tributesThisRound', 0) + len(cards_to_process)
+
             total_coins = sum(c.get('requirements', {}).get('coins', 0) for c, _ in cards_to_process)
             total_seaweed = sum(c.get('requirements', {}).get('seaweed', 0) for c, _ in cards_to_process)
             total_cages = sum(c.get('requirements', {}).get('cages', 0) for c, _ in cards_to_process)
@@ -1069,6 +1087,16 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                 from services.tribute_card_effects import apply_instant_effect
                 instant_result = apply_instant_effect(player, card, game_state)
 
+                if 'tributeCards' not in player: player['tributeCards'] = []
+                player['tributeCards'].append(card)
+
+                aura_result = apply_aura_effect(player, card)
+                if aura_result:
+                    if 'permaBuffs' not in player: player['permaBuffs'] = []
+                    for buff_key in aura_result:
+                        if aura_result[buff_key] and buff_key not in player['permaBuffs']:
+                            player['permaBuffs'].append(buff_key)
+
                 if instant_result.get('needChoice'):
                     from utils.events import ServerEvents, ServerGameActionTypes
                     from utils.helpers import make_action_message
@@ -1082,36 +1110,6 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                             'playerId': player['id'], 'options': instant_result.get('options')
                         }))
                     return 'waiting_choice'
-
-                if 'tributeCards' not in player: player['tributeCards'] = []
-                player['tributeCards'].append(card)
-
-                aura_result = apply_aura_effect(player, card)
-                if aura_result:
-                    if 'permaBuffs' not in player: player['permaBuffs'] = []
-                    for buff_key in aura_result:
-                        if aura_result[buff_key] and buff_key not in player['permaBuffs']:
-                            player['permaBuffs'].append(buff_key)
-
-            # ==============================================================
-            # 【核心修复】：对于普通上供，也只认前端传来的称号额外奖励选项
-            # ==============================================================
-            bonus_choice = action_payload.get('bonusTributeChoice')
-            if bonus_choice == 'de': player['de'] = player.get('de', 0) + 1
-            elif bonus_choice == 'wang': player['wang'] = player.get('wang', 0) + 1
-
-            if player['id'] not in tavern['occupants'] and len(tavern['occupants']) < 4:
-                tavern['occupants'].append(player['id'])
-
-            if 'tavernCompletionOrder' not in game_state: game_state['tavernCompletionOrder'] = {}
-            tavern_id_str = str(tavern_id)
-            if tavern_id_str not in game_state['tavernCompletionOrder']: game_state['tavernCompletionOrder'][tavern_id_str] = []
-            game_state['tavernCompletionOrder'][tavern_id_str].append(player['id'])
-            order = len(game_state['tavernCompletionOrder'][tavern_id_str])
-
-            if 'tavernCompletions' not in player: player['tavernCompletions'] = {}
-            player['tavernCompletions'][tavern_id] = order
-            player['tributesThisRound'] = player.get('tributesThisRound', 0) + len(cards_to_process)
 
         remaining = game_state['settlementState'].get('remainingActions', 1)
         if remaining > 1:
