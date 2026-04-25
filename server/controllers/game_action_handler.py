@@ -21,7 +21,7 @@ from utils.constants import AREAS
 from utils.events import ClientGameActionTypes, ServerEvents, ServerGameActionTypes, ServerAreaActionTypes
 from utils.helpers import send_error, has_resources, update_resources, get_player, make_action_message, make_broadcast_fn, make_settlement_state
 from utils.logger import log_info, log_debug
-from services.game import broadcast_game_state, start_area_settlement, complete_settlement
+from services.game import broadcast_game_state, start_area_settlement, complete_settlement, update_market_prices
 from services.area import process_area_action
 from services.tribute_card_effects import apply_aura_effect, get_endgame_choices, apply_endgame_choice, check_cage_trade
 
@@ -81,8 +81,8 @@ async def handle_place_headman(websocket, room_id, player_id, rooms, manager, pa
             return
 
     if area_name == 'tribute':
-        if slot_index == 5 and current_round < 4:
-            await send_error(websocket, '上供区特殊槽位在第4回合才开放')
+        if slot_index == 2 and current_round < 4:
+            await send_error(websocket, '上供区该席位在第4回合才开放')
             return
     # =========================================================
 
@@ -340,6 +340,10 @@ async def handle_buy_item(websocket, room_id, player_id, rooms, manager, payload
 
     if item_type == 'lobster' and player['coins'] >= prices['buyLobster']:
         await update_resources(player, {'coins': -prices['buyLobster'], 'normal': 1}, broadcast_fn=bf)
+        # 更新市场存量和价格
+        market_area = game_state['areas']['seafood_market']
+        market_area['marketLobsterCount'] = max(0, market_area.get('marketLobsterCount', 0) - 1)
+        update_market_prices(game_state)
         success = True
     elif item_type == 'seaweed' and player['coins'] >= prices['buySeaweed']:
         await update_resources(player, {'coins': -prices['buySeaweed'], 'seaweed': 1}, broadcast_fn=bf)
@@ -382,6 +386,10 @@ async def handle_sell_item(websocket, room_id, player_id, rooms, manager, payloa
 
     if item_type == 'lobster' and has_resources(player, {'normal': 1}):
         await update_resources(player, {'normal': -1, 'coins': prices['sellLobster']}, broadcast_fn=bf)
+        # 更新市场存量和价格
+        market_area = game_state['areas']['seafood_market']
+        market_area['marketLobsterCount'] = market_area.get('marketLobsterCount', 0) + 1
+        update_market_prices(game_state)
         success = True
     elif item_type == 'seaweed' and player['seaweed'] > 0:
         await update_resources(player, {'seaweed': -1, 'coins': prices['sellSeaweed']}, broadcast_fn=bf)

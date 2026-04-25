@@ -163,8 +163,10 @@ async def broadcast_game_state(room_id: str, rooms: dict, manager):
             'gameTitleCards': game_state.get('gameTitleCards', []),
             'players': game_state.get('players', []),
             'hireSlots': game_state.get('hireSlots', [None] * 8),
-            # 【终极修复】：必须补上 lastPlacement！没有它，最后放完的人按钮永远亮不起来！
-            'lastPlacement': game_state.get('lastPlacement')
+            'lastPlacement': game_state.get('lastPlacement'),
+            'tavernCompletionOrder': game_state.get('tavernCompletionOrder', {}),
+            'tributeTasks': game_state.get('tributeTasks', []),
+            'downtownCards': game_state.get('downtownCards', [])
         }
         await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
             make_action_message(ServerGameActionTypes.GAME_STATE_UPDATE, **data))

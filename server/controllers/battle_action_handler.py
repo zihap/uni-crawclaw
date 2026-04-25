@@ -439,14 +439,12 @@ async def handle_battle_bonus_choice(websocket, room_id, player_id, rooms, manag
 
 def _make_battle_action_router(handlers: dict):
     async def handle_battle_action_router(websocket, room_id, player_id, rooms, manager, payload):
-
-        action_t1 = payload.get('actionType')
-        action_t2 = payload.get('action_type')
+        # 兼容处理：优先获取 actionType，兜底获取 action_type
+        action_type = payload.get('actionType') or payload.get('action_type')
         inner_payload = payload.get('payload', payload)
-        action_t3 = inner_payload.get('actionType')
-        action_t4 = inner_payload.get('action_type')
+        inner_action_type = inner_payload.get('actionType') or inner_payload.get('action_type')
 
-        all_actions = [action_t1, action_t2, action_t3, action_t4]
+        all_actions = [action_type, inner_action_type]
 
         if 'lobster_selected' in all_actions:
             return await handle_lobster_selected(websocket, room_id, player_id, rooms, manager, inner_payload)
@@ -462,9 +460,9 @@ def _make_battle_action_router(handlers: dict):
                 inner_payload['actionType'] = valid_a
             return await handle_rpg_battle_action(websocket, room_id, player_id, rooms, manager, inner_payload)
 
-        handler = handlers.get(action_t1 or action_t2)
+        handler = handlers.get(action_type)
         if handler: return await handler(websocket, room_id, player_id, rooms, manager, payload)
-        await send_error(websocket, f'未知的战斗行动: {action_t1 or action_t2}')
+        await send_error(websocket, f'未知的战斗行动: {action_type}')
 
     return handle_battle_action_router
 
