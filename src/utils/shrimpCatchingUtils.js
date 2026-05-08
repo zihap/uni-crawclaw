@@ -7,16 +7,16 @@ import { LOBSTER_GRADES } from '@stores/game.js'
 
 // 捕虾指示物类型
 export const SHRIMP_INDICATOR_TYPES = {
-    LOBSTER: 'lobster', // 龙虾：获取1只野生龙虾
-    LOBSTER_OR_SEAWEED: 'lobster_or_seaweed', // 龙虾或海草：玩家选择
-    BUBBLE: 'bubble' // 气泡：兑换金币或龙虾
+    LOBSTER: 'lobster', // 灵螯：获取1只幼型灵螯
+    LOBSTER_OR_SEAWEED: 'lobster_or_seaweed', // 灵螯或仙草：玩家选择
+    BUBBLE: 'bubble' // 气泡：兑换金币或灵螯
 }
 
 // 捕虾指示物描述
 export const SHRIMP_INDICATOR_DESCRIPTIONS = {
-    [SHRIMP_INDICATOR_TYPES.LOBSTER]: '获取1只捕虾区的野生龙虾',
-    [SHRIMP_INDICATOR_TYPES.LOBSTER_OR_SEAWEED]: '获取1只捕虾区的野生龙虾或1根海草',
-    [SHRIMP_INDICATOR_TYPES.BUBBLE]: '1比1兑换金币，或保留后兑换三品龙虾(2个气泡)或二品龙虾(3个气泡)'
+    [SHRIMP_INDICATOR_TYPES.LOBSTER]: '获取1只捕虾区的幼型灵螯',
+    [SHRIMP_INDICATOR_TYPES.LOBSTER_OR_SEAWEED]: '获取1只捕虾区的幼型灵螯或1根仙草',
+    [SHRIMP_INDICATOR_TYPES.BUBBLE]: '1比1兑换金币，或保留后兑换三品灵螯(2个气泡)或二品灵螯(3个气泡)'
 }
 
 // 捕虾区行动格配置
@@ -50,8 +50,8 @@ export const SHRIMP_CATCHING_SLOTS = [
 // 气泡兑换规则
 export const BUBBLE_EXCHANGE_RULES = {
     COIN: 1, // 1气泡 = 1金币
-    GRADE3_LOBSTER: 2, // 2气泡 = 1三品龙虾
-    GRADE2_LOBSTER: 3 // 3气泡 = 1二品龙虾
+    GRADE3_LOBSTER: 2, // 2气泡 = 1三品灵螯
+    GRADE2_LOBSTER: 3 // 3气泡 = 1二品灵螯
 }
 
 const initBagItems = [
@@ -62,26 +62,26 @@ const initBagItems = [
     { type: 'bubble', icon: '💨', name: '气泡' },
     { type: 'bubble', icon: '💨', name: '气泡' },
     { type: 'bubble', icon: '💨', name: '气泡' },
-    { type: 'lobster', icon: '🦞', name: '龙虾' },
-    { type: 'lobster', icon: '🦞', name: '龙虾' },
-    { type: 'lobster', icon: '🦞', name: '龙虾' },
-    { type: 'lobster', icon: '🦞', name: '龙虾' },
-    { type: 'lobster', icon: '🦞', name: '龙虾' },
-    { type: 'lobster', icon: '🦞', name: '龙虾' },
-    { type: 'lobster', icon: '🦞', name: '龙虾' },
-    { type: 'seaweed', icon: '🌿', name: '海草' },
-    { type: 'seaweed', icon: '🌿', name: '海草' },
-    { type: 'seaweed', icon: '🌿', name: '海草' },
-    { type: 'seaweed', icon: '🌿', name: '海草' },
-    { type: 'seaweed', icon: '🌿', name: '海草' },
-    { type: 'seaweed', icon: '🌿', name: '海草' },
-    { type: 'seaweed', icon: '🌿', name: '海草' },
-    { type: 'either', icon: '❓', name: '龙虾或海草' },
-    { type: 'either', icon: '❓', name: '龙虾或海草' },
-    { type: 'either', icon: '❓', name: '龙虾或海草' },
-    { type: 'either', icon: '❓', name: '龙虾或海草' },
-    { type: 'either', icon: '❓', name: '龙虾或海草' },
-    { type: 'either', icon: '❓', name: '龙虾或海草' }
+    {type: 'lobster', icon: '🦞', name: '灵螯'},
+    {type: 'lobster', icon: '🦞', name: '灵螯'},
+    {type: 'lobster', icon: '🦞', name: '灵螯'},
+    {type: 'lobster', icon: '🦞', name: '灵螯'},
+    {type: 'lobster', icon: '🦞', name: '灵螯'},
+    {type: 'lobster', icon: '🦞', name: '灵螯'},
+    {type: 'lobster', icon: '🦞', name: '灵螯'},
+    {type: 'seaweed', icon: '🌿', name: '仙草'},
+    {type: 'seaweed', icon: '🌿', name: '仙草'},
+    {type: 'seaweed', icon: '🌿', name: '仙草'},
+    {type: 'seaweed', icon: '🌿', name: '仙草'},
+    {type: 'seaweed', icon: '🌿', name: '仙草'},
+    {type: 'seaweed', icon: '🌿', name: '仙草'},
+    {type: 'seaweed', icon: '🌿', name: '仙草'},
+    {type: 'either', icon: '❓', name: '灵螯或仙草'},
+    {type: 'either', icon: '❓', name: '灵螯或仙草'},
+    {type: 'either', icon: '❓', name: '灵螯或仙草'},
+    {type: 'either', icon: '❓', name: '灵螯或仙草'},
+    {type: 'either', icon: '❓', name: '灵螯或仙草'},
+    {type: 'either', icon: '❓', name: '灵螯或海草'}
 ]
 
 /**
@@ -106,7 +106,7 @@ export const generateShrimpIndicator = () => {
  * 处理捕虾指示物
  * @param {Object} player - 玩家对象
  * @param {string} indicatorType - 捕虾指示物类型
- * @param {Array} wildLobsterPool - 野生龙虾池
+ * @param {Array} wildLobsterPool - 幼型灵螯池
  * @param {Object} options - 选项
  * @returns {Object} 处理结果
  */
@@ -120,38 +120,38 @@ export const processShrimpIndicator = (player, indicatorType, wildLobsterPool, o
     try {
         switch (indicatorType) {
             case SHRIMP_INDICATOR_TYPES.LOBSTER:
-                // 获取1只野生龙虾
+                // 获取1只幼型灵螯
                 if (wildLobsterPool.length === 0) {
                     result.success = false
-                    result.message = '野生龙虾池已空'
+                    result.message = '幼型灵螯池已空'
                     return result
                 }
 
                 const lobster = wildLobsterPool.shift()
                 player.lobsters.push(lobster)
-                result.message = '获得1只野生龙虾'
+                result.message = '获得1只幼型灵螯'
                 result.changes.lobsters = 1
                 break
 
             case SHRIMP_INDICATOR_TYPES.LOBSTER_OR_SEAWEED:
-                // 玩家选择获取龙虾或海草
-                // 这里默认选择龙虾，实际游戏中需要玩家选择
+                // 玩家选择获取灵螯或仙草
+                // 这里默认选择灵螯，实际游戏中需要玩家选择
                 const choice = options.choice || 'lobster'
 
                 if (choice === 'lobster') {
                     if (wildLobsterPool.length === 0) {
                         result.success = false
-                        result.message = '野生龙虾池已空'
+                        result.message = '幼型灵螯池已空'
                         return result
                     }
 
                     const lobster = wildLobsterPool.shift()
                     player.lobsters.push(lobster)
-                    result.message = '获得1只野生龙虾'
+                    result.message = '获得1只幼型灵螯'
                     result.changes.lobsters = 1
                 } else {
                     player.seaweed += 1
-                    result.message = '获得1根海草'
+                    result.message = '获得1株琅玕仙草'
                     result.changes.seaweed = 1
                 }
                 break
@@ -180,7 +180,7 @@ export const processShrimpIndicator = (player, indicatorType, wildLobsterPool, o
  * 执行捕虾行动
  * @param {Object} player - 玩家对象
  * @param {number} actionCount - 行动次数
- * @param {Array} wildLobsterPool - 野生龙虾池
+ * @param {Array} wildLobsterPool - 幼型灵螯池
  * @param {Function} onIndicator - 捕虾指示物处理回调
  * @returns {Promise<Object>} 行动结果
  */
@@ -265,13 +265,13 @@ const showConfirmModal = () => {
 }
 
 /**
- * 显示龙虾或海草选择弹窗
+ * 显示灵螯或仙草选择弹窗
  * @returns {Promise<string|null>} 玩家选择的类型或null（取消）
  */
 const showLobsterOrSeaweedChoice = () => {
     return new Promise((resolve) => {
         uni.showActionSheet({
-            itemList: ['选龙虾', '选海草'],
+            itemList: ['选灵螯', '选仙草'],
             success: (res) => {
                 if (res.tapIndex === 0) {
                     resolve('lobster')
@@ -292,7 +292,7 @@ const showLobsterOrSeaweedChoice = () => {
  * 处理气泡兑换
  * @param {Object} player - 玩家对象
  * @param {string} exchangeType - 兑换类型
- * @param {Array} wildLobsterPool - 野生龙虾池
+ * @param {Array} wildLobsterPool - 幼型灵螯池
  * @returns {Object} 兑换结果
  */
 export const exchangeBubbles = (player, exchangeType, wildLobsterPool) => {
@@ -325,7 +325,7 @@ export const exchangeBubbles = (player, exchangeType, wildLobsterPool) => {
                 }
                 if (wildLobsterPool.length === 0) {
                     result.success = false
-                    result.message = '野生龙虾池已空'
+                    result.message = '幼型灵螯池已空'
                     return result
                 }
 
@@ -333,7 +333,7 @@ export const exchangeBubbles = (player, exchangeType, wildLobsterPool) => {
                 const lobster = wildLobsterPool.shift()
                 lobster.grade = LOBSTER_GRADES.GRADE3
                 player.lobsters.push(lobster)
-                result.message = '兑换1只三品龙虾'
+                result.message = '兑换1只三品灵螯'
                 result.changes.lobsters = 1
                 result.changes.bubbles = -2
                 break
@@ -346,7 +346,7 @@ export const exchangeBubbles = (player, exchangeType, wildLobsterPool) => {
                 }
                 if (wildLobsterPool.length === 0) {
                     result.success = false
-                    result.message = '野生龙虾池已空'
+                    result.message = '幼型灵螯池已空'
                     return result
                 }
 
@@ -354,7 +354,7 @@ export const exchangeBubbles = (player, exchangeType, wildLobsterPool) => {
                 const lobster2 = wildLobsterPool.shift()
                 lobster2.grade = LOBSTER_GRADES.GRADE2
                 player.lobsters.push(lobster2)
-                result.message = '兑换1只二品龙虾'
+                result.message = '兑换1只二品灵螯'
                 result.changes.lobsters = 1
                 result.changes.bubbles = -3
                 break

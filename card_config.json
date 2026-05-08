@@ -226,7 +226,7 @@
             "reward": {
                 "wang": 2
             },
-            "effectDesc": "每次斗龙虾挑战时可以先获得1个资源（金币/海草/普通龙虾自选）",
+            "effectDesc": "每次斗龙虾挑战时可以先获得1个资源（金币/仙草/普通龙虾自选）",
             "effectType": "aura_battle_bonus"
         },
         {
@@ -320,7 +320,7 @@
             "reward": {
                 "wang": 1
             },
-            "effectDesc": "获得本卡时以及后续每轮游戏开始时获得1个海草",
+            "effectDesc": "获得本卡时以及后续每轮游戏开始时获得1个仙草",
             "effectType": "aura_round_seaweed"
         },
         {
@@ -364,7 +364,7 @@
             "reward": {
                 "de": 1
             },
-            "effectDesc": "游戏结束最终结算前可以支付2/4/7个海草增加1/2/3德",
+            "effectDesc": "游戏结束最终结算前可以支付2/4/7个仙草增加1/2/3德",
             "effectType": "aura_endgame_score",
             "costResourceType": "seaweed"
         }
@@ -475,7 +475,7 @@
             "action": {
                 "type": "bazaar"
             },
-            "description": "直接获取1根海草+1个金币+1只普通龙虾+1个虾笼",
+            "description": "直接获取1根仙草+1个金币+1只普通龙虾+1个虾笼",
             "auto": true
         },
         {

@@ -449,12 +449,12 @@ async def _process_shrimp_catching_action(game_state: dict, action_type: str, ac
             if pool > 0:
                 shrimp_area['wildLobsterPool'] = pool - 1
                 player['lobsters'].append(_create_lobster('normal'))
-                result_msg = '获得1只野生龙虾'
+                result_msg = '获得1只幼型灵螯'
             else:
-                result_msg = '野生龙虾已空'
+                result_msg = '幼型灵螯已空'
         elif item == 'seaweed':
             player['seaweed'] += 1
-            result_msg = '获得1根海草'
+            result_msg = '获得1株琅玕仙草'
 
         if not reward_given:
             reward = template.get('reward', {})
@@ -509,11 +509,11 @@ async def _process_shrimp_catching_action(game_state: dict, action_type: str, ac
             if pool > 0:
                 shrimp_area['wildLobsterPool'] = pool - 1
                 player['lobsters'].append(_create_lobster('normal'))
-                result_msg = '获得1只野生龙虾'
-            else: result_msg = '野生龙虾已空'
+                result_msg = '获得1只幼型灵螯'
+            else: result_msg = '幼型灵螯已空'
         elif choice == 'seaweed':
             player['seaweed'] += 1
-            result_msg = '获得1根海草'
+            result_msg = '获得1株琅玕仙草'
 
         if not reward_given:
             reward = template.get('reward', {})

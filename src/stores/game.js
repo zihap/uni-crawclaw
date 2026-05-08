@@ -463,7 +463,7 @@ export const useGameStore = defineStore('game', () => {
             }
         }
 
-        // 捕虾区结算后，剩余野生龙虾流入海鲜市场，最高累计不超过8只
+        // 捕虾区结算后，剩余幼型灵螯流入海鲜市场，最高累计不超过8只
         const remainingLobsters = wildLobsterPool.value.length
         if (remainingLobsters > 0) {
             seafoodMarketLobsters.value += remainingLobsters
@@ -1087,7 +1087,7 @@ export const useGameStore = defineStore('game', () => {
         addLog('执行准备阶段', 'info')
 
         wildLobsterPool.value = Array.from({ length: 8 }, () => createLobster())
-        addLog('捕虾区：添加8只野生龙虾', 'info')
+        addLog('捕虾区：添加8只幼型灵螯', 'info')
 
         // 弃置场上剩余称号卡，直接从牌堆抽取2张全新的
         gameTitleCards.value = titleCardDeck.value.splice(0, 2)
