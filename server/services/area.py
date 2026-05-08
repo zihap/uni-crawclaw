@@ -1039,7 +1039,6 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                 def get_lobster_value(item):
                     kind, obj = item
                     if kind == 'titleCard': return 4
-                    if obj.get('title'): return 4
                     return grade_values.get(obj.get('grade', 'normal'), 0)
 
                 req_by_grade = []

@@ -1,116 +1,190 @@
 {
-    "titleCards": [
+"titleCards": [
         {
             "id": "title_1",
-            "name": "红头紫",
-            "skill": {
-                "description": "抛掷12面骰",
-                "diceSides": 12
-            },
-            "grade": "royal",
-            "description": ""
+            "name": "疾风",
+            "skillId": "s1",
+            "description": "进入战斗立即处于行动状态"
         },
         {
             "id": "title_2",
-            "name": "铁甲将军",
-            "skill": {
-                "description": "对方不能用草",
-                "diceSides": 10,
-                "blockSeaweed": true
-            },
-            "grade": "royal",
-            "description": ""
+            "name": "稳扎",
+            "skillId": "s2",
+            "description": "抛的点数小于等于3，视为6"
         },
         {
             "id": "title_3",
-            "name": "黄金鳌",
-            "skill": {
-                "description": "上贡时可以多加1德或者多加1望",
-                "diceSides": 10,
-                "bonusTribute": true
-            },
-            "grade": "royal",
-            "description": ""
+            "name": "蓄势",
+            "skillId": "s3",
+            "description": "你的回合开始时，获得1层“增益”。掷骰时，点数额外增加等同于“增益”层数的数值"
         },
         {
             "id": "title_4",
-            "name": "闪电钳",
-            "skill": {
-                "description": "吃草可以点数多加1点",
-                "diceSides": 10,
-                "seaweedDiceBonus": 1
-            },
-            "grade": "royal",
-            "description": ""
+            "name": "会心",
+            "skillId": "s4",
+            "description": "行动状态时，若抛出最大值，伤害额外+2"
         },
         {
             "id": "title_5",
-            "name": "勇者龙虾",
-            "description": "非常骁勇善战",
-            "grade": "royal",
-            "skill": {
-                "description": "可抛两次骰子，选择较优结果，使用10面骰",
-                "canReroll": true,
-                "diceSides": 10
-            }
+            "name": "天佑",
+            "skillId": "s5",
+            "description": "抛掷的点数+2点"
         },
         {
             "id": "title_6",
-            "name": "急先锋龙虾",
-            "description": "",
-            "grade": "royal",
-            "skill": {
-                "description": "出场即可移动",
-                "startStarted": true,
-                "diceSides": 10
-            }
+            "name": "奇变",
+            "skillId": "s6",
+            "description": "行动状态时，若抛出的点数为“奇数”，伤害额外+1"
         },
         {
             "id": "title_7",
-            "name": "铁壁龙虾",
-            "description": "",
-            "grade": "royal",
-            "skill": {
-                "description": "被覆盖时反败为胜",
-                "onCovered": true,
-                "diceSides": 10
-            }
+            "name": "偶成",
+            "skillId": "s7",
+            "description": "行动状态时，若抛出的点数为“偶数”，伤害额外+1"
         },
         {
             "id": "title_8",
-            "name": "长鳌虾",
-            "description": "",
-            "grade": "royal",
-            "skill": {
-                "description": "紧贴对方一格即可获胜",
-                "nearWinOnAdjacent": true,
-                "diceSides": 10
-            }
+            "name": "威压",
+            "skillId": "s8",
+            "description": "对手受到伤害翻血量卡时，少翻1张血量卡（最少翻1张）"
         },
         {
             "id": "title_9",
-            "name": "稳健龙虾",
-            "description": "天生沉稳，谋定而后动",
-            "grade": "royal",
-            "skill": {
-                "description": "每次移动额外+1步",
-                "bonusStep": 1,
-                "diceSides": 10
-            }
+            "name": "破绽",
+            "skillId": "s9",
+            "description": "造成伤害时，你可以指定对手翻开的血量卡中，点数最高的一张视为1点"
         },
         {
             "id": "title_10",
-            "name": "幸运龙虾",
-            "description": "",
-            "grade": "royal",
-            "skill": {
-                "description": "掷出1、2、3点视为6点",
-                "modifyRule": {
-                    "threshold": 3,
-                    "to": 6
-                },
-                "diceSides": 10
-            }
+            "name": "自愈",
+            "skillId": "s10",
+            "description": "你的回合开始时，若已受伤，恢复1点血量"
+        },
+        {
+            "id": "title_11",
+            "name": "狂热",
+            "skillId": "s11",
+            "description": "初始自带20%暴击率。且触发暴击后，暴击率不恢复为0%，而是仅降低10%"
+        },
+        {
+            "id": "title_12",
+            "name": "重击",
+            "skillId": "s12",
+            "description": "你的暴击伤害倍率从1.5倍提升至2.0倍"
+        },
+        {
+            "id": "title_13",
+            "name": "背水",
+            "skillId": "s13",
+            "description": "当你每次受到伤害时，暴击率额外提升20%"
+        },
+        {
+            "id": "title_14",
+            "name": "连斩",
+            "skillId": "s14",
+            "description": "若本次攻击触发了暴击，结算完伤害后，可以再进行一次行动抛骰"
+        },
+        {
+            "id": "title_15",
+            "name": "贪食",
+            "skillId": "s15",
+            "description": "你使用海草时，投掷骰子的点数+3"
+        },
+        {
+            "id": "title_16",
+            "name": "涅槃",
+            "skillId": "s16",
+            "description": "当你受到致命伤害时，抵消本次所有伤害"
+        },
+        {
+            "id": "title_17",
+            "name": "坚甲",
+            "skillId": "s17",
+            "description": "你的对手对你造成的伤害-1"
+        },
+        {
+            "id": "title_18",
+            "name": "幻影",
+            "skillId": "s18",
+            "description": "你有30%的几率闪避对手的攻击"
+        },
+        {
+            "id": "title_19",
+            "name": "棘甲",
+            "skillId": "s19",
+            "description": "每次受到伤害时，反弹 受伤点数/2(向下取整) 的伤害给攻击者。"
+        },
+        {
+            "id": "title_20",
+            "name": "冥毒",
+            "skillId": "s20",
+            "description": "你造成伤害时会使对手中毒，使其下一次掷骰子的点数 -2。"
+        },
+        {
+            "id": "title_21",
+            "name": "破法",
+            "skillId": "s21",
+            "description": "你的攻击无比锋利，无视对手的所有闪避与减伤效果。"
+        },
+        {
+            "id": "title_22",
+            "name": "逆鳞",
+            "skillId": "s22",
+            "description": "如果你掷骰掷出 1 点，立刻重掷一次，并使本次攻击的暴击率临时提升 30%。"
+        },
+        {
+            "id": "title_23",
+            "name": "嗜血",
+            "skillId": "s23",
+            "description": "当你受到伤害大于 1 点时，你的基础攻击力 +1（仅限本局战斗）。"
+        },
+        {
+            "id": "title_24",
+            "name": "龙威",
+            "skillId": "s24",
+            "description": "当你触发暴击时，威慑对手，使其的暴击率变为0%。"
+        },
+        {
+            "id": "title_25",
+            "name": "铁骨",
+            "skillId": "s25",
+            "description": "你的甲壳坚不可摧，对手对你造成暴击时，暴击倍率强制降为 1.0 倍。"
+        },
+        {
+            "id": "title_26",
+            "name": "燃血",
+            "skillId": "s26",
+            "description": "你的所有掷骰点数额外 +3，但代价是每次掷骰后，你的累计受伤增加 1 点。"
+        },
+        {
+            "id": "title_27",
+            "name": "归元",
+            "skillId": "s27",
+            "description": "生命力极其顽强，你抽取的血量卡，只要点数小于 3，则自动按 3 点计算。"
+        },
+        {
+            "id": "title_28",
+            "name": "反制",
+            "skillId": "s28",
+            "description": "你有20%的几率闪避对手攻击，如果成功，反击对手，对其造成 1 点伤害。"
+        },
+        {
+            "id": "title_29",
+            "name": "处决",
+            "skillId": "s29",
+            "description": "如果对手的累计受伤大于 5 点，你的攻击直接斩杀对手。"
+        },
+        {
+            "id": "title_30",
+            "name": "百足",
+            "skillId": "s30",
+            "description": "使用12面骰子"
+        },
+        {
+            "id": "title_31",
+            "name": "霸王",
+            "skillId": "s31",
+            "description": "抽取3张血量卡牌"
         }
     ],
     "tributeCards": [

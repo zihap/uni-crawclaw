@@ -15,9 +15,9 @@ from .constants import AREAS, MARKET_PRICES, TRIBUTE_TASKS, DOWNTOWN_CARDS, SLOT
 _CARD_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'card_config.json')
 try:
     with open(_CARD_CONFIG_PATH, 'r', encoding='utf-8') as _f:
-        _ALL_TITLE_CARDS = json.load(_f).get('titleCards', [])
+        ALL_TITLE_CARDS = json.load(_f).get('titleCards', [])
 except (FileNotFoundError, json.JSONDecodeError):
-    _ALL_TITLE_CARDS = []
+    ALL_TITLE_CARDS = []
 
 
 def generate_user_id() -> str:
@@ -87,7 +87,6 @@ def create_player(player_id: int, name: str, is_host: bool = False, user_id: str
         lobsters.append({
             'id': ''.join(random.choices(string.ascii_lowercase + string.digits, k=9)),
             'grade': 'normal',
-            'title': None
         })
 
     return {
@@ -114,7 +113,7 @@ def create_player(player_id: int, name: str, is_host: bool = False, user_id: str
 
         'permaBuffs': [],
 
-        'titleCards': [],
+        'titleCards': ALL_TITLE_CARDS.copy(),
 
         'ready': False,
         'isHost': is_host,
@@ -160,7 +159,7 @@ def draw_title_cards(game_state: dict):
     """抽取2张称号卡到本回合奖励池（丢弃上一回合未获取的称号卡）"""
     if 'titleCardDeck' not in game_state or not game_state['titleCardDeck']:
         import random
-        deck = _ALL_TITLE_CARDS.copy()
+        deck = ALL_TITLE_CARDS.copy()
         random.shuffle(deck)
         game_state['titleCardDeck'] = deck
 

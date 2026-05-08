@@ -249,11 +249,9 @@ async def complete_settlement(room_id, game_state, rooms, manager):
             card = first_player['card']
             choices = get_endgame_choices(player, card)
 
-            await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
+            await manager.send_to_player(room_id, first_player['playerId'], ServerEvents.SERVER_GAME_ACTION,
                 make_action_message(ServerGameActionTypes.GAME_ACTION, {
                     'actionType': 'endgameScoreChoiceRequired',
-                    'playerId': first_player['playerId'],
-                    'playerName': first_player['playerName'],
                     'data': {
                         'card': card,
                         'choices': choices
@@ -340,12 +338,23 @@ async def complete_settlement(room_id, game_state, rooms, manager):
                 player['coins'] = player.get('coins', 0) + 1
             elif effect_type == 'aura_round_seaweed':
                 player['seaweed'] = player.get('seaweed', 0) + 1
+    
+    # 清空本局的下注信息
+    from utils.game_state import arena_betting_state
+    for key in list(arena_betting_state.keys()):
+        if key.startswith(f"{room_id}_"):
+            del arena_betting_state[key]
 
     game_state['phase'] = 'placement'
     game_state['currentPlayerIndex'] = game_state.get('startingPlayerIndex', 0)
     game_state['currentArea'] = 0
     game_state['lastPlacement'] = None
     game_state['areas'].get('tribute')['challengeSlots'] = [None] * 3
+    for player in game_state['players']:
+        for lobster in player['lobsters']:
+            lobster['used'] = False
+        for title_card in player['titleCards']:
+            title_card['used'] = False
 
     for area_name in AREAS:
         if area_name in game_state['areas']:
