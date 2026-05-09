@@ -47,9 +47,6 @@ def draw_hp_values(draw_types):
         elif t == 'god': hp_values.append(random.choice([1, 2]))
     return hp_values
 
-def update_crit_chance(player):
-    base_crit = 0.2 if 's11' in player['skills'] else 0.0
-    player['critChance'] = max(0.0, min(1.0, base_crit + player['crit_bonus']))
 
 
 # ==============================================================================
@@ -90,17 +87,12 @@ class SkillExecutor:
                 ctx['roll'] -= 2
                 player['poisoned_stacks'] -= 1
                 logs.append(f"<br/><color=#00ffff>✨[状态生效-冥毒] 毒发！虚弱导致掷骰点数 -2！</color>")
-            if battle.get('phase') == 'enrage_roll' and player.get('intimidated'):
-                ctx['roll'] = 1
-                player['intimidated'] = False
-                logs.append(f"<br/><color=#00ffff>✨[状态生效-龙威] 陷入恐惧，起步强制失败！</color>")
 
             # 技能修饰
             if 's22' in skills and ctx['roll'] == 1:
                 ctx['roll'] = random.randint(1, player['diceType'])
-                player['crit_bonus'] += 0.3
-                update_crit_chance(player)
-                logs.append(f"<br/><color=#00ffff>✨[技能生效-逆鳞] 掷出1点触发重掷，本次掷出 {ctx['roll']} 点，暴击率飙升！</color>")
+                player['critChance'] = min(1.0, player['critChance'] + 0.3)
+                logs.append(f"<br/><color=#00ffff>✨[技能生效-逆鳞] 掷出 1 点触发重掷，本次掷出 {ctx['roll']} 点，暴击率飙升！</color>")
             if 's26' in skills:
                 ctx['roll'] += 3
                 player['dmgTaken'] += 1
@@ -148,6 +140,7 @@ class SkillExecutor:
                     ctx['base_dmg'] = 0
                     logs.append(f"<br/><color=#00ffff>✨[技能生效-幻影] 【{player['name']}】触发闪避，将伤害完全化解！</color>")
                 if 's28' in skills and random.random() < 0.2:
+                    ctx['base_dmg'] = 0
                     enemy['dmgTaken'] += 1
                     logs.append(f"<br/><color=#00ffff>✨[技能生效-反制] 闪避同时做出反击，【{enemy['name']}】受到 1 点伤害！</color>")
                 elif 's17' in skills and ctx['base_dmg'] > 0:
@@ -164,13 +157,12 @@ class SkillExecutor:
             if ctx['is_crit']:
                 battle['critCount'] += 1
                 if 's24' in skills:
-                    enemy['crit_bonus'] = -0.2 if 's11' in enemy_skills else 0.0
-                    update_crit_chance(enemy)
+                    # 龙威震慑：强行清空对手暴击率
+                    enemy['critChance'] = 0.0
                     logs.append(f"<br/><color=#00ffff>✨[技能生效-龙威] 龙威震慑！【{enemy['name']}】战意全无，暴击率被强行清零！</color>")
                 
-                if 's11' in skills: player['crit_bonus'] = max(0, player['crit_bonus'] - 0.1)
-                else: player['crit_bonus'] = 0.0
-                update_crit_chance(player)
+                if 's11' in skills: player['critChance'] = player['critChance'] - 0.1
+                else: player['critChance'] = 0.0
 
         # 9. 伤害结算后的追加效果 (Player: 攻击方, Enemy: 防守方)
         elif event_name == 'post_damage':
@@ -206,28 +198,33 @@ class SkillExecutor:
 
         # 12. 致死判定与免死 (Player: 防守方)
         elif event_name == 'lethal_check':
-            if 's16' in skills:
+            if 's16' in skills and not player.get('s16_used'):
                 ctx['survived'] = True
-                player['dmgTaken'] = ctx['total_hp'] - 1
-                logs.append(f"<br/><color=#00ffff>✨[技能生效-涅槃] 触发【免死】！抵消致命伤，强制剩余 1 血活了下来！</color>")
+                player['s16_used'] = True
+                logs.append(f"<br/><color=#00ffff>✨[技能生效-涅槃] 触发【免死】！抵消致命伤！</color>")
 
         # 13. 受伤存活后的属性变更 (Player: 防守方)
         elif event_name == 'survival_check':
-            crit_inc = 0.2
-            if 's13' in skills:
-                crit_inc = 0.4
-                logs.append(f"<br/><color=#00ffff>✨[技能生效-背水] 受到伤害激发了斗志，本次暴击率提升 40%！</color>")
+            # 嗜血：基础攻击力永久提升
             if 's23' in skills and ctx.get('damage_taken', 0) > 1:
                 player['bloodlust_stacks'] = player.get('bloodlust_stacks', 0) + 1
                 logs.append(f"<br/><color=#00ffff>✨[技能生效-嗜血] 受到重创激发了血性，基础攻击力永久 +1！</color>")
-            player['crit_bonus'] += crit_inc
-            update_crit_chance(player)
+
+            # 暴击率提升逻辑 (需检查是否被 [龙威 s24] 震慑)
+            if battle.get('lastAttackWasCrit') and 's24' in enemy_skills:
+                player['critChance'] = 0.0
+                logs.append(f"<br/><color=#999999>受到[龙威]震慑，战意全无，暴击率无法恢复...</color>")
+            else:
+                crit_inc = 0.2
+                if 's13' in skills:
+                    crit_inc = 0.4
+                    logs.append(f"<br/><color=#00ffff>✨[技能生效-背水] 受到伤害激发了斗志，本次暴击率提升 40%！</color>")
+                player['critChance'] = min(1.0, player['critChance'] + crit_inc)
 
         # 14. 追加回合判定 (Player: 防守方, Enemy: 攻击方)
         elif event_name == 'post_survival':
             if ctx.get('lastAttackWasCrit') and 's14' in enemy_skills:
                 ctx['extra_turn'] = True
-                enemy['enraged'] = False
                 logs.append(f"<br/><color=#00ffff>✨[技能生效-连斩] 狂暴连击！【{enemy['name']}】立刻获得一个全新的行动回合！</color>")
 
         return "".join(logs)
@@ -281,8 +278,7 @@ async def start_rpg_battle(room_id, battle_id, game_state, manager):
             'seaweed': get_player(game_state, defender_id).get('seaweed', 0),
             'skills': [d_lob.get('skillId')],
             'skillDesc': d_lob.get('description', ''),
-            'crit_bonus': 0.0,
-            'critChance': 0.0
+            'critChance': 0.2 if d_lob.get('skillId') == 's11' else 0.0
         },
         'p2': {
             'id': challenger_id,
@@ -299,15 +295,12 @@ async def start_rpg_battle(room_id, battle_id, game_state, manager):
             'seaweed': get_player(game_state, challenger_id).get('seaweed', 0),
             'skills': [c_lob.get('skillId')],
             'skillDesc': c_lob.get('description', ''),
-            'crit_bonus': 0.0,
-            'critChance': 0.0
+            'critChance': 0.2 if c_lob.get('skillId') == 's11' else 0.0
         }
     }
     
     p1 = game_state['current_battle']['p1']
     p2 = game_state['current_battle']['p2']
-    update_crit_chance(p1)
-    update_crit_chance(p2)
 
     # 【Hook调度】战斗开始判定
     log_d = SkillExecutor.trigger('battle_start', p1, p2, game_state['current_battle'], {})
@@ -468,7 +461,7 @@ async def handle_rpg_battle_action(websocket, room_id, player_id, rooms, manager
         # 【Hook调度】生存判定完毕，查验攻击方是否有连动能力
         battle['nextLog'] += SkillExecutor.trigger('post_survival', target_p, attacker_p, battle, ctx_turn)
         if ctx_turn['extra_turn'] and battle['nextPhase'] != 'reward_choice':
-            battle['nextPhase'] = 'enrage_roll'
+            battle['nextPhase'] = 'attack_roll'
             battle['nextActivePlayerId'] = attacker_p['id']
 
     elif action_type == 'confirm_hp_result':
@@ -518,20 +511,25 @@ async def handle_rpg_battle_action(websocket, room_id, player_id, rooms, manager
 
 def _process_damage(battle, active_p, defender_p, final_roll, bonus):
     ctx_dmg = {'final_roll': final_roll, 'base_dmg': calculate_damage(final_roll)}
-    # 【Hook调度】伤害计算
+    # 【Hook调度】基础伤害加成 (攻击方)
     battle['lastLog'] += SkillExecutor.trigger('damage_calc', active_p, defender_p, battle, ctx_dmg)
     
-    # 【Hook调度】防守减免
-    battle['lastLog'] += SkillExecutor.trigger('defense_calc', defender_p, active_p, battle, ctx_dmg)
-    base_dmg = ctx_dmg['base_dmg']
+    is_crit = False
+    crit_mult = 1.0
+    # 【Hook调度】暴击系统算力 (仅当有基础伤害时触发)
+    if ctx_dmg['base_dmg'] > 0:
+        ctx_crit = {'is_crit': False, 'crit_mult': 1.5}
+        battle['lastLog'] += SkillExecutor.trigger('crit_calc', active_p, defender_p, battle, ctx_crit)
+        is_crit = ctx_crit['is_crit']
+        crit_mult = ctx_crit['crit_mult']
+        
+        # 若触发暴击，先对伤害进行翻倍结算
+        if is_crit:
+            ctx_dmg['base_dmg'] = math.ceil(ctx_dmg['base_dmg'] * crit_mult)
 
-    ctx_crit = {'is_crit': False, 'crit_mult': 1.5}
-    # 【Hook调度】暴击系统算力
-    battle['lastLog'] += SkillExecutor.trigger('crit_calc', active_p, defender_p, battle, ctx_crit)
-    
-    is_crit = ctx_crit['is_crit']
-    crit_mult = ctx_crit['crit_mult']
-    final_dmg = math.ceil(base_dmg * crit_mult) if is_crit else base_dmg
+    # 【Hook调度】防守减免与闪避 (在暴击结算后执行，支持暴击 Miss)
+    battle['lastLog'] += SkillExecutor.trigger('defense_calc', defender_p, active_p, battle, ctx_dmg)
+    final_dmg = ctx_dmg['base_dmg']
 
     ctx_post = {'final_dmg': final_dmg}
     # 【Hook调度】伤害造成后的追击特效 (反伤、吸血、处决、挂毒)
