@@ -76,8 +76,8 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
       - heartbeat: 内联处理
       - clientRoomAction: 按 action_type 分发 (leaveRoom, setReady)
       - clientBattleAction: 按 action_type 分发 (lobsterSelected, spectatorBet, noLobsterForfeit)
-      - clientGameAction: 按 action_type 分发 (useSeaweed, placeHeadman, nextPlayer, nextArea, exchangeSignals,
-                        buyItem, sellItem, cultivateLobster, submitTribute, executeDowntownAction, areaAction)
+      - clientGameAction: 按 action_type 分发 (useSeaweed, placeHeadman, nextPlayer,
+                         submitTribute, executeDowntownAction, areaAction)
     """
     fingerprint = id(websocket)
 

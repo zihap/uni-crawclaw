@@ -186,25 +186,6 @@ async def handle_next_player(websocket, room_id, player_id, rooms, manager, payl
         await broadcast_game_state(room_id, rooms, manager)
 
 
-async def handle_next_area(websocket, room_id, player_id, rooms, manager, payload):
-    """下一个区域"""
-    game_state = rooms.get(room_id)
-    if not game_state:
-        return
-
-    if game_state.get('phase') != 'settlement':
-        await send_error(websocket, '当前不在结算阶段')
-        return
-
-    current_area = game_state.get('currentArea', 0)
-
-    if current_area + 1 >= len(AREAS):
-        await complete_settlement(room_id, game_state, rooms, manager)
-    else:
-        game_state['currentArea'] = current_area + 1
-        await start_area_settlement(websocket, room_id, game_state, rooms, manager)
-
-
 async def handle_area_action(websocket, room_id, player_id, rooms, manager, payload):
     """处理结算阶段的前端交互操作"""
     game_state = rooms.get(room_id)
@@ -291,166 +272,6 @@ async def handle_area_action(websocket, room_id, player_id, rooms, manager, payl
             await start_area_settlement(websocket, room_id, game_state, rooms, manager)
     elif result == 'continue_ui':
         await broadcast_game_state(room_id, rooms, manager)
-
-
-async def handle_exchange_signals(websocket, room_id, player_id, rooms, manager, payload):
-    """交换信号"""
-    exchange_type = payload.get('exchangeType')
-
-    game_state = rooms.get(room_id)
-    if not game_state:
-        return
-
-    player = game_state['players'][player_id]
-    bf = make_broadcast_fn(manager.send_to_room, room_id)
-
-    if exchange_type == '1to1' and player['tempBubbles'] >= 1:
-        player['tempBubbles'] -= 1
-        await update_resources(player, {'coins': 1}, broadcast_fn=bf)
-    elif exchange_type == '2to3' and player['tempBubbles'] >= 2:
-        player['tempBubbles'] -= 2
-        await update_resources(player, {'grade3': 1}, broadcast_fn=bf)
-    elif exchange_type == '3to2' and player['tempBubbles'] >= 3:
-        player['tempBubbles'] -= 3
-        await update_resources(player, {'grade2': 1}, broadcast_fn=bf)
-
-    await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-        make_action_message(ServerGameActionTypes.GAME_ACTION, {
-            'actionType': 'signalsExchanged',
-            'playerId': player_id,
-            'gameState': game_state
-        }))
-    await broadcast_game_state(room_id, rooms, manager)
-
-
-async def handle_buy_item(websocket, room_id, player_id, rooms, manager, payload):
-    """购买物品"""
-    item_type = payload.get('itemType')
-
-    game_state = rooms.get(room_id)
-    if not game_state:
-        return
-
-    player = game_state['players'][player_id]
-    prices = game_state['areas']['seafood_market']['dynamicPrices']
-    bf = make_broadcast_fn(manager.send_to_room, room_id)
-    success = False
-
-    has_cage_trade = check_cage_trade(player)
-
-    if item_type == 'lobster' and player['coins'] >= prices['buyLobster']:
-        await update_resources(player, {'coins': -prices['buyLobster'], 'normal': 1}, broadcast_fn=bf)
-        # 更新市场存量和价格
-        market_area = game_state['areas']['seafood_market']
-        market_area['marketLobsterCount'] = max(0, market_area.get('marketLobsterCount', 0) - 1)
-        update_market_prices(game_state)
-        success = True
-    elif item_type == 'seaweed' and player['coins'] >= prices['buySeaweed']:
-        await update_resources(player, {'coins': -prices['buySeaweed'], 'seaweed': 1}, broadcast_fn=bf)
-        success = True
-    elif item_type == 'cage' and player['coins'] >= prices['buyCage']:
-        buy_price = prices['buyCage'] - (has_cage_trade['buyDiscount'] if has_cage_trade else 0)
-        await update_resources(player, {'coins': -buy_price, 'cages': 1}, broadcast_fn=bf)
-        success = True
-    elif item_type == 'headman' and player['coins'] >= prices['hireHeadman']:
-        await update_resources(player, {'coins': -prices['hireHeadman'], 'liZhang': 1}, broadcast_fn=bf)
-        success = True
-
-    if success:
-        await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-            make_action_message(ServerGameActionTypes.GAME_ACTION, {
-                'actionType': 'itemBought',
-                'playerId': player_id,
-                'data': {'itemType': item_type},
-                'gameState': game_state
-            }))
-        await broadcast_game_state(room_id, rooms, manager)
-    else:
-        await send_error(websocket, '资源不足')
-
-
-async def handle_sell_item(websocket, room_id, player_id, rooms, manager, payload):
-    """出售物品"""
-    item_type = payload.get('itemType')
-
-    game_state = rooms.get(room_id)
-    if not game_state:
-        return
-
-    player = game_state['players'][player_id]
-    prices = game_state['areas']['seafood_market']['dynamicPrices']
-    bf = make_broadcast_fn(manager.send_to_room, room_id)
-    success = False
-
-    has_cage_trade = check_cage_trade(player)
-
-    if item_type == 'lobster' and has_resources(player, {'normal': 1}):
-        await update_resources(player, {'normal': -1, 'coins': prices['sellLobster']}, broadcast_fn=bf)
-        # 更新市场存量和价格
-        market_area = game_state['areas']['seafood_market']
-        market_area['marketLobsterCount'] = market_area.get('marketLobsterCount', 0) + 1
-        update_market_prices(game_state)
-        success = True
-    elif item_type == 'seaweed' and player['seaweed'] > 0:
-        await update_resources(player, {'seaweed': -1, 'coins': prices['sellSeaweed']}, broadcast_fn=bf)
-        success = True
-    elif item_type == 'cage' and player['cages'] > 0:
-        sell_price = prices['sellCage'] + (has_cage_trade['sellBonus'] if has_cage_trade else 0)
-        await update_resources(player, {'cages': -1, 'coins': sell_price}, broadcast_fn=bf)
-        success = True
-
-    if success:
-        await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-            make_action_message(ServerGameActionTypes.GAME_ACTION, {
-                'actionType': 'itemSold',
-                'playerId': player_id,
-                'data': {'itemType': item_type},
-                'gameState': game_state
-            }))
-        await broadcast_game_state(room_id, rooms, manager)
-    else:
-        await send_error(websocket, '物品不足')
-
-
-async def handle_cultivate_lobster(websocket, room_id, player_id, rooms, manager, payload):
-    """培养龙虾"""
-    game_state = rooms.get(room_id)
-    if not game_state:
-        return
-
-    player = game_state['players'][player_id]
-    bf = make_broadcast_fn(manager.send_to_room, room_id)
-    upgraded = False
-
-    if has_resources(player, {'grade1': 1}) and (player['cages'] > 0 or player['coins'] >= 3):
-        deltas = {'grade1': -1, 'royal': 1}
-        if player['cages'] > 0:
-            deltas['cages'] = -1
-        else:
-            deltas['coins'] = -3
-        await update_resources(player, deltas, broadcast_fn=bf)
-        if player['royalCountThisRound'] < 2:
-            player['royalCountThisRound'] += 1
-        upgraded = True
-    elif has_resources(player, {'grade2': 1}):
-        await update_resources(player, {'grade2': -1, 'grade1': 1}, broadcast_fn=bf)
-        upgraded = True
-    elif has_resources(player, {'grade3': 1}):
-        await update_resources(player, {'grade3': -1, 'grade2': 1}, broadcast_fn=bf)
-        upgraded = True
-    elif has_resources(player, {'normal': 1}):
-        await update_resources(player, {'normal': -1, 'grade3': 1}, broadcast_fn=bf)
-        upgraded = True
-
-    await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-        make_action_message(ServerGameActionTypes.GAME_ACTION, {
-            'actionType': 'lobsterCultivated',
-            'playerId': player_id,
-            'data': {'upgraded': upgraded},
-            'gameState': game_state
-        }))
-    await broadcast_game_state(room_id, rooms, manager)
-
 
 async def handle_downtown_action(websocket, room_id, player_id, rooms, manager, payload):
     """闹市行动"""
@@ -590,11 +411,6 @@ def get_game_action_handlers():
         ClientGameActionTypes.PLACE_HEADMAN: handle_place_headman,
         ClientGameActionTypes.CANCEL_HEADMAN: handle_cancel_headman,
         ClientGameActionTypes.NEXT_PLAYER: handle_next_player,
-        ClientGameActionTypes.NEXT_AREA: handle_next_area,
-        ClientGameActionTypes.EXCHANGE_SIGNALS: handle_exchange_signals,
-        ClientGameActionTypes.BUY_ITEM: handle_buy_item,
-        ClientGameActionTypes.SELL_ITEM: handle_sell_item,
-        ClientGameActionTypes.CULTIVATE_LOBSTER: handle_cultivate_lobster,
         ClientGameActionTypes.DOWNTOWN_ACTION: handle_downtown_action,
         ClientGameActionTypes.AREA_ACTION: handle_area_action,
         ClientGameActionTypes.ENDGAME_SCORE_CHOICE: handle_endgame_score_choice,

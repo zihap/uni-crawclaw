@@ -36,17 +36,6 @@ class ClientRoomActionTypes:
     LEAVE_ROOM = 'leaveRoom'
     SET_READY = 'setReady'
 
-
-class ClientBattleActionTypes:
-    """clientBattleAction 事件中的 action_type 取值"""
-    BATTLE_UPDATE = 'battleUpdate'
-    BATTLE_END = 'battleEnd'
-    LOBSTER_SELECTED = 'lobsterSelected'
-    SPECTATOR_BET = 'spectatorBet'
-    NO_LOBSTER_FORFEIT = 'noLobsterForfeit'
-    BATTLE_BONUS_CHOICE = 'battleBonusChoice'
-
-
 class ClientGameActionTypes:
     """clientGameAction 事件中的 actionType 取值"""
 
@@ -54,11 +43,6 @@ class ClientGameActionTypes:
     PLACE_HEADMAN = 'placeHeadman'
     CANCEL_HEADMAN = 'cancelHeadman'
     NEXT_PLAYER = 'nextPlayer'
-    NEXT_AREA = 'nextArea'
-    EXCHANGE_SIGNALS = 'exchangeSignals'
-    BUY_ITEM = 'buyItem'
-    SELL_ITEM = 'sellItem'
-    CULTIVATE_LOBSTER = 'cultivateLobster'
     SUBMIT_TRIBUTE = 'submitTribute'
     SUBMIT_TRIBUTE_CHOICE = 'submitTributeChoice'
     DOWNTOWN_ACTION = 'executeDowntownAction'

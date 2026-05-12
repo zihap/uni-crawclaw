@@ -15,7 +15,11 @@ from .constants import AREAS, MARKET_PRICES, TRIBUTE_TASKS, DOWNTOWN_CARDS, SLOT
 _CARD_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'card_config.json')
 try:
     with open(_CARD_CONFIG_PATH, 'r', encoding='utf-8') as _f:
-        ALL_TITLE_CARDS = json.load(_f).get('titleCards', [])
+        raw_title_cards = json.load(_f).get('titleCards', [])
+        ALL_TITLE_CARDS = []
+        for card in raw_title_cards:
+            card['grade'] = 'royal'
+            ALL_TITLE_CARDS.append(card)
 except (FileNotFoundError, json.JSONDecodeError):
     ALL_TITLE_CARDS = []
 
@@ -113,7 +117,7 @@ def create_player(player_id: int, name: str, is_host: bool = False, user_id: str
 
         'permaBuffs': [],
 
-        'titleCards': ALL_TITLE_CARDS.copy(),
+        'titleCards': [],
 
         'ready': False,
         'isHost': is_host,

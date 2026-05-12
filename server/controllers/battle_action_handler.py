@@ -7,8 +7,8 @@ import random
 import math
 import asyncio
 from utils.constants import AREAS, GRADE_UPGRADE, CHALLENGE_SLOT_DONE, CHALLENGE_TO_DEFENDER_SLOT_MAP
-from utils.events import ClientBattleActionTypes, ServerEvents, ServerBattleActionTypes, ServerAreaActionTypes
-from utils.helpers import send_error, get_player, update_resources, make_action_message, make_broadcast_fn, make_settlement_state
+from utils.events import ServerEvents, ServerBattleActionTypes, ServerAreaActionTypes
+from utils.helpers import send_error, get_player, update_resources, make_action_message, make_broadcast_fn, make_settlement_state, _build_resource_snapshot
 from utils.logger import log_info, log_debug
 from utils.game_state import arena_betting_state
 from services.game import broadcast_game_state, start_area_settlement, complete_settlement
@@ -573,9 +573,50 @@ async def _finalize_rpg_battle(websocket, room_id, game_state, manager, rooms):
         for titleCard in player['titleCards']:
             if titleCard.get('id') == winner_lobster_id or titleCard.get('id') == loser_lobster_id:
                 titleCard['used'] = True
+
+    bet_results = {}
+    battle_id = battle.get('battleId')
+    key = f"{room_id}_{battle_id}"
+    state = arena_betting_state.get(key)
+
+    if state and state.get('completed'):
+        for sid, bet in state.get('bets', {}).items():
+            bet_target = bet.get('target')
+            bet_amount = bet.get('amount', 0)
+            is_correct = (bet_target == winner_id) if bet_target is not None else False
+
+            sp = get_player(game_state, sid)
+            reward = 0
+            if is_correct and bet_amount > 0:
+                reward = bet_amount * 2
+                if sp:
+                    sp['coins'] += reward
+                    if check_bet_bonus(sp):
+                        sp['coins'] += 1
+                        reward += 1
+            elif not is_correct and bet_amount > 0:
+                reward = 0
+
+            bet_results[sid] = {
+                'amount': bet_amount,
+                'target': bet_target,
+                'isCorrect': is_correct,
+                'reward': reward
+            }
+
+        if bet_results:
+            bf = make_broadcast_fn(manager.send_to_room, room_id)
+            for sid in bet_results:
+                sp = get_player(game_state, sid)
+                if sp:
+                    await bf(sid, _build_resource_snapshot(sp))
+
+        arena_betting_state.pop(key, None)
+
     await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
         make_action_message('battleEnded', {
-            'actionType': 'battleEnded', 'gameState': game_state
+            'actionType': 'battleEnded', 'gameState': game_state,
+            'betResults': bet_results
         }))
     await asyncio.sleep(2.0)
     await _check_tribute_battles_complete(game_state, websocket, room_id, rooms, manager)
@@ -628,6 +669,29 @@ def swap_challenge_slot(game_state, challenge_slot):
         return True
     return False
 
+async def _start_battle_after_betting(room_id, battle_id, game_state, manager):
+    key = f"{room_id}_{battle_id}"
+    state = arena_betting_state.get(key)
+    if not state: return
+
+    state['completed'] = True
+
+    bets_info = {}
+    for sid, bet in state.get('bets', {}).items():
+        bets_info[sid] = {
+            'amount': bet.get('amount', 0),
+            'targetId': bet.get('target'),
+            'isCorrect': None
+        }
+
+    await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
+        make_action_message(ServerBattleActionTypes.ARENA_BETTING_COMPLETE, {
+            'bets': bets_info,
+            'spectators': state.get('spectators', [])
+        }))
+
+    await start_rpg_battle(room_id, battle_id, game_state, manager)
+
 async def handle_lobster_selected(websocket, room_id, player_id, rooms, manager, payload):
     lobster_data = payload.get('lobster')
     await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
@@ -651,7 +715,39 @@ async def handle_lobster_selected(websocket, room_id, player_id, rooms, manager,
         if state['challengerLobster'] and state['defenderLobster'] and not state['started']:
             state['started'] = True
             game_state = rooms.get(room_id)
-            await start_rpg_battle(room_id, battle_id, game_state, manager)
+
+            spectators = state.get('spectators', [])
+            has_spectators = len(spectators) > 0
+
+            if has_spectators:
+                challenger = get_player(game_state, state['challengerId'])
+                defender = get_player(game_state, state['defenderId'])
+
+                auto_bet_spectators = []
+                for sid in spectators:
+                    sp = get_player(game_state, sid)
+                    if sp and sp.get('coins', 0) == 0:
+                        state['bets'][sid] = {'amount': 0, 'target': None}
+                        auto_bet_spectators.append(sid)
+
+                await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
+                    make_action_message(ServerBattleActionTypes.ARENA_BETTING_START, {
+                        'battleId': battle_id,
+                        'challengerId': state['challengerId'],
+                        'challengerName': challenger['name'] if challenger else '',
+                        'challengerLobster': state['challengerLobster'],
+                        'defenderId': state['defenderId'],
+                        'defenderName': defender['name'] if defender else '',
+                        'defenderLobster': state['defenderLobster'],
+                        'spectators': spectators,
+                        'autoBetSpectators': auto_bet_spectators
+                    }))
+
+                all_bet = all(sid in state['bets'] for sid in spectators)
+                if all_bet:
+                    await _start_battle_after_betting(room_id, battle_id, game_state, manager)
+            else:
+                await start_rpg_battle(room_id, battle_id, game_state, manager)
 
 async def handle_no_lobster_forfeit(websocket, room_id, player_id, rooms, manager, payload):
     game_state = rooms.get(room_id)
@@ -674,12 +770,60 @@ async def handle_no_lobster_forfeit(websocket, room_id, player_id, rooms, manage
     await asyncio.sleep(2.0)
     await _check_tribute_battles_complete(game_state, websocket, room_id, rooms, manager)
 
-async def handle_battle_update_OLD(websocket, room_id, player_id, rooms, manager, payload): pass
-async def handle_battle_end_OLD(websocket, room_id, player_id, rooms, manager, payload): pass
-async def handle_spectator_bet(websocket, room_id, player_id, rooms, manager, payload): pass
+async def handle_spectator_bet(websocket, room_id, player_id, rooms, manager, payload):
+    game_state = rooms.get(room_id)
+    if not game_state: return
+
+    battle_id = payload.get('battleId')
+    bet_amount = payload.get('betAmount', 0)
+    bet_target = payload.get('betTarget')
+
+    key = f"{room_id}_{battle_id}"
+    state = arena_betting_state.get(key)
+    if not state:
+        await send_error(websocket, '当前没有可下注的战斗')
+        return
+
+    if state.get('completed'):
+        await send_error(websocket, '下注阶段已结束')
+        return
+
+    spectators = state.get('spectators', [])
+    if player_id not in spectators:
+        await send_error(websocket, '你不是观战玩家，无法下注')
+        return
+
+    if player_id in state.get('bets', {}):
+        await send_error(websocket, '你已经下注了')
+        return
+
+    if bet_target not in [state['challengerId'], state['defenderId']]:
+        await send_error(websocket, '下注目标无效')
+        return
+
+    player = get_player(game_state, player_id)
+    if not player:
+        await send_error(websocket, '玩家不存在')
+        return
+
+    player_coins = player.get('coins', 0)
+    if bet_amount < 0 or bet_amount > player_coins:
+        await send_error(websocket, f'下注金额无效，你当前拥有{player_coins}金币')
+        return
+
+    if bet_amount > 0:
+        player['coins'] -= bet_amount
+        bf = make_broadcast_fn(manager.send_to_room, room_id)
+        await bf(player_id, _build_resource_snapshot(player))
+
+    state['bets'][player_id] = {'amount': bet_amount, 'target': bet_target}
+
+    all_bet = all(sid in state['bets'] for sid in spectators)
+    if all_bet and state.get('started') and not state.get('completed'):
+        await _start_battle_after_betting(room_id, battle_id, game_state, manager)
 async def handle_battle_bonus_choice(websocket, room_id, player_id, rooms, manager, payload): pass
 
-def _make_battle_action_router(handlers: dict):
+def _make_battle_action_router():
     async def handle_battle_action_router(websocket, room_id, player_id, rooms, manager, payload):
         action_type = payload.get('actionType') or payload.get('action_type')
         inner_payload = payload.get('payload', payload)
@@ -689,6 +833,9 @@ def _make_battle_action_router(handlers: dict):
 
         if 'lobster_selected' in all_actions:
             return await handle_lobster_selected(websocket, room_id, player_id, rooms, manager, inner_payload)
+
+        if 'spectator_bet' in all_actions:
+            return await handle_spectator_bet(websocket, room_id, player_id, rooms, manager, inner_payload)
 
         if 'no_lobster_forfeit' in all_actions:
             return await handle_no_lobster_forfeit(websocket, room_id, player_id, rooms, manager, inner_payload)
@@ -701,19 +848,7 @@ def _make_battle_action_router(handlers: dict):
                 inner_payload['actionType'] = valid_a
             return await handle_rpg_battle_action(websocket, room_id, player_id, rooms, manager, inner_payload)
 
-        handler = handlers.get(action_type)
-        if handler: return await handler(websocket, room_id, player_id, rooms, manager, payload)
         await send_error(websocket, f'未知的战斗行动: {action_type}')
     return handle_battle_action_router
 
-def get_battle_action_handlers():
-    return {
-        ClientBattleActionTypes.BATTLE_UPDATE: handle_battle_update_OLD,
-        ClientBattleActionTypes.BATTLE_END: handle_battle_end_OLD,
-        ClientBattleActionTypes.LOBSTER_SELECTED: handle_lobster_selected,
-        ClientBattleActionTypes.SPECTATOR_BET: handle_spectator_bet,
-        ClientBattleActionTypes.NO_LOBSTER_FORFEIT: handle_no_lobster_forfeit,
-        ClientBattleActionTypes.BATTLE_BONUS_CHOICE: handle_battle_bonus_choice,
-    }
-
-handle_battle_action = _make_battle_action_router(get_battle_action_handlers())
+handle_battle_action = _make_battle_action_router()
