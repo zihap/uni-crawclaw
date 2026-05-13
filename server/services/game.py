@@ -263,22 +263,12 @@ async def complete_settlement(room_id, game_state, rooms, manager):
 
         game_state['status'] = 'ended'
 
-        # ======== 【修改部分：全新复杂算分逻辑注入服务端】 ========
+        # ======== 【修改部分：简化算分逻辑】 ========
         def calculate_final_score(player, taverns):
-            value_map = [1, 2, 3, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 9, 10]
-
-            def get_bonus(idx):
-                if idx >= 14: return 5
-                if idx >= 13: return 4
-                if idx >= 11: return 3
-                if idx >= 9: return 2
-                if idx >= 7: return 1
-                return 0
-
-            # 1. 核心乘积分
-            de_idx = min(max(player.get('de', 0), 0), 15)
-            wang_idx = min(max(player.get('wang', 0), 0), 15)
-            core_score = (value_map[de_idx] * value_map[wang_idx]) + get_bonus(de_idx) + get_bonus(wang_idx)
+            # 1. 核心乘积分（直接数值乘积）
+            de = player.get('de', 0)
+            wang = player.get('wang', 0)
+            core_score = de * wang
 
             # 2. 进贡席位分
             tavern_score = 0

@@ -148,7 +148,8 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
 
             # clientGameAction 路由
             if event == ClientEvents.CLIENT_GAME_ACTION:
-                if _check_idempotency(player_id, ClientEvents.CLIENT_GAME_ACTION, payload):
+                area_action_type = payload.get('actionType') or payload.get('action_type') or ''
+                if area_action_type != 'areaAction' and _check_idempotency(player_id, ClientEvents.CLIENT_GAME_ACTION, payload):
                     continue
                 result = await handle_game_action(websocket, room_id, player_id, rooms, manager, payload)
                 if result is False:
