@@ -35,6 +35,7 @@ class ClientRoomActionTypes:
     JOIN_ROOM = 'joinRoom'
     LEAVE_ROOM = 'leaveRoom'
     SET_READY = 'setReady'
+    INVITE_JOIN = 'inviteJoin'
 
 class ClientGameActionTypes:
     """clientGameAction 事件中的 actionType 取值"""
@@ -122,3 +123,12 @@ class ServerAreaActionTypes:
     AREA_WAITING_UI = 'areaWaitingUI'
     AREA_SETTLEMENT_START = 'areaSettlementStart'
     SETTLEMENT_COMPLETE = 'settlementComplete'
+
+
+class ServerErrorCodes:
+    """服务器错误码"""
+    ROOM_FULL = 'ROOM_FULL'
+    GAME_STARTED = 'GAME_STARTED'
+    ROOM_NOT_FOUND = 'ROOM_NOT_FOUND'
+    ALREADY_IN_ROOM = 'ALREADY_IN_ROOM'
+    INVALID_INVITE = 'INVALID_INVITE'
