@@ -1,0 +1,31 @@
+# -*- coding: utf-8 -*-
+"""
+错误码定义
+"""
+
+
+class ErrorCodes:
+    """错误码定义"""
+    
+    # 房间相关错误
+    ROOM_FULL = 'ROOM_FULL'
+    GAME_STARTED = 'GAME_STARTED'
+    ROOM_NOT_FOUND = 'ROOM_NOT_FOUND'
+    ALREADY_IN_ROOM = 'ALREADY_IN_ROOM'
+    INVALID_INVITE = 'INVALID_INVITE'
+    
+    # 玩家相关错误
+    PLAYER_NOT_FOUND = 'PLAYER_NOT_FOUND'
+    PLAYER_NOT_IN_ROOM = 'PLAYER_NOT_IN_ROOM'
+    
+    # 游戏相关错误
+    GAME_NOT_STARTED = 'GAME_NOT_STARTED'
+    GAME_ALREADY_ENDED = 'GAME_ALREADY_ENDED'
+    
+    # 网络相关错误
+    NETWORK_ERROR = 'NETWORK_ERROR'
+    TIMEOUT = 'TIMEOUT'
+    
+    # 微信相关错误
+    WECHAT_API_ERROR = 'WECHAT_API_ERROR'
+    WECHAT_AUTH_FAILED = 'WECHAT_AUTH_FAILED'

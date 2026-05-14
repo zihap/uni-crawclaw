@@ -10,7 +10,8 @@
   - SET_READY: 设置准备状态
 """
 
-from utils.events import ClientRoomActionTypes, ServerEvents, ServerRoomActionTypes, ServerErrorCodes
+from utils.events import ClientRoomActionTypes, ServerEvents, ServerRoomActionTypes
+from utils.error_codes import ErrorCodes
 from utils.helpers import generate_room_id, get_player, send_error, make_action_message
 from utils.logger import log_info
 from utils.game_state import create_game_state, create_player
@@ -199,7 +200,7 @@ async def handle_invite_join(websocket, rooms, manager, payload):
             'event': ServerEvents.ERROR,
             'data': {
                 'message': '房间不存在',
-                'errorCode': ServerErrorCodes.ROOM_NOT_FOUND
+                'errorCode': ErrorCodes.ROOM_NOT_FOUND
             }
         })
         return
@@ -210,7 +211,7 @@ async def handle_invite_join(websocket, rooms, manager, payload):
             'event': ServerEvents.ERROR,
             'data': {
                 'message': '房间已满',
-                'errorCode': ServerErrorCodes.ROOM_FULL
+                'errorCode': ErrorCodes.ROOM_FULL
             }
         })
         return
@@ -220,7 +221,7 @@ async def handle_invite_join(websocket, rooms, manager, payload):
             'event': ServerEvents.ERROR,
             'data': {
                 'message': '游戏已开始',
-                'errorCode': ServerErrorCodes.GAME_STARTED
+                'errorCode': ErrorCodes.GAME_STARTED
             }
         })
         return
@@ -231,7 +232,7 @@ async def handle_invite_join(websocket, rooms, manager, payload):
                 'event': ServerEvents.ERROR,
                 'data': {
                     'message': '您已在房间中',
-                    'errorCode': ServerErrorCodes.ALREADY_IN_ROOM
+                    'errorCode': ErrorCodes.ALREADY_IN_ROOM
                 }
             })
             return

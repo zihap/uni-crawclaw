@@ -125,10 +125,6 @@ class ServerAreaActionTypes:
     SETTLEMENT_COMPLETE = 'settlementComplete'
 
 
-class ServerErrorCodes:
-    """服务器错误码"""
-    ROOM_FULL = 'ROOM_FULL'
-    GAME_STARTED = 'GAME_STARTED'
-    ROOM_NOT_FOUND = 'ROOM_NOT_FOUND'
-    ALREADY_IN_ROOM = 'ALREADY_IN_ROOM'
-    INVALID_INVITE = 'INVALID_INVITE'
+from utils.error_codes import ErrorCodes
+
+ServerErrorCodes = ErrorCodes
