@@ -10,7 +10,7 @@
   - SET_READY: 设置准备状态
 """
 
-from utils.events import ClientRoomActionTypes, ServerEvents, ServerRoomActionTypes
+from utils.events import ClientRoomActionTypes, ServerEvents, ServerRoomActionTypes, ServerErrorCodes
 from utils.helpers import generate_room_id, get_player, send_error, make_action_message
 from utils.logger import log_info
 from utils.game_state import create_game_state, create_player
@@ -185,6 +185,84 @@ async def handle_set_ready(websocket, room_id, player_id, rooms, manager, payloa
             await start_game(room_id, rooms, manager)
 
 
+async def handle_invite_join(websocket, rooms, manager, payload):
+    """处理邀请加入请求"""
+    room_id = payload.get('roomId')
+    player_name = payload.get('playerName')
+    user_id = payload.get('userId')
+    inviter = payload.get('inviter')
+    
+    game_state = rooms.get(room_id)
+    
+    if not game_state:
+        await websocket.send_json({
+            'event': ServerEvents.ERROR,
+            'data': {
+                'message': '房间不存在',
+                'errorCode': ServerErrorCodes.ROOM_NOT_FOUND
+            }
+        })
+        return
+    
+    max_players = game_state.get('maxPlayers', 4)
+    if len(game_state['players']) >= max_players:
+        await websocket.send_json({
+            'event': ServerEvents.ERROR,
+            'data': {
+                'message': '房间已满',
+                'errorCode': ServerErrorCodes.ROOM_FULL
+            }
+        })
+        return
+    
+    if game_state['status'] != 'waiting':
+        await websocket.send_json({
+            'event': ServerEvents.ERROR,
+            'data': {
+                'message': '游戏已开始',
+                'errorCode': ServerErrorCodes.GAME_STARTED
+            }
+        })
+        return
+    
+    for p in game_state['players']:
+        if p.get('userId') == user_id:
+            await websocket.send_json({
+                'event': ServerEvents.ERROR,
+                'data': {
+                    'message': '您已在房间中',
+                    'errorCode': ServerErrorCodes.ALREADY_IN_ROOM
+                }
+            })
+            return
+    
+    new_player_id = len(game_state['players'])
+    player = create_player(new_player_id, player_name, False, user_id, position=new_player_id)
+    game_state['players'].append(player)
+    
+    manager.lobby_connections[user_id] = websocket
+    manager.user_rooms[user_id] = room_id
+    
+    await websocket.send_json({
+        'event': ServerEvents.SERVER_ROOM_ACTION,
+        'data': make_action_message(ServerRoomActionTypes.PLAYER_JOINED, {
+            'playerId': new_player_id, 
+            'player': player, 
+            'gameState': game_state
+        })
+    })
+    
+    await manager.broadcast_to_room_members(room_id, ServerEvents.SERVER_ROOM_ACTION,
+        make_action_message(ServerRoomActionTypes.ROOM_STATE_UPDATE, {
+            'players': game_state['players'],
+            'gameStarted': False,
+            'status': 'waiting',
+            'maxPlayers': game_state.get('maxPlayers', 4)
+        }))
+    
+    log_info(f"{player_name} joined room {room_id} via invite from {inviter}")
+
+
 def _make_room_action_router(handlers: dict):
     """创建房间行动路由函数"""
     async def handle_room_action_router(websocket, rooms, manager, payload):
@@ -201,6 +279,7 @@ def get_room_action_handlers():
     return {
         ClientRoomActionTypes.CREATE_ROOM: handle_create_room,
         ClientRoomActionTypes.JOIN_ROOM: handle_join_room,
+        ClientRoomActionTypes.INVITE_JOIN: handle_invite_join,
     }
 
 
