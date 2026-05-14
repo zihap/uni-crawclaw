@@ -18,6 +18,79 @@ from utils.game_state import create_game_state, create_player
 from services.game import broadcast_room_state, start_game, transfer_host, cleanup_room
 
 
+async def _add_player_to_room(websocket, rooms, manager, room_id, player_name, user_id, is_host=False):
+    """将玩家加入房间的公共逻辑。返回 (game_state, error_response, is_reconnect)"""
+    game_state = rooms.get(room_id)
+    
+    if not game_state:
+        return None, {
+            'event': ServerEvents.ERROR,
+            'data': {
+                'message': '房间不存在',
+                'errorCode': ErrorCodes.ROOM_NOT_FOUND
+            }
+        }, False
+    
+    for p in game_state['players']:
+        if p.get('userId') == user_id:
+            p['isOnline'] = True
+            p['ready'] = False
+            manager.lobby_connections[user_id] = websocket
+            manager.user_rooms[user_id] = room_id
+            return game_state, None, True
+    
+    max_players = game_state.get('maxPlayers', 4)
+    if len(game_state['players']) >= max_players:
+        return None, {
+            'event': ServerEvents.ERROR,
+            'data': {
+                'message': '房间已满',
+                'errorCode': ErrorCodes.ROOM_FULL
+            }
+        }, False
+    
+    if game_state['status'] != 'waiting':
+        return None, {
+            'event': ServerEvents.ERROR,
+            'data': {
+                'message': '游戏已开始',
+                'errorCode': ErrorCodes.GAME_STARTED
+            }
+        }, False
+    
+    new_player_id = len(game_state['players'])
+    player = create_player(new_player_id, player_name, is_host, user_id, position=new_player_id)
+    game_state['players'].append(player)
+    
+    manager.lobby_connections[user_id] = websocket
+    manager.user_rooms[user_id] = room_id
+    
+    return game_state, None, False
+
+
+async def _send_join_success(websocket, room_id, manager, game_state, is_reconnect=False):
+    """发送加入成功消息并广播房间状态更新"""
+    player = game_state['players'][-1]
+    action_type = ServerRoomActionTypes.PLAYER_RECONNECTED if is_reconnect else ServerRoomActionTypes.PLAYER_JOINED
+    
+    await websocket.send_json({
+        'event': ServerEvents.SERVER_ROOM_ACTION,
+        'data': make_action_message(action_type, {
+            'playerId': player['id'],
+            'player': player,
+            'gameState': game_state
+        })
+    })
+    
+    await manager.broadcast_to_room_members(room_id, ServerEvents.SERVER_ROOM_ACTION,
+        make_action_message(ServerRoomActionTypes.ROOM_STATE_UPDATE, {
+            'players': game_state['players'],
+            'gameStarted': False,
+            'status': 'waiting',
+            'maxPlayers': game_state.get('maxPlayers', 4)
+        }))
+
+
 async def handle_create_room(websocket, rooms, manager, payload):
     """创建房间"""
     player_name = payload.get('playerName')
@@ -53,80 +126,13 @@ async def handle_join_room(websocket, rooms, manager, payload):
     player_name = payload.get('playerName')
     user_id = payload.get('userId')
 
-    game_state = rooms.get(target_room_id)
-
-    if not game_state:
-        await websocket.send_json({
-            'event': ServerEvents.ERROR,
-            'data': {'message': '房间不存在'}
-        })
+    game_state, error, is_reconnect = await _add_player_to_room(websocket, rooms, manager, target_room_id, player_name, user_id)
+    if error:
+        await websocket.send_json(error)
         return
-
-    for p in game_state['players']:
-        if p.get('userId') == user_id:
-            p['isOnline'] = True
-            p['ready'] = False
-            manager.lobby_connections[user_id] = websocket
-            manager.user_rooms[user_id] = target_room_id
-            await websocket.send_json({
-                'event': ServerEvents.SERVER_ROOM_ACTION,
-                'data': make_action_message(ServerRoomActionTypes.PLAYER_RECONNECTED, {
-                    'player': p, 'players': game_state['players']
-                })
-            })
-            await manager.broadcast_to_room_members(target_room_id, ServerEvents.SERVER_ROOM_ACTION,
-                make_action_message(ServerRoomActionTypes.PLAYER_STATUS_CHANGE, {
-                    'playerId': p['id'],
-                    'playerName': p['name'],
-                    'status': 'online',
-                    'players': game_state['players']
-                }))
-            await manager.broadcast_to_room_members(target_room_id, ServerEvents.SERVER_ROOM_ACTION,
-                make_action_message(ServerRoomActionTypes.ROOM_STATE_UPDATE, {
-                    'players': game_state['players'],
-                    'gameStarted': False,
-                    'status': 'waiting',
-                    'maxPlayers': game_state.get('maxPlayers', 4)
-                }))
-            break
-    else:
-        max_players = game_state.get('maxPlayers', 4)
-        if len(game_state['players']) >= max_players:
-            await websocket.send_json({
-                'event': ServerEvents.ERROR,
-                'data': {'message': '房间已满'}
-            })
-            return
-
-        if game_state['status'] != 'waiting':
-            await websocket.send_json({
-                'event': ServerEvents.ERROR,
-                'data': {'message': '游戏已开始'}
-            })
-            return
-
-        new_player_id = len(game_state['players'])
-        player = create_player(new_player_id, player_name, False, user_id, position=new_player_id)
-        game_state['players'].append(player)
-
-        manager.lobby_connections[user_id] = websocket
-        manager.user_rooms[user_id] = target_room_id
-
-        await websocket.send_json({
-            'event': ServerEvents.SERVER_ROOM_ACTION,
-            'data': make_action_message(ServerRoomActionTypes.PLAYER_JOINED, {
-                'playerId': new_player_id, 'player': player, 'gameState': game_state
-            })
-        })
-
-        await manager.broadcast_to_room_members(target_room_id, ServerEvents.SERVER_ROOM_ACTION,
-            make_action_message(ServerRoomActionTypes.ROOM_STATE_UPDATE, {
-                'players': game_state['players'],
-                'gameStarted': False,
-                'status': 'waiting',
-                'maxPlayers': game_state.get('maxPlayers', 4)
-            }))
-        log_info(f"{player_name} joined room {target_room_id}")
+    
+    await _send_join_success(websocket, target_room_id, manager, game_state, is_reconnect)
+    log_info(f"{player_name} joined room {target_room_id}")
 
 
 async def handle_leave_room(websocket, room_id, player_id, rooms, manager, payload, fingerprint):
@@ -193,74 +199,12 @@ async def handle_invite_join(websocket, rooms, manager, payload):
     user_id = payload.get('userId')
     inviter = payload.get('inviter')
     
-    game_state = rooms.get(room_id)
-    
-    if not game_state:
-        await websocket.send_json({
-            'event': ServerEvents.ERROR,
-            'data': {
-                'message': '房间不存在',
-                'errorCode': ErrorCodes.ROOM_NOT_FOUND
-            }
-        })
+    game_state, error, is_reconnect = await _add_player_to_room(websocket, rooms, manager, room_id, player_name, user_id)
+    if error:
+        await websocket.send_json(error)
         return
     
-    max_players = game_state.get('maxPlayers', 4)
-    if len(game_state['players']) >= max_players:
-        await websocket.send_json({
-            'event': ServerEvents.ERROR,
-            'data': {
-                'message': '房间已满',
-                'errorCode': ErrorCodes.ROOM_FULL
-            }
-        })
-        return
-    
-    if game_state['status'] != 'waiting':
-        await websocket.send_json({
-            'event': ServerEvents.ERROR,
-            'data': {
-                'message': '游戏已开始',
-                'errorCode': ErrorCodes.GAME_STARTED
-            }
-        })
-        return
-    
-    for p in game_state['players']:
-        if p.get('userId') == user_id:
-            await websocket.send_json({
-                'event': ServerEvents.ERROR,
-                'data': {
-                    'message': '您已在房间中',
-                    'errorCode': ErrorCodes.ALREADY_IN_ROOM
-                }
-            })
-            return
-    
-    new_player_id = len(game_state['players'])
-    player = create_player(new_player_id, player_name, False, user_id, position=new_player_id)
-    game_state['players'].append(player)
-    
-    manager.lobby_connections[user_id] = websocket
-    manager.user_rooms[user_id] = room_id
-    
-    await websocket.send_json({
-        'event': ServerEvents.SERVER_ROOM_ACTION,
-        'data': make_action_message(ServerRoomActionTypes.PLAYER_JOINED, {
-            'playerId': new_player_id, 
-            'player': player, 
-            'gameState': game_state
-        })
-    })
-    
-    await manager.broadcast_to_room_members(room_id, ServerEvents.SERVER_ROOM_ACTION,
-        make_action_message(ServerRoomActionTypes.ROOM_STATE_UPDATE, {
-            'players': game_state['players'],
-            'gameStarted': False,
-            'status': 'waiting',
-            'maxPlayers': game_state.get('maxPlayers', 4)
-        }))
-    
+    await _send_join_success(websocket, room_id, manager, game_state, is_reconnect)
     log_info(f"{player_name} joined room {room_id} via invite from {inviter}")
 
 
