@@ -36,6 +36,8 @@ class ClientRoomActionTypes:
     LEAVE_ROOM = 'leaveRoom'
     SET_READY = 'setReady'
     INVITE_JOIN = 'inviteJoin'
+    KICK_PLAYER = 'kickPlayer'
+    START_GAME = 'startGame'
 
 class ClientGameActionTypes:
     """clientGameAction 事件中的 actionType 取值"""
@@ -94,6 +96,7 @@ class ServerRoomActionTypes:
     PLAYER_LEFT = 'playerLeft'
     ROOM_STATE_UPDATE = 'roomStateUpdate'
     PLAYER_READY = 'playerReady'
+    PLAYER_KICKED = 'playerKicked'
 
 
 class ServerGameActionTypes:

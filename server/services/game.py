@@ -4,6 +4,7 @@
 """
 
 from typing import Dict
+import asyncio
 import time
 from utils.constants import AREAS, MARKET_PRICES, CHALLENGE_SLOT_DONE
 from utils.events import ServerEvents, ServerRoomActionTypes, ServerGameActionTypes, ServerAreaActionTypes
@@ -79,6 +80,38 @@ def cleanup_room(room_id: str, rooms: dict, manager):
         log_info(f"Room {room_id} deleted")
 
 
+scheduled_transfers: Dict[int, asyncio.Task] = {}
+
+
+async def _delayed_host_transfer(room_id: str, player_id: int, rooms: dict, manager, broadcast_func):
+    """延迟60秒后转移房主，若玩家已重连则不转移"""
+    try:
+        await asyncio.sleep(60)
+        game_state = rooms.get(room_id)
+        if not game_state:
+            log_info(f"_delayed_host_transfer: room {room_id} no longer exists, skipping transfer")
+            return
+        player = next((p for p in game_state['players'] if p['id'] == player_id), None)
+        if player and not player.get('isOnline'):
+            log_info(f"_delayed_host_transfer: executing host transfer for player {player_id} in room {room_id}")
+            transfer_host(room_id, game_state)
+            await broadcast_func(room_id)
+        else:
+            log_info(f"_delayed_host_transfer: player {player_id} is back online or not found, skipping transfer")
+    except asyncio.CancelledError:
+        log_info(f"_delayed_host_transfer: cancelled for player {player_id}")
+        pass
+    finally:
+        scheduled_transfers.pop(player_id, None)
+
+
+def cancel_pending_host_transfer(player_id: int):
+    """取消指定玩家的待执行房主转移任务"""
+    task = scheduled_transfers.pop(player_id, None)
+    if task:
+        task.cancel()
+
+
 def transfer_host(room_id: str, game_state: dict):
     """转移房主身份"""
     if not game_state or game_state['status'] != 'waiting':
@@ -102,22 +135,31 @@ def transfer_host(room_id: str, game_state: dict):
 
 async def handle_player_disconnect(room_id: str, player_id: int, player_name: str, rooms: dict, manager, broadcast_func):
     """处理玩家断开连接"""
-    log_debug(f"handle_player_disconnect called for room {room_id}, player {player_id}")
+    log_info(f"handle_player_disconnect: room={room_id}, player_id={player_id}, player_name={player_name}")
 
     game_state = rooms.get(room_id)
     if not game_state:
         log_debug(f"game_state not found in handle_player_disconnect for room {room_id}")
         return
 
-    if player_name is None and player_id is not None:
-        player = next((p for p in game_state['players'] if p['id'] == player_id), None)
-        if player:
-            player_name = player.get('name')
-            player['isOnline'] = False
-            player['ready'] = False
-            player['lastSeen'] = int(time.time())
+    player = next((p for p in game_state['players'] if p['id'] == player_id), None)
+    if not player:
+        log_info(f"handle_player_disconnect: player {player_id} not found in room {room_id}")
+        return
 
-    transfer_host(room_id, game_state)
+    if player_name is None:
+        player_name = player.get('name')
+
+    player['isOnline'] = False
+    player['ready'] = False
+    player['lastSeen'] = int(time.time())
+    log_info(f"handle_player_disconnect: marked player {player_id} ({player_name}) offline, isHost={player.get('isHost')}")
+
+    if player.get('isHost') and player_id not in scheduled_transfers:
+        log_info(f"handle_player_disconnect: scheduling delayed host transfer for player {player_id}")
+        scheduled_transfers[player_id] = asyncio.create_task(
+            _delayed_host_transfer(room_id, player_id, rooms, manager, broadcast_func)
+        )
 
     all_offline = all(not p.get('isOnline', True) for p in game_state['players'])
 

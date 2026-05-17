@@ -15,8 +15,8 @@ from fastapi import WebSocket, WebSocketDisconnect
 from utils.events import ClientEvents, ServerEvents, ServerRoomActionTypes, ClientRoomActionTypes
 from utils.helpers import get_player, make_action_message
 from utils.logger import log_info, log_debug, log_error
-from services.game import handle_player_disconnect, broadcast_room_state
-from controllers.room_action_handler import handle_room_action, handle_set_ready, handle_leave_room
+from services.game import handle_player_disconnect, broadcast_room_state, cancel_pending_host_transfer
+from controllers.room_action_handler import handle_room_action, handle_set_ready, handle_leave_room, handle_kick_player, handle_start_game
 from controllers.game_action_handler import handle_game_action
 from controllers.battle_action_handler import handle_battle_action
 from controllers.battle_action_handler import handle_battle_action
@@ -44,6 +44,10 @@ async def handle_lobby_websocket(websocket: WebSocket, rooms: dict, manager):
 
             # clientRoomAction 路由
             elif event == ClientEvents.CLIENT_ROOM_ACTION:
+                # Track userId for disconnect handling
+                action_type = payload.get('action_type')
+                if action_type and user_id is None:
+                    user_id = payload.get('userId')
                 result = await handle_room_action(websocket, rooms, manager, payload)
                 if result is False:
                     break
@@ -89,8 +93,11 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
     game_state = rooms.get(room_id)
     if game_state:
         player = get_player(game_state, player_id)
+        log_info(f"Game WS reconnect: room_id={room_id}, player_id={player_id}, player_found={player is not None}")
         if player:
+            log_info(f"Game WS reconnect: player={player.get('name')}, isOnline={player.get('isOnline')}, isHost={player.get('isHost')}, players_count={len(game_state.get('players', []))}")
             player['isOnline'] = True
+            cancel_pending_host_transfer(player_id)
             await manager.send_to_room(room_id, ServerEvents.SERVER_ROOM_ACTION,
                 make_action_message(ServerRoomActionTypes.PLAYER_STATUS_CHANGE, {
                     'playerId': player_id,
@@ -108,6 +115,7 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
                 'currentRound': game_state.get('currentRound', 1),
                 'currentPlayerIndex': game_state.get('currentPlayerIndex', 0)
             }))
+        log_info(f"Game WS reconnect: sent ROOM_STATE_UPDATE to player {player_id}, players={[{ 'id': p['id'], 'name': p['name'], 'isHost': p.get('isHost') } for p in game_state.get('players', [])]}")
 
     try:
         while True:
@@ -133,6 +141,10 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
                     result = await handle_leave_room(websocket, room_id, player_id, rooms, manager, payload, fingerprint)
                 elif action_type == ClientRoomActionTypes.SET_READY:
                     result = await handle_set_ready(websocket, room_id, player_id, rooms, manager, payload)
+                elif action_type == ClientRoomActionTypes.KICK_PLAYER:
+                    result = await handle_kick_player(websocket, room_id, player_id, rooms, manager, payload)
+                elif action_type == ClientRoomActionTypes.START_GAME:
+                    result = await handle_start_game(websocket, room_id, player_id, rooms, manager, payload)
                 if result is False:
                     break
                 continue

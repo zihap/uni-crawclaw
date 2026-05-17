@@ -17,6 +17,8 @@ class ErrorCodes:
     # 玩家相关错误
     PLAYER_NOT_FOUND = 'PLAYER_NOT_FOUND'
     PLAYER_NOT_IN_ROOM = 'PLAYER_NOT_IN_ROOM'
+    NOT_HOST = 'NOT_HOST'
+    CANNOT_KICK_SELF = 'CANNOT_KICK_SELF'
     
     # 游戏相关错误
     GAME_NOT_STARTED = 'GAME_NOT_STARTED'
