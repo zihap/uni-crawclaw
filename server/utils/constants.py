@@ -76,7 +76,7 @@ AREA_SLOT_COUNTS = {
     'marketplace': 3
 }
 
-CARD_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'card_config.json')
+CARD_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'card_config.json')
 
 _CARD_CONFIG_DEFAULT = {
     'tributeCards': [

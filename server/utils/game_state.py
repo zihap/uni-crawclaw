@@ -12,7 +12,7 @@ import copy
 from typing import Dict
 from .constants import AREAS, MARKET_PRICES, TRIBUTE_TASKS, DOWNTOWN_CARDS, SLOT_TEMPLATES, AREA_SLOT_COUNTS
 
-_CARD_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'card_config.json')
+_CARD_CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'card_config.json')
 try:
     with open(_CARD_CONFIG_PATH, 'r', encoding='utf-8') as _f:
         raw_title_cards = json.load(_f).get('titleCards', [])
