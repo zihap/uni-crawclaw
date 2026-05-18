@@ -8,6 +8,10 @@ import os
 import sys
 from typing import Dict
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -15,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from utils.connection import ConnectionManager
 from controllers.websocket import handle_lobby_websocket, handle_game_websocket
+from utils.logger import log_info, log_error
 
 app = FastAPI(
     title="龙争虾斗游戏服务器",
@@ -50,6 +55,23 @@ async def get_room(room_id: str):
             'maxPlayers': game_state.get('maxPlayers', 4)
         }
     }
+
+
+@app.post("/api/wechat/login")
+async def wechat_login(request_body: dict):
+    """微信登录：通过code换取openid"""
+    code = request_body.get("code")
+    if not code:
+        raise HTTPException(status_code=400, detail="缺少code参数")
+
+    try:
+        from services.wechat_auth import exchange_code_for_openid
+        result = await exchange_code_for_openid(code)
+        log_info(f"微信登录接口返回: openid={result.get('openid', '')[:6]}***")
+        return result
+    except ValueError as e:
+        log_error(f"微信登录失败: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.websocket("/ws/lobby")

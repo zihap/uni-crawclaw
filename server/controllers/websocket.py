@@ -88,6 +88,7 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
     log_info(f"WebSocket connection: room_id={room_id}, player_id={player_id}")
     log_debug(f"rooms at connection time: {list(rooms.keys())}")
 
+    await websocket.accept()
     await manager.connect(websocket, room_id, player_id)
 
     game_state = rooms.get(room_id)

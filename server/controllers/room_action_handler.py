@@ -209,6 +209,8 @@ async def handle_leave_room(websocket, room_id, player_id, rooms, manager, paylo
     except Exception:
         pass
 
+    return False
+
 
 async def handle_set_ready(websocket, room_id, player_id, rooms, manager, payload):
     """设置准备状态"""
