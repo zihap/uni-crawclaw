@@ -57,7 +57,6 @@ class ConnectionManager:
             self.user_rooms.pop(user_id, None)
 
     async def connect(self, websocket: WebSocket, room_id: str, player_id: int):
-        await websocket.accept()
         if room_id not in self.active_connections:
             self.active_connections[room_id] = {}
         self.active_connections[room_id][str(player_id)] = websocket
