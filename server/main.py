@@ -22,6 +22,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# 允许所有跨域请求，这对 WebSockets 握手至关重要
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -34,12 +35,21 @@ rooms: Dict[str, dict] = {}
 manager = ConnectionManager()
 
 
+# ==========================================
+# 新增：微信云托管网关健康检查探针
+# ==========================================
+@app.get("/")
+async def health_check():
+    """微信云托管负载均衡健康检查专用探针"""
+    return {"status": "ok", "message": "巨螯 (CrawClaw) Game Server is Alive!"}
+
+
 @app.get("/api/rooms/{room_id}")
 async def get_room(room_id: str):
     """获取房间信息"""
     game_state = rooms.get(room_id)
     if not game_state:
-        raise HTTPException(status_code=404, message="房间不存在")
+        raise HTTPException(status_code=404, detail="房间不存在")
 
     return {
         'success': True,
@@ -68,4 +78,12 @@ if __name__ == '__main__':
     import uvicorn
 
     port = int(os.environ.get('PORT', 3100))
-    uvicorn.run(app, host='0.0.0.0', port=port)
+
+    # 修改：增加 proxy_headers 和 forwarded_allow_ips 参数，允许穿透云托管网关
+    uvicorn.run(
+        app,
+        host='0.0.0.0',
+        port=port,
+        proxy_headers=True,
+        forwarded_allow_ips="*"
+    )
