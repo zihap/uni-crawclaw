@@ -23,7 +23,7 @@ from utils.helpers import send_error, has_resources, update_resources, get_playe
 from utils.logger import log_info, log_debug
 from services.game import broadcast_game_state, start_area_settlement, complete_settlement, update_market_prices
 from services.area import process_area_action
-from services.tribute_card_effects import apply_aura_effect, get_endgame_choices, apply_endgame_choice, check_cage_trade
+from services.tribute_card_effects import get_endgame_choices, apply_endgame_choice, check_cage_trade
 
 
 async def handle_use_seaweed(websocket, room_id, player_id, rooms, manager, payload):
@@ -226,6 +226,7 @@ async def handle_area_action(websocket, room_id, player_id, rooms, manager, payl
                     if slots[idx] is not None:
                         more_players_in_area = True
                         break
+        log_debug(f"[handle_settlement_action] more_players_in_area={more_players_in_area}, remaining_actions={settlement_state.get('remainingActions', 1)}")
 
         remaining_actions = settlement_state.get('remainingActions', 1)
         player_slots = settlement_state.get('playerSlots', [])
@@ -241,8 +242,7 @@ async def handle_area_action(websocket, room_id, player_id, rooms, manager, payl
                     'actionCount': remaining_actions - 1,
                     'slotIndex': player_slots[0] if player_slots else 0,
                     'player': player,
-                    'taverns': game_state.get('taverns', []),
-                    'tributeTasks': game_state.get('tributeTasks', [])
+                    'taverns': game_state.get('taverns', [])
                 }))
         elif more_players_in_area:
             if player_slots and len(player_slots) > 1:
@@ -272,47 +272,8 @@ async def handle_area_action(websocket, room_id, player_id, rooms, manager, payl
             await start_area_settlement(websocket, room_id, game_state, rooms, manager)
     elif result == 'continue_ui':
         await broadcast_game_state(room_id, rooms, manager)
-
-async def handle_downtown_action(websocket, room_id, player_id, rooms, manager, payload):
-    """闹市行动"""
-    card_index = payload.get('cardIndex')
-    option_index = payload.get('optionIndex', 0)
-
-    game_state = rooms.get(room_id)
-    if not game_state:
-        return
-
-    player = game_state['players'][player_id]
-    card = game_state['downtownCards'][card_index] if card_index is not None and card_index < len(game_state['downtownCards']) else None
-    if not card:
-        await send_error(websocket, '卡牌不存在')
-        return
-
-    options = card.get('action', {}).get('options', [])
-    if not options or option_index >= len(options):
-        await send_error(websocket, '无效的选项')
-        return
-
-    selected = options[option_index]
-    cost = selected.get('cost', {})
-    reward = selected.get('reward', {})
-
-    if not has_resources(player, cost):
-        await send_error(websocket, '资源不足')
-        return
-
-    bf = make_broadcast_fn(manager.send_to_room, room_id)
-    await update_resources(player, {**cost, **reward}, broadcast_fn=bf)
-
-    await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
-        make_action_message(ServerGameActionTypes.GAME_ACTION, {
-            'actionType': 'downtownActionExecuted',
-            'playerId': player_id,
-            'data': {'card': card},
-            'gameState': game_state
-        }))
-    await broadcast_game_state(room_id, rooms, manager)
-
+    else:
+        log_debug(f"[handle_settlement_action] unhandled result={result}")
 
 async def handle_endgame_score_choice(websocket, room_id, player_id, rooms, manager, payload):
     """处理终局得分选择"""
@@ -411,7 +372,6 @@ def get_game_action_handlers():
         ClientGameActionTypes.PLACE_HEADMAN: handle_place_headman,
         ClientGameActionTypes.CANCEL_HEADMAN: handle_cancel_headman,
         ClientGameActionTypes.NEXT_PLAYER: handle_next_player,
-        ClientGameActionTypes.DOWNTOWN_ACTION: handle_downtown_action,
         ClientGameActionTypes.AREA_ACTION: handle_area_action,
         ClientGameActionTypes.ENDGAME_SCORE_CHOICE: handle_endgame_score_choice,
     }

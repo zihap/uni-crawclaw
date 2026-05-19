@@ -250,6 +250,7 @@ async def _resolve_breeding_step(game_state: dict, manager, room_id):
 async def _resolve_tribute_step(game_state: dict, manager, room_id):
     area_data = game_state['areas']['tribute']
     slots = area_data['slots']
+    log_debug(f"[_resolve_tribute_step] slots={slots}, battleQueue={game_state.get('battleQueue')}, challengeSlots={area_data.get('challengeSlots')}")
 
     if 'tributeBattlesCompleted' not in game_state: game_state['tributeBattlesCompleted'] = 0
     if not game_state.get('battleQueue'):
@@ -315,6 +316,7 @@ async def _resolve_tribute_actions(game_state: dict, manager, room_id):
 
     settlement_state = game_state.get('settlementState', {})
     current_slot_index = settlement_state.get('currentSlotIndex', 0)
+    log_debug(f"[_resolve_tribute_actions] current_slot_index={current_slot_index}, slots={slots}")
 
     while current_slot_index < len(slots):
         player_id = slots[current_slot_index]
@@ -322,6 +324,7 @@ async def _resolve_tribute_actions(game_state: dict, manager, room_id):
             template = templates[current_slot_index]
             action_count = template['actionCount'] if template else 1
             player = game_state['players'][player_id]
+            log_debug(f"[_resolve_tribute_actions] slot={current_slot_index}, player_id={player_id}, action_count={action_count}")
 
             game_state['settlementState'] = make_settlement_state('tribute', current_slot_index, action_count, player_id)
             await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
@@ -331,8 +334,7 @@ async def _resolve_tribute_actions(game_state: dict, manager, room_id):
                     'actionCount': action_count,
                     'slotIndex': current_slot_index,
                     'player': _serialize_player(player),
-                    'taverns': game_state.get('taverns', []),
-                    'tributeTasks': game_state.get('tributeTasks', [])
+                    'taverns': game_state.get('taverns', [])
                 }))
             return 'waiting_ui'
         current_slot_index += 1
@@ -397,9 +399,15 @@ async def process_area_action(game_state: dict, action_type: str, action_payload
     area_type = settlement_state.get('areaType')
     player_id = settlement_state.get('waitingForPlayer')
 
-    if player_id is None: return 'error'
+    log_debug(f"[process_area_action] area_type={area_type}, waitingForPlayer={player_id}, action_type={action_type}")
+
+    if player_id is None:
+        log_debug(f"[process_area_action] ERROR-E0: waitingForPlayer is None, settlementState={settlement_state}")
+        return 'error'
     player = next((p for p in game_state['players'] if p['id'] == player_id), None)
-    if not player: return 'error'
+    if not player:
+        log_debug(f"[process_area_action] ERROR-E0b: player not found for id={player_id}, players={[p['id'] for p in game_state['players']]}")
+        return 'error'
 
     if area_type == 'shrimp_catching': return await _process_shrimp_catching_action(game_state, action_type, action_payload, player, manager, room_id, websocket)
     elif area_type == 'seafood_market': return await _process_seafood_market_action(game_state, action_type, action_payload, player, manager, room_id, websocket)
@@ -910,24 +918,36 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
         naked_reward_type = action_payload.get('nakedRewardType')
 
         taverns = game_state.get('taverns', [])
-        if tavern_id >= len(taverns): return 'error'
+        log_debug(f"[_process_tribute_action] player={player['id']}, isNaked={is_naked}, tavern_id={tavern_id}, card_ids={card_ids}, taverns_len={len(taverns)}")
+        if tavern_id >= len(taverns):
+            log_debug(f"[_process_tribute_action] ERROR-T0: tavern_id={tavern_id} >= len(taverns)={len(taverns)}")
+            return 'error'
         tavern = taverns[tavern_id]
+        log_debug(f"[_process_tribute_action] tavern={tavern_id}, cards_in_tavern={[c.get('id') for c in tavern.get('cards', [])]}")
 
         if is_naked:
-            if player.get('tavernCompletions', {}).get(tavern_id) is not None: return 'error'
+            if player.get('tavernCompletions', {}).get(tavern_id) is not None:
+                log_debug(f"[_process_tribute_action] ERROR-T1: already completed tavern {tavern_id}")
+                return 'error'
             player_lobsters = player.get('lobsters', [])
             player_title_cards = player.get('titleCards', [])
 
-            if naked_lobster_index < 0: return 'error'
+            if naked_lobster_index < 0:
+                log_debug(f"[_process_tribute_action] ERROR-T2: naked_lobster_index < 0")
+                return 'error'
             lobster = None
             if naked_lobster_index < len(player_lobsters):
                 lobster = player_lobsters[naked_lobster_index]
             else:
                 tc_index = naked_lobster_index - len(player_lobsters)
-                if tc_index < 0 or tc_index >= len(player_title_cards): return 'error'
+                if tc_index < 0 or tc_index >= len(player_title_cards):
+                    log_debug(f"[_process_tribute_action] ERROR-T3: tc_index out of range")
+                    return 'error'
                 lobster = player_title_cards[tc_index]
 
-            if GRADE_VALUES.get(lobster.get('grade', 'normal'), 0) < 1 and not lobster.get('name'): return 'error'
+            if GRADE_VALUES.get(lobster.get('grade', 'normal'), 0) < 1 and not lobster.get('name'):
+                log_debug(f"[_process_tribute_action] ERROR-T4: lobster grade too low, grade={lobster.get('grade')}, name={lobster.get('name')}")
+                return 'error'
 
             if naked_lobster_index < len(player_lobsters): del player_lobsters[naked_lobster_index]
             else:
@@ -962,7 +982,9 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             player['tributesThisRound'] = player.get('tributesThisRound', 0) + 1
 
         else:
-            if not card_ids and not card_id: return 'error'
+            if not card_ids and not card_id:
+                log_debug(f"[_process_tribute_action] ERROR-T5: no card_ids and no card_id")
+                return 'error'
             if card_id and not card_ids: card_ids = [card_id]
 
             cards_to_process = []
@@ -974,7 +996,10 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                         card = c
                         card_index = idx
                         break
-                if not card: return 'error'
+                if not card:
+                    log_debug(f"[_process_tribute_action] ERROR-T6: card '{cid}' not found in tavern {tavern_id} cards={[c.get('id') for c in tavern.get('cards', [])]}")
+                    await send_error(websocket, '卡牌不存在于该酒楼')
+                    return 'error'
                 cards_to_process.append((card, card_index))
 
             bonus_choice = action_payload.get('bonusTributeChoice')
@@ -1013,18 +1038,29 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                 if 'normal' in all_lobster_reqs and all_lobster_reqs['normal'] > 0:
                     all_lobster_reqs['normal'] = max(0, all_lobster_reqs['normal'] - tribute_discount['lobsterDiscount'])
 
-            if player.get('coins', 0) < total_coins: return 'error'
-            if player.get('seaweed', 0) < total_seaweed: return 'error'
-            if player.get('cages', 0) < total_cages: return 'error'
+            if player.get('coins', 0) < total_coins:
+                log_debug(f"[_process_tribute_action] ERROR-T7: insufficient coins, have={player.get('coins', 0)}, need={total_coins}")
+                return 'error'
+            if player.get('seaweed', 0) < total_seaweed:
+                log_debug(f"[_process_tribute_action] ERROR-T8: insufficient seaweed, have={player.get('seaweed', 0)}, need={total_seaweed}")
+                return 'error'
+            if player.get('cages', 0) < total_cages:
+                log_debug(f"[_process_tribute_action] ERROR-T9: insufficient cages, have={player.get('cages', 0)}, need={total_cages}")
+                return 'error'
 
             selected_lobster_ids = action_payload.get('selectedLobsterIds', [])
             if all_lobster_reqs:
-                if not selected_lobster_ids or len(selected_lobster_ids) == 0: return 'error'
+                if not selected_lobster_ids or len(selected_lobster_ids) == 0:
+                    log_debug(f"[_process_tribute_action] ERROR-T10: all_lobster_reqs={all_lobster_reqs} but selected_lobster_ids is empty/missing")
+                    return 'error'
                 grade_values = {'normal': 0, 'grade3': 1, 'grade2': 2, 'grade1': 3, 'royal': 4}
                 player_lobsters = player.get('lobsters', [])
                 player_title_cards = player.get('titleCards', [])
 
                 selected_items = []
+                player_lobster_ids = [l.get('id') for l in player_lobsters]
+                player_tc_ids = [t.get('id') for t in player_title_cards]
+                log_debug(f"[_process_tribute_action] lobster lookups: selected_ids={selected_lobster_ids}, player_lobster_ids={player_lobster_ids}, player_tc_ids={player_tc_ids}")
                 for lid in selected_lobster_ids:
                     lobster = next((l for l in player_lobsters if l.get('id') == lid), None)
                     if lobster:
@@ -1034,6 +1070,8 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                     if tc:
                         selected_items.append(('titleCard', tc))
                         continue
+                    log_debug(f"[_process_tribute_action] ERROR-T11: lobster/title card id '{lid}' not found in player inventory")
+                    await send_error(websocket, '所选祭品不在你的背包中')
                     return 'error'
 
                 def get_lobster_value(item):
@@ -1045,7 +1083,7 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                 for grade_key, count in all_lobster_reqs.items():
                     req_val = grade_values.get(grade_key, 0)
                     req_by_grade.append((req_val, count))
-                req_by_grade.sort(key=lambda x: x[0], reverse=True)
+                req_by_grade.sort(key=lambda x: x[0])
 
                 used_indices = set()
                 for req_val, count in req_by_grade:
@@ -1058,7 +1096,10 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                     for _, idx in candidates[:count]:
                         used_indices.add(idx)
                         matched += 1
-                    if matched < count: return 'error'
+                    if matched < count:
+                        log_debug(f"[_process_tribute_action] ERROR-T12: grade matching failed req_val={req_val}, count={count}, matched={matched}, selected_items_values={[get_lobster_value(it) for it in selected_items]}, used_indices={used_indices}")
+                        await send_error(websocket, '所选祭品品级不足以满足卡牌要求')
+                        return 'error'
 
                 for lid in selected_lobster_ids:
                     for i, lobster in enumerate(player_lobsters):
@@ -1089,7 +1130,7 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                 if 'tributeCards' not in player: player['tributeCards'] = []
                 player['tributeCards'].append(card)
 
-                aura_result = apply_aura_effect(player, card)
+                aura_result = apply_aura_effect(card)
                 if aura_result:
                     if 'permaBuffs' not in player: player['permaBuffs'] = []
                     for buff_key in aura_result:
@@ -1169,20 +1210,6 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                             other_player['lobsters'].pop(0)
                     elif target_type == 'cage':
                         other_player['cages'] = max(0, other_player.get('cages', 0) - 1)
-
-        aura_task = next((t for t in game_state['tributeTasks'] if str(t['id']) == str(task_id)), None)
-        if aura_task:
-            aura_result = apply_aura_effect(player, aura_task)
-            if aura_result:
-                if 'permaBuffs' not in player:
-                    player['permaBuffs'] = []
-                for buff_key in aura_result:
-                    if aura_result[buff_key]:
-                        player['permaBuffs'].append(buff_key)
-
-            if 'tributeCards' not in player:
-                player['tributeCards'] = []
-            player['tributeCards'].append(aura_task)
 
         game_state['pendingTributeChoice'] = None
         current_slot_index = game_state['settlementState'].get('currentSlotIndex', 0)

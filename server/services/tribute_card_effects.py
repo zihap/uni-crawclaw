@@ -210,7 +210,7 @@ def apply_instant_effect(player: dict, card: dict, game_state: dict) -> dict:
     return {}
 
 
-def apply_aura_effect(player: dict, card: dict) -> dict:
+def apply_aura_effect(card: dict) -> dict:
     """
     返回光环效果要设置的 permaBuff
     
