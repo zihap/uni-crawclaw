@@ -46,9 +46,6 @@ class ClientGameActionTypes:
     PLACE_HEADMAN = 'placeHeadman'
     CANCEL_HEADMAN = 'cancelHeadman'
     NEXT_PLAYER = 'nextPlayer'
-    SUBMIT_TRIBUTE = 'submitTribute'
-    SUBMIT_TRIBUTE_CHOICE = 'submitTributeChoice'
-    DOWNTOWN_ACTION = 'executeDowntownAction'
     AREA_ACTION = 'areaAction'
     ENDGAME_SCORE_CHOICE = 'endgameScoreChoice'
 

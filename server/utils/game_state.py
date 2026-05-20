@@ -62,7 +62,6 @@ def create_game_state() -> dict:
             }
         },
 
-        'tributeTasks': [],
         'downtownCards': [],
         'titleCardDeck': [], # 称号卡牌堆
         'gameTitleCards': [], # 奖励池中当前回合展示的2张称号卡
@@ -132,20 +131,16 @@ def create_player(player_id: int, name: str, is_host: bool = False, user_id: str
     }
 
 
-def draw_tribute_tasks(game_state: dict):
-    """抽取上供卡到游戏状态"""
+def distribute_tavern_cards(game_state: dict):
+    """洗牌并分配上供卡到酒楼"""
     shuffled = copy.deepcopy(TRIBUTE_TASKS)
     random.shuffle(shuffled)
-    game_state['tributeTasks'] = shuffled[:3]
-
-    # 【重点修复】：删除了以前错误覆盖 downtownCards 的代码 (game_state['downtownCards'] = shuffled[3:6])
 
     if 'taverns' in game_state:
-        tavern_cards = shuffled[3:] # 剩下的全分给酒楼
         card_idx = 0
         for tavern in game_state['taverns']:
-            while len(tavern['cards']) < 2 and card_idx < len(tavern_cards):
-                tavern['cards'].append(tavern_cards[card_idx])
+            while len(tavern['cards']) < 2 and card_idx < len(shuffled):
+                tavern['cards'].append(shuffled[card_idx])
                 card_idx += 1
 
 

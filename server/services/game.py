@@ -8,7 +8,7 @@ import asyncio
 import time
 from utils.constants import AREAS, MARKET_PRICES, CHALLENGE_SLOT_DONE
 from utils.events import ServerEvents, ServerRoomActionTypes, ServerGameActionTypes, ServerAreaActionTypes
-from utils.game_state import draw_tribute_tasks, draw_downtown_cards, draw_title_cards
+from utils.game_state import distribute_tavern_cards, draw_downtown_cards, draw_title_cards
 from utils.logger import log_info, log_debug
 from utils.helpers import make_action_message, calculate_market_prices
 from services.tribute_card_effects import get_endgame_choices
@@ -207,7 +207,6 @@ async def broadcast_game_state(room_id: str, rooms: dict, manager):
             'hireSlots': game_state.get('hireSlots', [None] * 8),
             'lastPlacement': game_state.get('lastPlacement'),
             'tavernCompletionOrder': game_state.get('tavernCompletionOrder', {}),
-            'tributeTasks': game_state.get('tributeTasks', []),
             'downtownCards': game_state.get('downtownCards', [])
         }
         await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
@@ -246,7 +245,7 @@ async def start_game(room_id: str, rooms: dict, manager):
             slot_count = len(game_state['areas'][area_name]['slots'])
             game_state['areas'][area_name]['slots'] = [None] * slot_count
 
-    draw_tribute_tasks(game_state)
+    distribute_tavern_cards(game_state)
     draw_downtown_cards(game_state)  # 游戏开始时只执行这一次
     draw_title_cards(game_state)
 
@@ -396,7 +395,7 @@ async def complete_settlement(room_id, game_state, rooms, manager):
     for p in game_state['players']:
         p['royalCountThisRound'] = 0
 
-    draw_tribute_tasks(game_state)
+    distribute_tavern_cards(game_state)
     # 【重点修复】：已删除 draw_downtown_cards(game_state) ，不再每回合刷新卡牌！
     draw_title_cards(game_state)
 
