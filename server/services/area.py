@@ -11,7 +11,7 @@ from utils.events import ServerEvents, ServerAreaActionTypes, ServerBattleAction
 from utils.logger import log_info, log_debug
 from services.game import broadcast_game_state
 from utils.helpers import send_error, make_action_message, create_lobster as _make_lobster, calculate_market_prices, make_settlement_state
-from services.tribute_card_effects import check_market_rule, check_breed_bonus, check_tribute_discount, check_battle_bonus, check_adjacent_action, get_adjacent_rewards, apply_aura_effect
+from services.tribute_card_effects import check_market_rule, check_breed_bonus, check_tribute_discount, check_battle_bonus, check_adjacent_action, get_adjacent_rewards, apply_aura_effect, check_cage_trade
 
 
 def _create_lobster(grade='normal'):
@@ -174,6 +174,10 @@ async def _resolve_seafood_market_step(game_state: dict, manager, room_id):
 
             if action_count > 0:
                 prices = calculate_market_prices(area_data['marketLobsterCount'])
+                cage_trade = check_cage_trade(player)
+                if cage_trade:
+                    prices['buyCage'] = max(1, prices['buyCage'] - cage_trade['buyDiscount'])
+                    prices['sellCage'] = prices['sellCage'] + cage_trade['sellBonus']
                 game_state['settlementState'] = make_settlement_state('seafood_market', current_slot_index, action_count, player_id)
 
                 await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
@@ -229,8 +233,20 @@ async def _resolve_breeding_step(game_state: dict, manager, room_id):
                     game_state['settlementState']['currentSlotIndex'] += 1
                     game_state['settlementState']['waitingForPlayer'] = None
                     return 'action_complete'
-                current_slot_index += 1
-                continue
+                if player.get('isAI'):
+                    # AI没有龙虾，直接跳过
+                    current_slot_index += 1
+                    continue
+                # 人类玩家没有龙虾，显示UI（前端显示空状态和跳过按钮）
+                game_state['settlementState'] = make_settlement_state('breeding', current_slot_index, 0, player_id)
+                await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
+                    make_action_message(ServerAreaActionTypes.AREA_WAITING_UI, {
+                        'areaType': 'breeding',
+                        'playerId': player_id,
+                        'actionCount': 0,
+                        'player': _serialize_player(player),
+                    }))
+                return 'waiting_ui'
 
             if not is_arena_override:
                 game_state['settlementState'] = make_settlement_state('breeding', current_slot_index, action_count, player_id)
@@ -265,6 +281,7 @@ async def _resolve_tribute_step(game_state: dict, manager, room_id):
 
             if challenger_id is not None and defender_id is not None and challenge_slots_battle_status[defender_idx] != CHALLENGE_SLOT_DONE and challenger_id != defender_id:
                 game_state['battleQueue'].append({
+                    'battleId': str(challenge_idx),
                     'challengerId': challenger_id,
                     'defenderId': defender_id,
                     'challengeSlot': challenge_idx,
@@ -573,6 +590,13 @@ async def _process_seafood_market_action(game_state: dict, action_type: str, act
     market_rule = check_market_rule(player)
     buy_price = market_rule['buyPrice'] if market_rule else prices['buyLobster']
 
+    cage_trade = check_cage_trade(player)
+    cage_buy_price = prices['buyCage']
+    cage_sell_price = prices['sellCage']
+    if cage_trade:
+        cage_buy_price = max(1, prices['buyCage'] - cage_trade['buyDiscount'])
+        cage_sell_price = prices['sellCage'] + cage_trade['sellBonus']
+
     success = False
 
     if action_type == 'buy_lobster':
@@ -606,15 +630,15 @@ async def _process_seafood_market_action(game_state: dict, action_type: str, act
             return 'error'
 
     elif action_type == 'buy_cage':
-        if player['coins'] >= prices['buyCage']:
-            player['coins'] -= prices['buyCage']
+        if player['coins'] >= cage_buy_price:
+            player['coins'] -= cage_buy_price
             player['cages'] += 1
             success = True
         else: return 'error'
     elif action_type == 'sell_cage':
         if player['cages'] > 0:
             player['cages'] -= 1
-            player['coins'] += prices['sellCage']
+            player['coins'] += cage_sell_price
             success = True
         else: return 'error'
     elif action_type == 'buy_seaweed':
@@ -679,12 +703,17 @@ async def _process_seafood_market_action(game_state: dict, action_type: str, act
         game_state['settlementState']['currentSlotIndex'] = current_idx + 1
         return 'action_complete'
     else:
+        prices = calculate_market_prices(area_data['marketLobsterCount'])
+        cage_trade = check_cage_trade(player)
+        if cage_trade:
+            prices['buyCage'] = max(1, prices['buyCage'] - cage_trade['buyDiscount'])
+            prices['sellCage'] = prices['sellCage'] + cage_trade['sellBonus']
         await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
             make_action_message(ServerAreaActionTypes.AREA_WAITING_UI, {
                 'areaType': 'seafood_market',
                 'playerId': settlement_state.get('waitingForPlayer'),
                 'actionCount': remaining_actions,
-                'prices': calculate_market_prices(area_data['marketLobsterCount']),
+                'prices': prices,
                 'player': _serialize_player(player),
                 'marketLobsterCount': area_data['marketLobsterCount'],
                 'currentRound': game_state.get('currentRound', 1),
@@ -696,6 +725,21 @@ async def _process_seafood_market_action(game_state: dict, action_type: str, act
 async def _process_breeding_action(game_state: dict, action_type: str, action_payload: dict, player: dict, manager, room_id, websocket):
     settlement_state = game_state.get('settlementState', {})
     remaining_actions = settlement_state.get('remainingActions', 0)
+
+    # skip 在 remaining_actions 检查之前处理（没有龙虾时 actionCount=0 仍可 skip）
+    if action_type == 'skip':
+        is_arena_override = settlement_state.get('overrideActionCount') is not None
+        if is_arena_override:
+            game_state['settlementState'] = make_settlement_state('marketplace', settlement_state.get('currentSlotIndex'), 1, player['id'])
+            game_state['settlementState']['currentSlotIndex'] += 1
+            game_state['settlementState']['waitingForPlayer'] = None
+            return 'action_complete'
+
+        game_state['settlementState']['waitingForPlayer'] = None
+        game_state['settlementState']['remainingActions'] = 0
+        current_idx = game_state['settlementState'].get('currentSlotIndex', 0)
+        game_state['settlementState']['currentSlotIndex'] = current_idx + 1
+        return 'action_complete'
 
     if remaining_actions <= 0: return 'error'
 
@@ -780,19 +824,6 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
                     'player': _serialize_player(player),
                 }))
             return 'continue_ui'
-    elif action_type == 'skip':
-        is_arena_override = settlement_state.get('overrideActionCount') is not None
-        if is_arena_override:
-            game_state['settlementState'] = make_settlement_state('marketplace', settlement_state.get('currentSlotIndex'), 1, player['id'])
-            game_state['settlementState']['currentSlotIndex'] += 1
-            game_state['settlementState']['waitingForPlayer'] = None
-            return 'action_complete'
-
-        game_state['settlementState']['waitingForPlayer'] = None
-        game_state['settlementState']['remainingActions'] = 0
-        current_idx = game_state['settlementState'].get('currentSlotIndex', 0)
-        game_state['settlementState']['currentSlotIndex'] = current_idx + 1
-        return 'action_complete'
     return 'error'
 
 
@@ -804,16 +835,21 @@ async def _process_marketplace_action(game_state: dict, action_type: str, action
         option_index = action_payload.get('optionIndex', 0)
         available_cards = [c for c in game_state.get('downtownCards', []) if not c.get('usedThisRound', False)]
 
-        if card_index is None or card_index >= len(available_cards): return 'error'
+        log_info(f"[marketplace] cardIndex={card_index}, available_cards={len(available_cards)}, cards={[c.get('name') or c.get('action',{}).get('type') for c in available_cards]}")
+        if card_index is None or card_index >= len(available_cards):
+            log_info(f"[marketplace] ERROR: card_index {card_index} out of range")
+            return 'error'
         card = available_cards[card_index]
         card['usedThisRound'] = True
         action_type_inner = card.get('action', {}).get('type')
+        log_info(f"[marketplace] executing card: {card.get('name')} (type={action_type_inner})")
 
         if action_type_inner == 'exchange':
             options = card.get('action', {}).get('options', [])
             if option_index >= len(options): return 'error'
             cost = options[option_index].get('cost', {})
             reward = options[option_index].get('reward', {})
+            log_info(f"[marketplace] exchange: cost={cost}, reward={reward}")
 
             for res_type, res_amount in cost.items():
                 if res_type == 'lobsters':
@@ -843,13 +879,16 @@ async def _process_marketplace_action(game_state: dict, action_type: str, action
                 elif res_type == 'coins': player['coins'] += res_amount
                 elif res_type == 'seaweed': player['seaweed'] += res_amount
                 elif res_type == 'cages': player['cages'] += res_amount
+            log_info(f"[marketplace] exchange done: player {player['id']} coins={player['coins']} seaweed={player['seaweed']} lobsters={len(player['lobsters'])}")
 
         elif action_type_inner == 'post_station':
             tributes_count = player.get('tributesThisRound', 0)
+            log_info(f"[marketplace] post_station: tributes_count={tributes_count}, option_index={option_index}")
             if tributes_count > 0:
                 if option_index < 0 or option_index > tributes_count: return 'error'
                 player['de'] = player.get('de', 0) + option_index
                 player['wang'] = player.get('wang', 0) + (tributes_count - option_index)
+            log_info(f"[marketplace] post_station done: player {player['id']} de={player['de']} wang={player['wang']}")
 
         elif action_type_inner == 'breeding_4':
             if len(player['lobsters']) > 0:
@@ -865,6 +904,7 @@ async def _process_marketplace_action(game_state: dict, action_type: str, action
 
         elif action_type_inner == 'black_market':
             player['lobsters'].append(_create_lobster('grade2'))
+            log_info(f"[marketplace] black_market: gave grade2 lobster to player {player['id']}, now has {len(player['lobsters'])} lobsters")
 
         elif action_type_inner == 'academy':
             if player.get('de', 0) < player.get('wang', 0): player['de'] += 1
@@ -887,9 +927,11 @@ async def _process_marketplace_action(game_state: dict, action_type: str, action
             player['coins'] = player.get('coins', 0) + 1
             player['cages'] = player.get('cages', 0) + 1
             player['lobsters'].append(_create_lobster('normal'))
+            log_info(f"[marketplace] bazaar done: player {player['id']} coins={player['coins']} seaweed={player['seaweed']} cages={player['cages']} lobsters={len(player['lobsters'])}")
 
         elif action_type_inner == 'inn':
             player['inn_headman'] = True
+            log_info(f"[marketplace] inn done: player {player['id']} inn_headman=True")
 
         game_state['settlementState']['waitingForPlayer'] = None
         current_idx = game_state['settlementState'].get('currentSlotIndex', 0)
@@ -1120,6 +1162,10 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             for ci in sorted_indices: del tavern['cards'][ci]
 
             for card, _ in cards_to_process:
+                card_id = card.get('id')
+                if card_id:
+                    deck = game_state.get('tributeCardDeck', [])
+                    game_state['tributeCardDeck'] = [c for c in deck if c.get('id') != card_id]
                 reward = card.get('reward', {})
                 player['de'] = player.get('de', 0) + reward.get('de', 0)
                 player['wang'] = player.get('wang', 0) + reward.get('wang', 0)

@@ -117,7 +117,7 @@ def transfer_host(room_id: str, game_state: dict):
     if not game_state or game_state['status'] != 'waiting':
         return
 
-    online_players = [p for p in game_state['players'] if p.get('isOnline')]
+    online_players = [p for p in game_state['players'] if p.get('isOnline') and not p.get('isAI')]
     if not online_players:
         return
 
@@ -262,6 +262,44 @@ async def start_game(room_id: str, rooms: dict, manager):
     log_info(f"Game started in room {room_id}")
 
 
+def calculate_final_score(player, taverns):
+    """计算玩家终局得分"""
+    # 1. 核心乘积分（直接数值乘积）
+    de = player.get('de', 0)
+    wang = player.get('wang', 0)
+    core_score = de * wang
+
+    # 2. 进贡席位分
+    tavern_score = 0
+    for t in taverns:
+        occupants = t.get('occupants', [])
+        if player['id'] in occupants:
+            rank = occupants.index(player['id'])
+            if rank < 4:
+                tavern_score += [3, 2, 1, 0][rank]
+
+    # 3. 资源转换分
+    coins_score = player.get('coins', 0) // 2
+    seaweed_score = player.get('seaweed', 0) // 3
+    cages_score = player.get('cages', 0) * 2
+
+    lobsters_score = 0
+    for l in player.get('lobsters', []):
+        g = l.get('grade')
+        if g == 'normal': lobsters_score += 1
+        elif g == 'grade3': lobsters_score += 2
+        elif g == 'grade2': lobsters_score += 3
+        elif g == 'grade1': lobsters_score += 5
+        elif g == 'royal': lobsters_score += 8
+
+    # 单独游离的称号视为8分
+    for tc in player.get('titleCards', []):
+        lobsters_score += 8
+
+    res_score = coins_score + seaweed_score + cages_score + lobsters_score
+    return core_score + tavern_score + res_score + player.get('bonusPoints', 0)
+
+
 async def complete_settlement(room_id, game_state, rooms, manager):
     """完成结算阶段，进入清理和下一回合"""
     cleanup_phase(game_state)
@@ -285,7 +323,32 @@ async def complete_settlement(room_id, game_state, rooms, manager):
             game_state['waitingForEndgameChoice'] = players_need_endgame_choice
             game_state['endgameChoiceIndex'] = 0
 
-            first_player = players_need_endgame_choice[0]
+            # AI自动处理终局得分选择（逐个处理所有AI玩家）
+            while game_state['endgameChoiceIndex'] < len(players_need_endgame_choice):
+                cur = players_need_endgame_choice[game_state['endgameChoiceIndex']]
+                cur_player = game_state['players'][cur['playerId']]
+                if not cur_player.get('isAI'):
+                    break  # 遇到真人玩家，停止自动处理，等待客户端交互
+                from services.ai_decision_engine import decide_endgame_score_choice
+                from services.tribute_card_effects import apply_endgame_choice
+                choice_result = decide_endgame_score_choice(cur_player, cur['card'])
+                apply_endgame_choice(cur_player, cur['card'], choice_result)
+                game_state['endgameChoiceIndex'] += 1
+
+            # 如果所有玩家都处理完了（全是AI或已全部选完）
+            if game_state['endgameChoiceIndex'] >= len(players_need_endgame_choice):
+                game_state['waitingForEndgameChoice'] = None
+                game_state['status'] = 'ended'
+                winner = sorted(game_state['players'], key=lambda x: calculate_final_score(x, game_state.get('taverns', [])), reverse=True)[0]
+                await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
+                    make_action_message(ServerAreaActionTypes.SETTLEMENT_COMPLETE, {'gameState': game_state}))
+                await manager.send_to_room(room_id, ServerEvents.SERVER_GAME_ACTION,
+                    make_action_message(ServerGameActionTypes.GAME_ENDED, {'winner': winner, 'gameState': game_state}))
+                await broadcast_game_state(room_id, rooms, manager)
+                return
+            # 否则还有真人玩家需要选择，fall through到下面的send_to_player逻辑
+
+            first_player = players_need_endgame_choice[game_state['endgameChoiceIndex']]
             player = game_state['players'][first_player['playerId']]
             card = first_player['card']
             choices = get_endgame_choices(player, card)
@@ -304,44 +367,6 @@ async def complete_settlement(room_id, game_state, rooms, manager):
 
         game_state['status'] = 'ended'
 
-        # ======== 【修改部分：简化算分逻辑】 ========
-        def calculate_final_score(player, taverns):
-            # 1. 核心乘积分（直接数值乘积）
-            de = player.get('de', 0)
-            wang = player.get('wang', 0)
-            core_score = de * wang
-
-            # 2. 进贡席位分
-            tavern_score = 0
-            for t in taverns:
-                occupants = t.get('occupants', [])
-                if player['id'] in occupants:
-                    rank = occupants.index(player['id'])
-                    if rank < 4:
-                        tavern_score += [3, 2, 1, 0][rank]
-
-            # 3. 资源转换分
-            coins_score = player.get('coins', 0) // 2
-            seaweed_score = player.get('seaweed', 0) // 3
-            cages_score = player.get('cages', 0) * 2
-
-            lobsters_score = 0
-            for l in player.get('lobsters', []):
-                g = l.get('grade')
-                if g == 'normal': lobsters_score += 1
-                elif g == 'grade3': lobsters_score += 2
-                elif g == 'grade2': lobsters_score += 3
-                elif g == 'grade1': lobsters_score += 5
-                elif g == 'royal': lobsters_score += 8
-
-            # 单独游离的称号视为8分
-            for tc in player.get('titleCards', []):
-                lobsters_score += 8
-
-            res_score = coins_score + seaweed_score + cages_score + lobsters_score
-            return core_score + tavern_score + res_score + player.get('bonusPoints', 0)
-
-        # 依据新算法寻找最高分赢家
         winner = sorted(
             game_state['players'],
             key=lambda x: calculate_final_score(x, game_state.get('taverns', [])),
@@ -384,6 +409,7 @@ async def complete_settlement(room_id, game_state, rooms, manager):
     for player in game_state['players']:
         for lobster in player['lobsters']:
             lobster['used'] = False
+            lobster['selectedForBattle'] = False
         for title_card in player['titleCards']:
             title_card['used'] = False
 

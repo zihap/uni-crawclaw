@@ -368,6 +368,101 @@ async def handle_invite_join(websocket, rooms, manager, payload):
     log_info(f"{player_name} joined room {room_id} via invite from {inviter}")
 
 
+async def handle_add_ai(websocket, room_id, player_id, rooms, manager, payload):
+    """添加AI机器人到房间"""
+    game_state = rooms.get(room_id)
+    if not game_state:
+        await send_error(websocket, '房间不存在')
+        return
+
+    if game_state['status'] != 'waiting':
+        await websocket.send_json({
+            'event': ServerEvents.ERROR,
+            'data': {'message': '游戏已开始，无法添加AI', 'errorCode': 'GAME_STARTED'}
+        })
+        return
+
+    player = game_state['players'][player_id] if player_id < len(game_state['players']) else None
+    if not player or not player.get('isHost'):
+        await websocket.send_json({
+            'event': ServerEvents.ERROR,
+            'data': {'message': '只有房主可以添加AI', 'errorCode': 'NOT_HOST'}
+        })
+        return
+
+    max_players = game_state.get('maxPlayers', 4)
+    if len(game_state['players']) >= max_players:
+        await websocket.send_json({
+            'event': ServerEvents.ERROR,
+            'data': {'message': '房间已满', 'errorCode': 'ROOM_FULL'}
+        })
+        return
+
+    from services.ai_player import create_ai_player
+    used_ids = {p['id'] for p in game_state['players']}
+    new_id = 0
+    while new_id in used_ids:
+        new_id += 1
+    position = new_id
+    ai_player = create_ai_player(new_id, position=position)
+    game_state['players'].append(ai_player)
+
+    await manager.send_to_room(room_id, ServerEvents.SERVER_ROOM_ACTION,
+        make_action_message(ServerRoomActionTypes.AI_ADDED, {
+            'playerId': new_id,
+            'player': ai_player,
+            'players': game_state['players']
+        }))
+    await broadcast_room_state(room_id, rooms, manager)
+    log_info(f"AI player {ai_player['name']} added to room {room_id}")
+
+
+async def handle_kick_ai(websocket, room_id, player_id, rooms, manager, payload):
+    """踢出AI机器人"""
+    game_state = rooms.get(room_id)
+    if not game_state:
+        await send_error(websocket, '房间不存在')
+        return
+
+    if game_state['status'] != 'waiting':
+        await websocket.send_json({
+            'event': ServerEvents.ERROR,
+            'data': {'message': '游戏已开始，无法踢出AI', 'errorCode': 'GAME_STARTED'}
+        })
+        return
+
+    player = game_state['players'][player_id] if player_id < len(game_state['players']) else None
+    if not player or not player.get('isHost'):
+        await websocket.send_json({
+            'event': ServerEvents.ERROR,
+            'data': {'message': '只有房主可以踢出AI', 'errorCode': 'NOT_HOST'}
+        })
+        return
+
+    target_id = int(payload.get('targetPlayerId', -1))
+    target = next((p for p in game_state['players'] if p['id'] == target_id), None)
+    if not target:
+        await send_error(websocket, '目标玩家不存在')
+        return
+
+    if not target.get('isAI'):
+        await websocket.send_json({
+            'event': ServerEvents.ERROR,
+            'data': {'message': '只能踢出AI玩家', 'errorCode': 'NOT_AI'}
+        })
+        return
+
+    game_state['players'].remove(target)
+
+    await manager.send_to_room(room_id, ServerEvents.SERVER_ROOM_ACTION,
+        make_action_message(ServerRoomActionTypes.AI_KICKED, {
+            'playerId': target_id,
+            'players': game_state['players']
+        }))
+    await broadcast_room_state(room_id, rooms, manager)
+    log_info(f"AI player {target['name']} kicked from room {room_id}")
+
+
 def _make_room_action_router(handlers: dict):
     """创建房间行动路由函数"""
     async def handle_room_action_router(websocket, rooms, manager, payload):

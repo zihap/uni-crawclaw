@@ -16,9 +16,8 @@ from utils.events import ClientEvents, ServerEvents, ServerRoomActionTypes, Clie
 from utils.helpers import get_player, make_action_message
 from utils.logger import log_info, log_debug, log_error
 from services.game import handle_player_disconnect, broadcast_room_state, cancel_pending_host_transfer
-from controllers.room_action_handler import handle_room_action, handle_set_ready, handle_leave_room, handle_kick_player, handle_start_game
+from controllers.room_action_handler import handle_room_action, handle_set_ready, handle_leave_room, handle_kick_player, handle_start_game, handle_add_ai, handle_kick_ai
 from controllers.game_action_handler import handle_game_action
-from controllers.battle_action_handler import handle_battle_action
 from controllers.battle_action_handler import handle_battle_action
 
 
@@ -85,6 +84,13 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
     """
     fingerprint = id(websocket)
 
+    from services.ai_scheduler import AIActionScheduler
+    if not hasattr(manager, 'ai_schedulers'):
+        manager.ai_schedulers = {}
+    if room_id not in manager.ai_schedulers:
+        manager.ai_schedulers[room_id] = AIActionScheduler(rooms, manager)
+    ai_scheduler = manager.ai_schedulers[room_id]
+
     log_info(f"WebSocket connection: room_id={room_id}, player_id={player_id}")
     log_debug(f"rooms at connection time: {list(rooms.keys())}")
 
@@ -146,6 +152,10 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
                     result = await handle_kick_player(websocket, room_id, player_id, rooms, manager, payload)
                 elif action_type == ClientRoomActionTypes.START_GAME:
                     result = await handle_start_game(websocket, room_id, player_id, rooms, manager, payload)
+                elif action_type == ClientRoomActionTypes.ADD_AI:
+                    result = await handle_add_ai(websocket, room_id, player_id, rooms, manager, payload)
+                elif action_type == ClientRoomActionTypes.KICK_AI:
+                    result = await handle_kick_ai(websocket, room_id, player_id, rooms, manager, payload)
                 if result is False:
                     break
                 continue
@@ -154,7 +164,7 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
             if event == ClientEvents.CLIENT_BATTLE_ACTION:
                 if _check_idempotency(player_id, ClientEvents.CLIENT_BATTLE_ACTION, payload):
                     continue
-                result = await handle_battle_action(websocket, room_id, player_id, rooms, manager, payload)
+                result = await handle_battle_action(websocket, room_id, player_id, rooms, manager, payload, ai_scheduler=ai_scheduler)
                 if result is False:
                     break
                 continue
@@ -164,7 +174,7 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
                 area_action_type = payload.get('actionType') or payload.get('action_type') or ''
                 if area_action_type != 'areaAction' and _check_idempotency(player_id, ClientEvents.CLIENT_GAME_ACTION, payload):
                     continue
-                result = await handle_game_action(websocket, room_id, player_id, rooms, manager, payload)
+                result = await handle_game_action(websocket, room_id, player_id, rooms, manager, payload, ai_scheduler=ai_scheduler)
                 if result is False:
                     break
                 continue

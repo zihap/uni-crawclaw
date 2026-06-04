@@ -60,8 +60,6 @@ SLOT_TEMPLATES = {
         {'actionCount': 1},
         {'actionCount': 1},
         {'actionCount': 1},
-        {'actionCount': 1},
-        {'actionCount': 1},
         {'actionCount': 1}
     ],
     'marketplace': [None, None, None]
@@ -72,7 +70,7 @@ AREA_SLOT_COUNTS = {
     'shrimp_catching': 4,
     'seafood_market': 4,
     'breeding': 4,
-    'tribute': 8,
+    'tribute': 6,
     'marketplace': 3
 }
 

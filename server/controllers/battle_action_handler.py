@@ -322,9 +322,12 @@ async def start_rpg_battle(room_id, battle_id, game_state, manager):
 async def handle_rpg_battle_action(websocket, room_id, player_id, rooms, manager, payload):
     action_type = payload.get('actionType') or payload.get('action_type')
     game_state = rooms.get(room_id)
-    if not game_state or 'current_battle' not in game_state: return
+    if not game_state or 'current_battle' not in game_state:
+        log_debug(f"[handle_rpg_battle_action] EXIT: no game_state or no current_battle")
+        return
 
     battle = game_state['current_battle']
+    log_debug(f"[handle_rpg_battle_action] action={action_type}, player={player_id}, activePlayer={battle.get('activePlayerId')}, phase={battle.get('phase')}")
 
     if action_type not in ['confirm_hp_result', 'claim_battle_reward'] and player_id != battle.get('activePlayerId') and player_id != battle.get('targetPlayerId'):
         await send_error(websocket, '还没轮到你操作！')
@@ -618,6 +621,7 @@ async def _finalize_rpg_battle(websocket, room_id, game_state, manager, rooms):
             'actionType': 'battleEnded', 'gameState': game_state,
             'betResults': bet_results
         }))
+    del game_state['current_battle']  # 清除战斗状态
     await asyncio.sleep(2.0)
     await _check_tribute_battles_complete(game_state, websocket, room_id, rooms, manager)
 
@@ -653,10 +657,22 @@ async def _check_tribute_battles_complete(game_state, websocket, room_id, rooms,
                 await start_area_settlement(websocket, room_id, game_state, rooms, manager)
         return True
     else:
-        await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
-            make_action_message('battleStart', {
-                'actionType': 'battleStart', 'battleQueue': game_state['battleQueue']
-            }))
+        battles_needing_start = []
+        for b in remaining_battles:
+            bid = str(b.get('battleId', b.get('challengeSlot', '')))
+            key = f"{room_id}_{bid}"
+            state = arena_betting_state.get(key)
+            if state and state.get('completed'):
+                await start_rpg_battle(room_id, bid, game_state, manager)
+            elif state and state.get('started'):
+                pass
+            else:
+                battles_needing_start.append(b)
+        if battles_needing_start:
+            await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
+                make_action_message('battleStart', {
+                    'actionType': 'battleStart', 'battleQueue': battles_needing_start
+                }))
         return False
 
 def swap_challenge_slot(game_state, challenge_slot):
@@ -726,7 +742,8 @@ async def handle_lobster_selected(websocket, room_id, player_id, rooms, manager,
                 auto_bet_spectators = []
                 for sid in spectators:
                     sp = get_player(game_state, sid)
-                    if sp and sp.get('coins', 0) == 0:
+                    if sp and (sp.get('coins', 0) == 0 or sp.get('isAI')):
+                        # 0金币或AI观战者自动跳过下注
                         state['bets'][sid] = {'amount': 0, 'target': None}
                         auto_bet_spectators.append(sid)
 
@@ -824,7 +841,7 @@ async def handle_spectator_bet(websocket, room_id, player_id, rooms, manager, pa
 async def handle_battle_bonus_choice(websocket, room_id, player_id, rooms, manager, payload): pass
 
 def _make_battle_action_router():
-    async def handle_battle_action_router(websocket, room_id, player_id, rooms, manager, payload):
+    async def handle_battle_action_router(websocket, room_id, player_id, rooms, manager, payload, ai_scheduler=None):
         action_type = payload.get('actionType') or payload.get('action_type')
         inner_payload = payload.get('payload', payload)
         inner_action_type = inner_payload.get('actionType') or inner_payload.get('action_type')
@@ -832,13 +849,34 @@ def _make_battle_action_router():
         all_actions = [action_type, inner_action_type]
 
         if 'lobster_selected' in all_actions:
-            return await handle_lobster_selected(websocket, room_id, player_id, rooms, manager, inner_payload)
+            result = await handle_lobster_selected(websocket, room_id, player_id, rooms, manager, inner_payload)
+            if ai_scheduler:
+                from services.area import process_area_action
+                await ai_scheduler.check_and_trigger(
+                    room_id, websocket, rooms, manager,
+                    handle_battle_action_fn=handle_battle_action_router,
+                    process_area_action_fn=process_area_action)
+            return result
 
         if 'spectator_bet' in all_actions:
-            return await handle_spectator_bet(websocket, room_id, player_id, rooms, manager, inner_payload)
+            result = await handle_spectator_bet(websocket, room_id, player_id, rooms, manager, inner_payload)
+            if ai_scheduler:
+                from services.area import process_area_action
+                await ai_scheduler.check_and_trigger(
+                    room_id, websocket, rooms, manager,
+                    handle_battle_action_fn=handle_battle_action_router,
+                    process_area_action_fn=process_area_action)
+            return result
 
         if 'no_lobster_forfeit' in all_actions:
-            return await handle_no_lobster_forfeit(websocket, room_id, player_id, rooms, manager, inner_payload)
+            result = await handle_no_lobster_forfeit(websocket, room_id, player_id, rooms, manager, inner_payload)
+            if ai_scheduler:
+                from services.area import process_area_action
+                await ai_scheduler.check_and_trigger(
+                    room_id, websocket, rooms, manager,
+                    handle_battle_action_fn=handle_battle_action_router,
+                    process_area_action_fn=process_area_action)
+            return result
 
         rpg_actions = ['battleAction', 'roll_dice', 'seaweed_choice', 'draw_hp', 'confirm_hp_result', 'claim_battle_reward']
 
@@ -846,7 +884,15 @@ def _make_battle_action_router():
             if inner_payload.get('actionType') is None:
                 valid_a = next((a for a in all_actions if a in rpg_actions and a != 'battleAction'), 'battleAction')
                 inner_payload['actionType'] = valid_a
-            return await handle_rpg_battle_action(websocket, room_id, player_id, rooms, manager, inner_payload)
+            result = await handle_rpg_battle_action(websocket, room_id, player_id, rooms, manager, inner_payload)
+            # AI自动行动：战斗行动后检查是否需要触发AI
+            if ai_scheduler:
+                from services.area import process_area_action
+                await ai_scheduler.check_and_trigger(
+                    room_id, websocket, rooms, manager,
+                    handle_battle_action_fn=handle_battle_action_router,
+                    process_area_action_fn=process_area_action)
+            return result
 
         await send_error(websocket, f'未知的战斗行动: {action_type}')
     return handle_battle_action_router
