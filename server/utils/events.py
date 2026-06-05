@@ -38,6 +38,8 @@ class ClientRoomActionTypes:
     INVITE_JOIN = 'inviteJoin'
     KICK_PLAYER = 'kickPlayer'
     START_GAME = 'startGame'
+    ADD_AI = 'addAI'
+    KICK_AI = 'kickAI'
 
 class ClientGameActionTypes:
     """clientGameAction 事件中的 actionType 取值"""
@@ -94,6 +96,8 @@ class ServerRoomActionTypes:
     ROOM_STATE_UPDATE = 'roomStateUpdate'
     PLAYER_READY = 'playerReady'
     PLAYER_KICKED = 'playerKicked'
+    AI_ADDED = 'aiAdded'
+    AI_KICKED = 'aiKicked'
 
 
 class ServerGameActionTypes:

@@ -65,6 +65,7 @@ def create_game_state() -> dict:
         'downtownCards': [],
         'titleCardDeck': [], # 称号卡牌堆
         'gameTitleCards': [], # 奖励池中当前回合展示的2张称号卡
+        'tributeCardDeck': [], # 上供卡牌堆（已完成的卡会永久移除）
         'taverns': [
             {'id': i, 'name': f'酒楼{i+1}', 'cards': [], 'occupants': []}
             for i in range(6)
@@ -132,16 +133,17 @@ def create_player(player_id: int, name: str, is_host: bool = False, user_id: str
 
 
 def distribute_tavern_cards(game_state: dict):
-    """洗牌并分配上供卡到酒楼"""
-    shuffled = copy.deepcopy(TRIBUTE_TASKS)
-    random.shuffle(shuffled)
+    """从上供卡牌堆抽牌分配到酒楼（已完成的卡不会再次出现）"""
+    deck = game_state.get('tributeCardDeck', [])
+    if not deck:
+        deck = copy.deepcopy(TRIBUTE_TASKS)
+        random.shuffle(deck)
+        game_state['tributeCardDeck'] = deck
 
     if 'taverns' in game_state:
-        card_idx = 0
         for tavern in game_state['taverns']:
-            while len(tavern['cards']) < 2 and card_idx < len(shuffled):
-                tavern['cards'].append(shuffled[card_idx])
-                card_idx += 1
+            while len(tavern['cards']) < 2 and deck:
+                tavern['cards'].append(deck.pop(0))
 
 
 def draw_downtown_cards(game_state: dict):
