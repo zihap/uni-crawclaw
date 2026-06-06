@@ -128,7 +128,11 @@ def create_player(player_id: int, name: str, is_host: bool = False, user_id: str
 
         # 闹市区新增状态记录
         'tributesThisRound': 0,
-        'inn_headman': False
+        'inn_headman': False,
+
+        # AI接管状态
+        'isAITakeover': False,
+        'aiTakeoverTime': None
     }
 
 

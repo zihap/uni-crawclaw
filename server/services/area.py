@@ -10,7 +10,7 @@ from utils.constants import FISHING_BAG_ITEMS, SLOT_TEMPLATES, MARKET_PRICES, CH
 from utils.events import ServerEvents, ServerAreaActionTypes, ServerBattleActionTypes
 from utils.logger import log_info, log_debug
 from services.game import broadcast_game_state
-from utils.helpers import send_error, make_action_message, create_lobster as _make_lobster, calculate_market_prices, make_settlement_state
+from utils.helpers import send_error, make_action_message, create_lobster as _make_lobster, calculate_market_prices, make_settlement_state, is_ai_player
 from services.tribute_card_effects import check_market_rule, check_breed_bonus, check_tribute_discount, check_battle_bonus, check_adjacent_action, get_adjacent_rewards, apply_aura_effect, check_cage_trade
 
 
@@ -233,7 +233,7 @@ async def _resolve_breeding_step(game_state: dict, manager, room_id):
                     game_state['settlementState']['currentSlotIndex'] += 1
                     game_state['settlementState']['waitingForPlayer'] = None
                     return 'action_complete'
-                if player.get('isAI'):
+                if is_ai_player(player):
                     # AI没有龙虾，直接跳过
                     current_slot_index += 1
                     continue

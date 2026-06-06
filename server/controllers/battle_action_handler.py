@@ -8,7 +8,7 @@ import math
 import asyncio
 from utils.constants import AREAS, GRADE_UPGRADE, CHALLENGE_SLOT_DONE, CHALLENGE_TO_DEFENDER_SLOT_MAP
 from utils.events import ServerEvents, ServerBattleActionTypes, ServerAreaActionTypes
-from utils.helpers import send_error, get_player, update_resources, make_action_message, make_broadcast_fn, make_settlement_state, _build_resource_snapshot
+from utils.helpers import send_error, get_player, update_resources, make_action_message, make_broadcast_fn, make_settlement_state, _build_resource_snapshot, is_ai_player
 from utils.logger import log_info, log_debug
 from utils.game_state import arena_betting_state
 from services.game import broadcast_game_state, start_area_settlement, complete_settlement
@@ -742,7 +742,7 @@ async def handle_lobster_selected(websocket, room_id, player_id, rooms, manager,
                 auto_bet_spectators = []
                 for sid in spectators:
                     sp = get_player(game_state, sid)
-                    if sp and (sp.get('coins', 0) == 0 or sp.get('isAI')):
+                    if sp and (sp.get('coins', 0) == 0 or is_ai_player(sp)):
                         # 0金币或AI观战者自动跳过下注
                         state['bets'][sid] = {'amount': 0, 'target': None}
                         auto_bet_spectators.append(sid)

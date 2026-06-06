@@ -105,6 +105,18 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
             log_info(f"Game WS reconnect: player={player.get('name')}, isOnline={player.get('isOnline')}, isHost={player.get('isHost')}, players_count={len(game_state.get('players', []))}")
             player['isOnline'] = True
             cancel_pending_host_transfer(player_id)
+            # 新增：清除AI接管状态
+            if player.get('isAITakeover'):
+                player['isAITakeover'] = False
+                player.pop('aiTakeoverTime', None)
+                # 取消定时器（如果还在运行）
+                ai_scheduler.cancel_takeover_timer(room_id, player_id)
+                # 通知前端玩家已重连
+                await manager.send_to_room(room_id, ServerEvents.SERVER_ROOM_ACTION,
+                    make_action_message(ServerRoomActionTypes.AI_TAKEOVER_ENDED, {
+                        'playerId': player_id,
+                        'playerName': player.get('name')
+                    }))
             await manager.send_to_room(room_id, ServerEvents.SERVER_ROOM_ACTION,
                 make_action_message(ServerRoomActionTypes.PLAYER_STATUS_CHANGE, {
                     'playerId': player_id,

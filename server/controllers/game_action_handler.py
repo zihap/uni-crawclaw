@@ -19,7 +19,7 @@
 
 from utils.constants import AREAS
 from utils.events import ClientGameActionTypes, ServerEvents, ServerGameActionTypes, ServerAreaActionTypes
-from utils.helpers import send_error, has_resources, update_resources, get_player, make_action_message, make_broadcast_fn, make_settlement_state
+from utils.helpers import send_error, has_resources, update_resources, get_player, make_action_message, make_broadcast_fn, make_settlement_state, is_ai_player
 from utils.logger import log_info, log_debug
 from services.game import broadcast_game_state, start_area_settlement, complete_settlement, update_market_prices, calculate_final_score
 from services.area import process_area_action
@@ -317,7 +317,7 @@ async def handle_endgame_score_choice(websocket, room_id, player_id, rooms, mana
     while game_state['endgameChoiceIndex'] < len(waiting_list):
         next_player_info = waiting_list[game_state['endgameChoiceIndex']]
         next_player_obj = game_state['players'][next_player_info['playerId']]
-        if not next_player_obj.get('isAI'):
+        if not is_ai_player(next_player_obj):
             break
         from services.ai_decision_engine import decide_endgame_score_choice
         choice_result = decide_endgame_score_choice(next_player_obj, next_player_info['card'])

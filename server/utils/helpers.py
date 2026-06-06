@@ -17,6 +17,11 @@ def make_action_message(action_type: str, data: dict = None, **kwargs) -> dict:
     return {'actionType': action_type, **kwargs}
 
 
+def is_ai_player(player: dict) -> bool:
+    """检查是否为AI玩家（包括AI接管的人类玩家）"""
+    return player.get('isAI', False) or player.get('isAITakeover', False)
+
+
 def create_lobster(grade: str = 'normal') -> dict:
     """创建一只龙虾对象"""
     return {

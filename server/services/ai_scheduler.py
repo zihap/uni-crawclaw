@@ -5,11 +5,12 @@ AI行动调度器与WebSocket桩
 
 import asyncio
 import random
-from typing import Optional
+import time
+from typing import Optional, Dict
 from utils.logger import log_info
 from utils.constants import AREAS
-from utils.events import ServerEvents, ServerAreaActionTypes, ServerBattleActionTypes
-from utils.helpers import make_action_message
+from utils.events import ServerEvents, ServerAreaActionTypes, ServerBattleActionTypes, ServerRoomActionTypes
+from utils.helpers import make_action_message, is_ai_player
 
 
 class AIWebSocket:
@@ -37,6 +38,7 @@ class AIActionScheduler:
         self._running_tasks: dict = {}  # room_id -> asyncio.Task
         self._in_battle_loop = False  # 重入保护
         self._in_check_trigger = False  # check_and_trigger重入保护
+        self.ai_takeover_timers: Dict[str, asyncio.Task] = {}
 
     def is_ai_turn(self, room_id: str) -> bool:
         """检测当前是否为AI玩家的回合"""
@@ -47,7 +49,7 @@ class AIActionScheduler:
         idx = gs.get('currentPlayerIndex', 0)
         if idx < 0 or idx >= len(players):
             return False
-        return players[idx].get('isAI', False)
+        return is_ai_player(players[idx])
 
     def get_current_ai_player(self, room_id: str) -> Optional[dict]:
         """获取当前AI玩家"""
@@ -56,9 +58,70 @@ class AIActionScheduler:
             return None
         players = gs.get('players', [])
         idx = gs.get('currentPlayerIndex', 0)
-        if 0 <= idx < len(players) and players[idx].get('isAI'):
+        if 0 <= idx < len(players) and is_ai_player(players[idx]):
             return players[idx]
         return None
+
+    async def start_takeover_timer(self, room_id: str, player_id: int, rooms: dict, manager):
+        """启动60秒AI接管定时器"""
+        key = f"{room_id}_{player_id}"
+        if key in self.ai_takeover_timers:
+            log_info(f"[takeover] replacing existing timer for player {player_id} in room {room_id}")
+            self.ai_takeover_timers[key].cancel()
+
+        async def _delayed_takeover():
+            try:
+                await asyncio.sleep(60)
+                game_state = rooms.get(room_id)
+                if not game_state:
+                    log_info(f"[takeover] timer fired for player {player_id} but room {room_id} no longer exists")
+                    return
+                player = next((p for p in game_state['players'] if p['id'] == player_id), None)
+                if not player:
+                    log_info(f"[takeover] timer fired for player {player_id} but player not found")
+                    return
+                if player.get('isOnline'):
+                    log_info(f"[takeover] timer fired for player {player_id} but player is back online, skipping")
+                    return
+                log_info(f"[takeover] executing takeover for player {player_id} in room {room_id}")
+                player['isAITakeover'] = True
+                player['aiTakeoverTime'] = int(time.time())
+                await manager.send_to_room(room_id, ServerEvents.SERVER_ROOM_ACTION,
+                    make_action_message(ServerRoomActionTypes.AI_TAKEOVER_STARTED, {
+                        'playerId': player_id,
+                        'playerName': player.get('name')
+                    }))
+                from controllers.game_action_handler import handle_place_headman, handle_next_player
+                from controllers.battle_action_handler import handle_battle_action
+                from services.area import process_area_action
+                await self.check_and_trigger(room_id, None, rooms, manager,
+                    handle_place_headman_fn=handle_place_headman,
+                    handle_next_player_fn=handle_next_player,
+                    process_area_action_fn=process_area_action,
+                    handle_battle_action_fn=handle_battle_action)
+            except asyncio.CancelledError:
+                log_info(f"[takeover] timer cancelled for player {player_id} in room {room_id}")
+                raise
+            except Exception as e:
+                log_info(f"[takeover] timer failed for player {player_id} in room {room_id}: {e}")
+
+        self.ai_takeover_timers[key] = asyncio.create_task(_delayed_takeover())
+
+    def cancel_takeover_timer(self, room_id: str, player_id: int):
+        """取消AI接管定时器"""
+        key = f"{room_id}_{player_id}"
+        if key in self.ai_takeover_timers:
+            self.ai_takeover_timers[key].cancel()
+            del self.ai_takeover_timers[key]
+            log_info(f"[takeover] timer cancelled for player {player_id} in room {room_id}")
+
+    def cleanup_room_timers(self, room_id: str):
+        """清理房间相关的所有定时器"""
+        keys_to_remove = [key for key in self.ai_takeover_timers if key.startswith(f"{room_id}_")]
+        for key in keys_to_remove:
+            self.ai_takeover_timers[key].cancel()
+            del self.ai_takeover_timers[key]
+            log_info(f"[takeover] cleanup timer {key} for room {room_id}")
 
     async def _handle_tribute_lobster_selection(self, room_id: str, gs: dict, manager):
         """处理tribute战斗的AI龙虾选择和判负逻辑"""
@@ -88,7 +151,7 @@ class AIActionScheduler:
                 if state[role] is not None:
                     continue
                 player = next((p for p in gs['players'] if p['id'] == pid), None)
-                if not player or not player.get('isAI'):
+                if not player or not is_ai_player(player):
                     continue
                 available = [l for l in player.get('lobsters', []) if not l.get('used') and not l.get('selectedForBattle') and l.get('grade', 'normal') != 'normal']
                 if available:
@@ -109,8 +172,8 @@ class AIActionScheduler:
             d_has = state['defenderLobster'] is not None
             c_player = next((p for p in gs['players'] if p['id'] == cid), None)
             d_player = next((p for p in gs['players'] if p['id'] == did), None)
-            c_is_ai = c_player and c_player.get('isAI')
-            d_is_ai = d_player and d_player.get('isAI')
+            c_is_ai = c_player and is_ai_player(c_player)
+            d_is_ai = d_player and is_ai_player(d_player)
 
             if not c_has and c_is_ai:
                 forfeit_loser = cid
@@ -146,12 +209,13 @@ class AIActionScheduler:
             # 双方都已选龙虾
             c_player = next((p for p in gs['players'] if p['id'] == cid), None)
             d_player = next((p for p in gs['players'] if p['id'] == did), None)
-            both_ai = (c_player and c_player.get('isAI')) and (d_player and d_player.get('isAI'))
+            both_ai = (c_player and is_ai_player(c_player)) and (d_player and is_ai_player(d_player))
             if state['challengerLobster'] and state['defenderLobster'] and not state['started'] and both_ai:
                 state['started'] = True
                 spectators = state.get('spectators', [])
                 has_human_spectators = any(
-                    not next((p for p in gs['players'] if p['id'] == sid), {}).get('isAI')
+                    not next((p for p in gs['players'] if p['id'] == sid), {}).get('isAI') and
+                    not next((p for p in gs['players'] if p['id'] == sid), {}).get('isAITakeover')
                     for sid in spectators
                 )
                 if has_human_spectators:
@@ -160,7 +224,7 @@ class AIActionScheduler:
                     auto_bet = []
                     for sid in spectators:
                         sp = next((p for p in gs['players'] if p['id'] == sid), None)
-                        if sp and (sp.get('isAI') or sp.get('coins', 0) == 0):
+                        if sp and (is_ai_player(sp) or sp.get('coins', 0) == 0):
                             state['bets'][sid] = {'amount': 0, 'target': None}
                             auto_bet.append(sid)
                     await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
@@ -197,7 +261,7 @@ class AIActionScheduler:
                 break
             for pid, role in [(cid, 'challengerLobster'), (did, 'defenderLobster')]:
                 player = next((p for p in gs['players'] if p['id'] == pid), None)
-                if player and not player.get('isAI') and state[role] is None:
+                if player and not is_ai_player(player) and state[role] is None:
                     needs_human_input = True
                     break
             if needs_human_input:
@@ -213,12 +277,15 @@ class AIActionScheduler:
         while True:
             gs = self.rooms.get(room_id)
             if not gs or gs.get('phase') != 'placement':
+                log_info(f"[schedule_ai_placement] exiting: phase={gs.get('phase') if gs else 'N/A'}")
                 return
 
             ai_player = self.get_current_ai_player(room_id)
             if not ai_player:
+                log_info(f"[schedule_ai_placement] exiting: no AI player found")
                 return
 
+            log_info(f"[schedule_ai_placement] AI player {ai_player['id']} ({ai_player.get('name')}) thinking...")
             think_time = random.uniform(1.0, 3.0)
             ai_player['aiState'] = 'thinking'
             await asyncio.sleep(think_time)
@@ -227,6 +294,7 @@ class AIActionScheduler:
 
             from services.ai_decision_engine import decide_placement
             decision = decide_placement(gs, ai_player)
+            log_info(f"[schedule_ai_placement] AI player {ai_player['id']} decision: area={decision['area_index']}, slot={decision['slot_index']}")
 
             ai_ws = AIWebSocket()
 
@@ -258,7 +326,7 @@ class AIActionScheduler:
             if waiting_player_id is not None:
                 # 有等待中的玩家，检查是否为AI
                 players = gs.get('players', [])
-                ai_player = next((p for p in players if p['id'] == waiting_player_id and p.get('isAI')), None)
+                ai_player = next((p for p in players if p['id'] == waiting_player_id and is_ai_player(p)), None)
                 if not ai_player:
                     return  # 人类玩家，交给前端处理
 
@@ -363,7 +431,7 @@ class AIActionScheduler:
                     log_info(f"[schedule_ai_battle] exiting: no activePlayerId")
                     return
 
-                ai_player = next((p for p in gs['players'] if p['id'] == ai_player_id and p.get('isAI')), None)
+                ai_player = next((p for p in gs['players'] if p['id'] == ai_player_id and is_ai_player(p)), None)
                 if not ai_player:
                     log_info(f"[schedule_ai_battle] exiting: player {ai_player_id} is not AI")
                     return
@@ -438,7 +506,7 @@ class AIActionScheduler:
                     else:
                         current_id = battle.get('activePlayerId')
                     if current_id is not None:
-                        player = next((p for p in gs['players'] if p['id'] == current_id and p.get('isAI')), None)
+                        player = next((p for p in gs['players'] if p['id'] == current_id and is_ai_player(p)), None)
                         if player and handle_battle_action_fn:
                             log_info(f"[check_and_trigger] triggering battle AI during settlement")
                             await self.schedule_ai_battle(
@@ -453,8 +521,8 @@ class AIActionScheduler:
                 waiting_id = settlement_state.get('waitingForPlayer')
                 log_info(f"[check_and_trigger] settlement: waitingForPlayer={waiting_id}")
                 if waiting_id is not None:
-                    player = next((p for p in gs['players'] if p['id'] == waiting_id and p.get('isAI')), None)
-                    log_info(f"[check_and_trigger] waiting player isAI={player.get('isAI') if player else None}")
+                    player = next((p for p in gs['players'] if p['id'] == waiting_id and is_ai_player(p)), None)
+                    log_info(f"[check_and_trigger] waiting player isAI={player.get('isAI') if player else None}, isAITakeover={player.get('isAITakeover') if player else None}")
                     if player and process_area_action_fn:
                         log_info(f"[check_and_trigger] triggering settlement AI for player {waiting_id}")
                         await self.schedule_ai_settlement(
@@ -523,7 +591,7 @@ class AIActionScheduler:
                 if battle:
                     current_id = battle.get('activePlayerId')
                     if current_id is not None:
-                        player = next((p for p in gs['players'] if p['id'] == current_id and p.get('isAI')), None)
+                        player = next((p for p in gs['players'] if p['id'] == current_id and is_ai_player(p)), None)
                         if player and handle_battle_action_fn:
                             await self.schedule_ai_battle(
                                 room_id, websocket, rooms, manager, handle_battle_action_fn)

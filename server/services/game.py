@@ -10,7 +10,7 @@ from utils.constants import AREAS, MARKET_PRICES, CHALLENGE_SLOT_DONE
 from utils.events import ServerEvents, ServerRoomActionTypes, ServerGameActionTypes, ServerAreaActionTypes
 from utils.game_state import distribute_tavern_cards, draw_downtown_cards, draw_title_cards
 from utils.logger import log_info, log_debug
-from utils.helpers import make_action_message, calculate_market_prices
+from utils.helpers import make_action_message, calculate_market_prices, is_ai_player
 from services.tribute_card_effects import get_endgame_choices
 
 
@@ -77,6 +77,11 @@ def cleanup_room(room_id: str, rooms: dict, manager):
             if key.startswith(f"{room_id}_"):
                 del arena_betting_state[key]
 
+        # 清理AI接管定时器
+        ai_scheduler = manager.ai_schedulers.get(room_id)
+        if ai_scheduler:
+            ai_scheduler.cleanup_room_timers(room_id)
+
         log_info(f"Room {room_id} deleted")
 
 
@@ -117,7 +122,7 @@ def transfer_host(room_id: str, game_state: dict):
     if not game_state or game_state['status'] != 'waiting':
         return
 
-    online_players = [p for p in game_state['players'] if p.get('isOnline') and not p.get('isAI')]
+    online_players = [p for p in game_state['players'] if p.get('isOnline') and not is_ai_player(p)]
     if not online_players:
         return
 
@@ -150,6 +155,10 @@ async def handle_player_disconnect(room_id: str, player_id: int, player_name: st
     if player_name is None:
         player_name = player.get('name')
 
+    if not player.get('isOnline', True):
+        log_info(f"handle_player_disconnect: player {player_id} ({player_name}) already offline, skipping")
+        return
+
     player['isOnline'] = False
     player['ready'] = False
     player['lastSeen'] = int(time.time())
@@ -168,6 +177,13 @@ async def handle_player_disconnect(room_id: str, player_id: int, player_name: st
     if all_offline:
         cleanup_room(room_id, rooms, manager)
         return
+
+    # 启动AI接管定时器（仅对人类玩家，且不是所有玩家都离线）
+    if not player.get('isAI'):
+        ai_scheduler = manager.ai_schedulers.get(room_id)
+        if ai_scheduler:
+            log_info(f"handle_player_disconnect: starting AI takeover timer for player {player_id}")
+            await ai_scheduler.start_takeover_timer(room_id, player_id, rooms, manager)
 
     await manager.broadcast_to_room_members(room_id, ServerEvents.SERVER_ROOM_ACTION,
         make_action_message(ServerRoomActionTypes.PLAYER_STATUS_CHANGE,
@@ -327,7 +343,7 @@ async def complete_settlement(room_id, game_state, rooms, manager):
             while game_state['endgameChoiceIndex'] < len(players_need_endgame_choice):
                 cur = players_need_endgame_choice[game_state['endgameChoiceIndex']]
                 cur_player = game_state['players'][cur['playerId']]
-                if not cur_player.get('isAI'):
+                if not is_ai_player(cur_player):
                     break  # 遇到真人玩家，停止自动处理，等待客户端交互
                 from services.ai_decision_engine import decide_endgame_score_choice
                 from services.tribute_card_effects import apply_endgame_choice

@@ -12,7 +12,7 @@
 
 from utils.events import ClientRoomActionTypes, ServerEvents, ServerRoomActionTypes
 from utils.error_codes import ErrorCodes
-from utils.helpers import generate_room_id, get_player, send_error, make_action_message
+from utils.helpers import generate_room_id, get_player, send_error, make_action_message, is_ai_player
 from utils.logger import log_info
 from utils.game_state import create_game_state, create_player
 from services.game import broadcast_room_state, start_game, transfer_host, cleanup_room, cancel_pending_host_transfer
@@ -445,7 +445,7 @@ async def handle_kick_ai(websocket, room_id, player_id, rooms, manager, payload)
         await send_error(websocket, '目标玩家不存在')
         return
 
-    if not target.get('isAI'):
+    if not is_ai_player(target):
         await websocket.send_json({
             'event': ServerEvents.ERROR,
             'data': {'message': '只能踢出AI玩家', 'errorCode': 'NOT_AI'}

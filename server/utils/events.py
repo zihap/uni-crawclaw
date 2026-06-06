@@ -98,6 +98,8 @@ class ServerRoomActionTypes:
     PLAYER_KICKED = 'playerKicked'
     AI_ADDED = 'aiAdded'
     AI_KICKED = 'aiKicked'
+    AI_TAKEOVER_STARTED = 'aiTakeoverStarted'
+    AI_TAKEOVER_ENDED = 'aiTakeoverEnded'
 
 
 class ServerGameActionTypes:
