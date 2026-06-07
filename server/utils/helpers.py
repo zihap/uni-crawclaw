@@ -150,7 +150,6 @@ def _build_resource_snapshot(player: dict) -> dict:
         'de': player.get('de', 0),
         'wang': player.get('wang', 0),
         'liZhang': player.get('liZhang', 0),
-        'bubbles': player.get('bubbles', 0),
         'bonusGold': player.get('bonusGold', 0),
         'lobsters': player.get('lobsters', []),
         'titleCards': player.get('titleCards', []),

@@ -211,8 +211,7 @@ TRIBUTE_TASKS = card_config.get('tributeCards', _CARD_CONFIG_DEFAULT['tributeCar
 DOWNTOWN_CARDS = card_config.get('marketplaceCards', _CARD_CONFIG_DEFAULT['marketplaceCards'])
 
 FISHING_BAG_ITEMS = [
-    {'type': 'bubble', 'weight': 30},
-    {'type': 'lobster', 'weight': 25},
-    {'type': 'seaweed', 'weight': 25},
+    {'type': 'lobster', 'weight': 40},
+    {'type': 'seaweed', 'weight': 40},
     {'type': 'either', 'weight': 20}
 ]

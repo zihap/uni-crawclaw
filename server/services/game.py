@@ -253,7 +253,6 @@ async def start_game(room_id: str, rooms: dict, manager):
     game_state['currentPlayerIndex'] = starting_player_idx
 
     for p in game_state['players']:
-        p['bubbles'] = 0
         p['ready'] = False
 
     for area_name in AREAS:

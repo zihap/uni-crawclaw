@@ -465,9 +465,6 @@ async def _process_shrimp_catching_action(game_state: dict, action_type: str, ac
                 }))
             return 'continue_ui'
 
-        elif item == 'bubble':
-            player['tempBubbles'] += 1
-            result_msg = '获得1个气泡'
         elif item == 'lobster':
             shrimp_area = game_state['areas']['shrimp_catching']
             pool = shrimp_area.get('wildLobsterPool', 0)
@@ -1289,7 +1286,6 @@ def _serialize_player(player: dict) -> dict:
         'lobsters': player['lobsters'],
         'titleCards': player['titleCards'],
         'tributeCards': player.get('tributeCards', []),
-        'tempBubbles': player.get('tempBubbles', 0),
         'tavernCompletions': player.get('tavernCompletions', {}),
         'hiredLaborersBonus': player.get('hiredLaborersBonus', [])
     }

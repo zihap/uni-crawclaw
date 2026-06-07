@@ -40,6 +40,7 @@ yarn-error.log*
 *.sw?
 *.sublime-*
 AGENTS.md
+docs/
 
 # OS
 .DS_Store
