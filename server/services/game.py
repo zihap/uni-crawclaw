@@ -10,7 +10,7 @@ from utils.constants import AREAS, MARKET_PRICES, CHALLENGE_SLOT_DONE
 from utils.events import ServerEvents, ServerRoomActionTypes, ServerGameActionTypes, ServerAreaActionTypes
 from utils.game_state import distribute_tavern_cards, draw_downtown_cards, draw_title_cards
 from utils.logger import log_info, log_debug
-from utils.helpers import make_action_message, calculate_market_prices, is_ai_player
+from utils.helpers import make_action_message, calculate_market_prices, is_ai_player, update_resources, make_broadcast_fn, make_delta_broadcast_fn
 from services.tribute_card_effects import get_endgame_choices
 
 
@@ -42,9 +42,6 @@ def cleanup_phase(game_state: dict):
         if player.get('inn_headman'):
             player['liZhang'] += 1
             player['inn_headman'] = False
-
-    for player in game_state['players']:
-        player['coins'] += 2 + player.get('bonusGold', 0)
 
     if 'taverns' in game_state:
         for tavern in game_state['taverns']:
@@ -339,6 +336,13 @@ async def complete_settlement(room_id, game_state, rooms, manager):
     """完成结算阶段，进入清理和下一回合"""
     cleanup_phase(game_state)
 
+    # Broadcast round start resource changes
+    bf = make_broadcast_fn(manager.send_to_room, room_id)
+    dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+    for player in game_state['players']:
+        delta = 2 + player.get('bonusGold', 0)
+        await update_resources(player, {'coins': delta}, broadcast_fn=bf, delta_broadcast_fn=dbf)
+
     if game_state['currentRound'] >= game_state['maxRounds']:
         # （...此处保留原有的 endgameChoice 逻辑...）
         players_need_endgame_choice = []
@@ -367,7 +371,11 @@ async def complete_settlement(room_id, game_state, rooms, manager):
                 from services.ai_decision_engine import decide_endgame_score_choice
                 from services.tribute_card_effects import apply_endgame_choice
                 choice_result = decide_endgame_score_choice(cur_player, cur['card'])
-                apply_endgame_choice(cur_player, cur['card'], choice_result)
+                result = apply_endgame_choice(cur_player, cur['card'], choice_result)
+                if result:
+                    bf = make_broadcast_fn(manager.send_to_room, room_id)
+                    dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+                    await update_resources(cur_player, result, broadcast_fn=bf, delta_broadcast_fn=dbf)
                 game_state['endgameChoiceIndex'] += 1
 
             # 如果所有玩家都处理完了（全是AI或已全部选完）
@@ -421,14 +429,16 @@ async def complete_settlement(room_id, game_state, rooms, manager):
     game_state['currentRound'] += 1
 
     # 触发每轮 aura 效果
+    bf = make_broadcast_fn(manager.send_to_room, room_id)
+    dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
     for player in game_state['players']:
         tribute_cards = player.get('tributeCards', [])
         for card in tribute_cards:
             effect_type = card.get('effectType')
             if effect_type == 'aura_round_coin':
-                player['coins'] = player.get('coins', 0) + 1
+                await update_resources(player, {'coins': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             elif effect_type == 'aura_round_seaweed':
-                player['seaweed'] = player.get('seaweed', 0) + 1
+                await update_resources(player, {'seaweed': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
     
     # 清空本局的下注信息
     from utils.game_state import arena_betting_state
@@ -452,9 +462,6 @@ async def complete_settlement(room_id, game_state, rooms, manager):
         if area_name in game_state['areas']:
             slot_count = len(game_state['areas'][area_name]['slots'])
             game_state['areas'][area_name]['slots'] = [None] * slot_count
-
-    for p in game_state['players']:
-        p['royalCountThisRound'] = 0
 
     distribute_tavern_cards(game_state)
     # 【重点修复】：已删除 draw_downtown_cards(game_state) ，不再每回合刷新卡牌！

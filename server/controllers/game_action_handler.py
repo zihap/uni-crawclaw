@@ -19,7 +19,7 @@
 
 from utils.constants import AREAS
 from utils.events import ClientGameActionTypes, ServerEvents, ServerGameActionTypes, ServerAreaActionTypes
-from utils.helpers import send_error, has_resources, update_resources, get_player, make_action_message, make_broadcast_fn, make_settlement_state, is_ai_player
+from utils.helpers import send_error, has_resources, update_resources, get_player, make_action_message, make_broadcast_fn, make_delta_broadcast_fn, make_settlement_state, is_ai_player
 from utils.logger import log_info, log_debug
 from services.game import broadcast_game_state, start_area_settlement, complete_settlement, update_market_prices, calculate_final_score
 from services.area import process_area_action
@@ -35,7 +35,9 @@ async def handle_use_seaweed(websocket, room_id, player_id, rooms, manager, payl
     if not player or player['seaweed'] <= 0:
         await send_error(websocket, '海草不足')
         return
-    await update_resources(player, {'seaweed': -1}, broadcast_fn=make_broadcast_fn(manager.send_to_room, room_id))
+    bf = make_broadcast_fn(manager.send_to_room, room_id)
+    dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+    await update_resources(player, {'seaweed': -1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
 
 async def handle_place_headman(websocket, room_id, player_id, rooms, manager, payload):
@@ -89,11 +91,12 @@ async def handle_place_headman(websocket, room_id, player_id, rooms, manager, pa
 
     slots = area_data['slots']
     bf = make_broadcast_fn(manager.send_to_room, room_id)
+    dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
     if slot_index < 0 or slot_index >= len(slots) or slots[slot_index] is not None:
         await send_error(websocket, '该位置已有米宝')
         return
 
-    await update_resources(player, {'liZhang': -1}, broadcast_fn=bf)
+    await update_resources(player, {'liZhang': -1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
     slots[slot_index] = player_id
     game_state['lastPlacement'] = {
         'playerId': player_id,
@@ -139,7 +142,8 @@ async def handle_cancel_headman(websocket, room_id, player_id, rooms, manager, p
     slots[slot_index] = None
     game_state['lastPlacement'] = None
     bf = make_broadcast_fn(manager.send_to_room, room_id)
-    await update_resources(player, {'liZhang': 1}, broadcast_fn=bf)
+    dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+    await update_resources(player, {'liZhang': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
     await broadcast_game_state(room_id, rooms, manager)
 
 
@@ -300,16 +304,21 @@ async def handle_endgame_score_choice(websocket, room_id, player_id, rooms, mana
     player = game_state['players'][player_id]
 
     if choice:
-        apply_endgame_choice(player, card, choice)
+        result = apply_endgame_choice(player, card, choice)
     elif choice_index is not None:
         choices = get_endgame_choices(player, card)
         if choice_index < 0 or choice_index >= len(choices):
             await send_error(websocket, '无效的选择')
             return
-        apply_endgame_choice(player, card, choices[choice_index])
+        result = apply_endgame_choice(player, card, choices[choice_index])
     else:
         await send_error(websocket, '无效的请求')
         return
+
+    if result:
+        bf = make_broadcast_fn(manager.send_to_room, room_id)
+        dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+        await update_resources(player, result, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
     game_state['endgameChoiceIndex'] = current_index + 1
 
@@ -321,7 +330,11 @@ async def handle_endgame_score_choice(websocket, room_id, player_id, rooms, mana
             break
         from services.ai_decision_engine import decide_endgame_score_choice
         choice_result = decide_endgame_score_choice(next_player_obj, next_player_info['card'])
-        apply_endgame_choice(next_player_obj, next_player_info['card'], choice_result)
+        result = apply_endgame_choice(next_player_obj, next_player_info['card'], choice_result)
+        if result:
+            bf = make_broadcast_fn(manager.send_to_room, room_id)
+            dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+            await update_resources(next_player_obj, result, broadcast_fn=bf, delta_broadcast_fn=dbf)
         game_state['endgameChoiceIndex'] += 1
 
     if game_state['endgameChoiceIndex'] >= len(waiting_list):

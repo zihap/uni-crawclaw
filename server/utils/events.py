@@ -111,6 +111,7 @@ class ServerGameActionTypes:
     GAME_ACTION = 'gameAction'
     TRIBUTE_CHOICE_REQUIRED = 'tributeChoiceRequired'
     ENDGAME_SCORE_CHOICE = 'endgameScoreChoice'
+    PLAYER_RESOURCE_DELTA = 'playerResourceDelta'
 
 
 class ServerBattleActionTypes:

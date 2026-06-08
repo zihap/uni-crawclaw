@@ -111,7 +111,6 @@ def create_player(player_id: int, name: str, is_host: bool = False, user_id: str
 
         'completedTasks': [],
         'tavernCompletions': {},
-        'royalCountThisRound': 0,
         'bonusGold': 0,
 
         'permaBuffs': [],

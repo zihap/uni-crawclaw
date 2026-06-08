@@ -194,8 +194,7 @@ def apply_instant_effect(player: dict, card: dict, game_state: dict) -> dict:
         return {}
     
     elif effect_type == 'instant_gain_cages':
-        player['cages'] = player.get('cages', 0) + 2
-        return {}
+        return {'resourceDeltas': {'cages': 2}}
     
     elif effect_type == 'instant_buy_advanced_lobster':
         return {'needChoice': True, 'choiceType': 'buy_advanced_lobster', 'options': [
@@ -273,18 +272,8 @@ def get_endgame_choices(player: dict, card: dict) -> List[dict]:
     return []
 
 
-def apply_endgame_choice(player: dict, card: dict, choice: dict) -> bool:
-    """
-    应用终局选择
-    
-    Args:
-        player: 玩家数据
-        card: 上供卡数据
-        choice: 选择数据，包含 cost 和 reward
-    
-    Returns:
-        bool: 是否成功应用选择
-    """
+def apply_endgame_choice(player: dict, card: dict, choice: dict):
+    """返回资源变化量 dict，失败返回 False"""
     cost = choice.get('cost', 0)
     reward = choice.get('reward', 0)
     cost_resource_type = card.get('costResourceType', 'coins')
@@ -293,10 +282,4 @@ def apply_endgame_choice(player: dict, card: dict, choice: dict) -> bool:
     if current_resource < cost:
         return False
     
-    if cost_resource_type == 'coins':
-        player['coins'] -= cost
-    elif cost_resource_type == 'seaweed':
-        player['seaweed'] -= cost
-    
-    player['de'] = player.get('de', 0) + reward
-    return True
+    return {cost_resource_type: -cost, 'de': reward}
