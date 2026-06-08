@@ -4,6 +4,7 @@
 """
 
 from typing import Dict, List, Optional
+from utils.constants import GRADE_UPGRADE
 
 
 def has_perma_buff(player: dict, buff_name: str) -> bool:
@@ -164,18 +165,9 @@ def apply_instant_effect(player: dict, card: dict, game_state: dict) -> dict:
             if upgrade_count >= breed_count:
                 break
             current_grade = lobster.get('grade', 'normal')
-            # 每次培养升级1品
-            if current_grade == 'normal':
-                lobster['grade'] = 'grade3'
-                upgrade_count += 1
-            elif current_grade == 'grade3':
-                lobster['grade'] = 'grade2'
-                upgrade_count += 1
-            elif current_grade == 'grade2':
-                lobster['grade'] = 'grade1'
-                upgrade_count += 1
-            elif current_grade == 'grade1':
-                lobster['grade'] = 'royal'
+            next_grade = GRADE_UPGRADE.get(current_grade)
+            if next_grade and next_grade != current_grade:
+                lobster['grade'] = next_grade
                 upgrade_count += 1
         return {'upgraded': upgrade_count}
     
@@ -183,14 +175,9 @@ def apply_instant_effect(player: dict, card: dict, game_state: dict) -> dict:
         lobsters = player.get('lobsters', [])
         for lobster in lobsters:
             current_grade = lobster.get('grade', 'normal')
-            if current_grade == 'normal':
-                lobster['grade'] = 'grade3'
-            elif current_grade == 'grade3':
-                lobster['grade'] = 'grade2'
-            elif current_grade == 'grade2':
-                lobster['grade'] = 'grade1'
-            elif current_grade == 'grade1':
-                lobster['grade'] = 'royal'
+            next_grade = GRADE_UPGRADE.get(current_grade)
+            if next_grade:
+                lobster['grade'] = next_grade
         return {}
     
     elif effect_type == 'instant_gain_cages':

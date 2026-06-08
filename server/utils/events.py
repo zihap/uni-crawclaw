@@ -77,6 +77,7 @@ class ServerEvents:
 
     # 资源 (独立事件)
     PLAYER_RESOURCE_UPDATE = 'playerResourceUpdate'
+    PLAYER_RESOURCE_DELTA = 'playerResourceDelta'
 
     # 错误 (独立事件)
     ERROR = 'error'
@@ -111,7 +112,6 @@ class ServerGameActionTypes:
     GAME_ACTION = 'gameAction'
     TRIBUTE_CHOICE_REQUIRED = 'tributeChoiceRequired'
     ENDGAME_SCORE_CHOICE = 'endgameScoreChoice'
-    PLAYER_RESOURCE_DELTA = 'playerResourceDelta'
 
 
 class ServerBattleActionTypes:
@@ -132,6 +132,4 @@ class ServerAreaActionTypes:
     SETTLEMENT_COMPLETE = 'settlementComplete'
 
 
-from utils.error_codes import ErrorCodes
 
-ServerErrorCodes = ErrorCodes

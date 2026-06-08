@@ -20,12 +20,6 @@ def update_market_prices(game_state: dict):
     market_area['dynamicPrices'] = calculate_market_prices(market_area['marketLobsterCount'])
 
 
-def prepare_phase(game_state: dict):
-    """准备阶段处理"""
-    game_state['areas']['shrimp_catching']['wildLobsterPool'] = 8
-    update_market_prices(game_state)
-
-
 def cleanup_phase(game_state: dict):
     """清理阶段处理（对齐单机 executeCleanupPhase）"""
     market_area = game_state['areas']['seafood_market']

@@ -6,16 +6,11 @@
 import json
 import random
 import copy
-from utils.constants import FISHING_BAG_ITEMS, SLOT_TEMPLATES, MARKET_PRICES, CHALLENGE_SLOT_DONE, GRADE_VALUES
+from utils.constants import FISHING_BAG_ITEMS, SLOT_TEMPLATES, MARKET_PRICES, CHALLENGE_SLOT_DONE, GRADE_VALUES, GRADE_UPGRADE, GRADE_UPGRADE_SEAWEED
 from utils.events import ServerEvents, ServerAreaActionTypes, ServerBattleActionTypes
 from utils.logger import log_info, log_debug
-from services.game import broadcast_game_state
-from utils.helpers import send_error, make_action_message, create_lobster as _make_lobster, calculate_market_prices, make_settlement_state, is_ai_player, update_resources, make_broadcast_fn, make_delta_broadcast_fn, _build_resource_snapshot
+from utils.helpers import send_error, make_action_message, calculate_market_prices, make_settlement_state, is_ai_player, update_resources, make_broadcast_fn, make_delta_broadcast_fn, _build_resource_snapshot
 from services.tribute_card_effects import check_market_rule, check_breed_bonus, check_tribute_discount, check_battle_bonus, check_adjacent_action, get_adjacent_rewards, apply_aura_effect, check_cage_trade
-
-
-def _create_lobster(grade='normal'):
-    return _make_lobster(grade)
 
 
 def draw_from_bag(game_state: dict) -> str:
@@ -761,17 +756,11 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
             await send_error(websocket, '虾王已达最高品级，无法继续培养')
             return 'error'
 
-        def get_next_grade(g):
-            mapping = {'normal': 'grade3', 'grade3': 'grade2', 'grade2': 'grade1', 'grade1': 'royal', 'royal': 'royal'}
-            return mapping.get(g, g)
-
-        target_grade = get_next_grade(old_grade)
+        target_grade = GRADE_UPGRADE.get(old_grade, old_grade)
 
         if use_seaweed:
             if player.get('seaweed', 0) < 1: return 'error'
-            if old_grade == 'normal': target_grade = 'grade2'
-            elif old_grade == 'grade3': target_grade = 'grade1'
-            else: target_grade = 'royal'
+            target_grade = GRADE_UPGRADE_SEAWEED.get(old_grade, old_grade)
 
         is_upgrading_to_royal = (old_grade != 'royal' and target_grade == 'royal')
 
@@ -807,7 +796,7 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
 
         has_breed_bonus = check_breed_bonus(player)
         if has_breed_bonus and lobster['grade'] != 'royal':
-            lobster['grade'] = get_next_grade(lobster['grade'])
+            lobster['grade'] = GRADE_UPGRADE.get(lobster['grade'], lobster['grade'])
 
         remaining_actions -= 1
         game_state['settlementState']['remainingActions'] = remaining_actions

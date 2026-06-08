@@ -6,7 +6,7 @@
 import random
 import math
 import asyncio
-from utils.constants import AREAS, GRADE_UPGRADE, CHALLENGE_SLOT_DONE, CHALLENGE_TO_DEFENDER_SLOT_MAP
+from utils.constants import AREAS, CHALLENGE_SLOT_DONE, CHALLENGE_TO_DEFENDER_SLOT_MAP
 from utils.events import ServerEvents, ServerBattleActionTypes, ServerAreaActionTypes
 from utils.helpers import send_error, get_player, update_resources, make_action_message, make_broadcast_fn, make_delta_broadcast_fn, make_settlement_state, _build_resource_snapshot, is_ai_player
 from utils.logger import log_info, log_debug

@@ -11,5 +11,4 @@ __all__ = [
     'ConnectionManager',
     'AREAS', 'MARKET_PRICES', 'TRIBUTE_TASKS', 'DOWNTOWN_CARDS', 'FISHING_BAG_ITEMS',
     'create_game_state', 'create_player', 'generate_user_id', 'distribute_tavern_cards', 'draw_downtown_cards',
-    'generate_room_id'
 ]
