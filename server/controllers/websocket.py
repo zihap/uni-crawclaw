@@ -105,6 +105,12 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
             log_info(f"Game WS reconnect: player={player.get('name')}, isOnline={player.get('isOnline')}, isHost={player.get('isHost')}, players_count={len(game_state.get('players', []))}")
             player['isOnline'] = True
             cancel_pending_host_transfer(player_id)
+            # 取消待执行的房间删除任务
+            from services.game import scheduled_deletions
+            deletion_task = scheduled_deletions.pop(room_id, None)
+            if deletion_task:
+                deletion_task.cancel()
+                log_info(f"Cancelled room deletion for {room_id} due to player reconnect")
             # 新增：清除AI接管状态
             if player.get('isAITakeover'):
                 player['isAITakeover'] = False

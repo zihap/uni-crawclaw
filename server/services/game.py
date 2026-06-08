@@ -86,6 +86,22 @@ def cleanup_room(room_id: str, rooms: dict, manager):
 
 
 scheduled_transfers: Dict[int, asyncio.Task] = {}
+scheduled_deletions: Dict[str, asyncio.Task] = {}
+
+
+async def _delayed_room_cleanup(room_id: str, rooms: dict, manager):
+    """延迟5分钟后删除房间，若有人重连则取消"""
+    try:
+        await asyncio.sleep(300)  # 5分钟 = 300秒
+        game_state = rooms.get(room_id)
+        if game_state:
+            all_offline = all(not p.get('isOnline', True) for p in game_state['players'])
+            if all_offline:
+                cleanup_room(room_id, rooms, manager)
+    except asyncio.CancelledError:
+        log_info(f"Room deletion cancelled for {room_id}")
+    finally:
+        scheduled_deletions.pop(room_id, None)
 
 
 async def _delayed_host_transfer(room_id: str, player_id: int, rooms: dict, manager, broadcast_func):
@@ -175,7 +191,11 @@ async def handle_player_disconnect(room_id: str, player_id: int, player_name: st
     await broadcast_func(room_id)
 
     if all_offline:
-        cleanup_room(room_id, rooms, manager)
+        if room_id not in scheduled_deletions:
+            log_info(f"Scheduling room deletion for {room_id} in 5 minutes")
+            scheduled_deletions[room_id] = asyncio.create_task(
+                _delayed_room_cleanup(room_id, rooms, manager)
+            )
         return
 
     # 启动AI接管定时器（仅对人类玩家，且不是所有玩家都离线）
