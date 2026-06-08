@@ -382,7 +382,7 @@ async def handle_add_ai(websocket, room_id, player_id, rooms, manager, payload):
         })
         return
 
-    player = game_state['players'][player_id] if player_id < len(game_state['players']) else None
+    player = get_player(game_state, player_id)
     if not player or not player.get('isHost'):
         await websocket.send_json({
             'event': ServerEvents.ERROR,
@@ -431,7 +431,7 @@ async def handle_kick_ai(websocket, room_id, player_id, rooms, manager, payload)
         })
         return
 
-    player = game_state['players'][player_id] if player_id < len(game_state['players']) else None
+    player = get_player(game_state, player_id)
     if not player or not player.get('isHost'):
         await websocket.send_json({
             'event': ServerEvents.ERROR,

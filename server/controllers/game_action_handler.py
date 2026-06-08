@@ -50,7 +50,14 @@ async def handle_place_headman(websocket, room_id, player_id, rooms, manager, pa
         await send_error(websocket, '游戏未开始')
         return
 
-    if player_id != game_state.get('currentPlayerIndex'):
+    # 使用get_player通过ID查找玩家，然后获取其数组索引
+    player = get_player(game_state, player_id)
+    if not player:
+        await send_error(websocket, '玩家不存在')
+        return
+
+    player_index = game_state['players'].index(player)
+    if player_index != game_state.get('currentPlayerIndex'):
         await send_error(websocket, '不是你的回合')
         return
 
@@ -59,8 +66,7 @@ async def handle_place_headman(websocket, room_id, player_id, rooms, manager, pa
         await send_error(websocket, '本回合已放置过里长，请点击下一阶段')
         return
 
-    player = game_state['players'][player_id]
-    if not player or player['liZhang'] <= 0:
+    if player['liZhang'] <= 0:
         await send_error(websocket, '没有米宝了')
         return
 
@@ -115,7 +121,14 @@ async def handle_cancel_headman(websocket, room_id, player_id, rooms, manager, p
         await send_error(websocket, '游戏未开始')
         return
 
-    if player_id != game_state.get('currentPlayerIndex'):
+    # 使用get_player通过ID查找玩家，然后获取其数组索引
+    player = get_player(game_state, player_id)
+    if not player:
+        await send_error(websocket, '玩家不存在')
+        return
+
+    player_index = game_state['players'].index(player)
+    if player_index != game_state.get('currentPlayerIndex'):
         await send_error(websocket, '不是你的回合')
         return
 
@@ -137,8 +150,6 @@ async def handle_cancel_headman(websocket, room_id, player_id, rooms, manager, p
         game_state['lastPlacement'] = None
         await send_error(websocket, '放置位置已变更')
         return
-
-    player = game_state['players'][player_id]
     slots[slot_index] = None
     game_state['lastPlacement'] = None
     bf = make_broadcast_fn(manager.send_to_room, room_id)
@@ -153,7 +164,14 @@ async def handle_next_player(websocket, room_id, player_id, rooms, manager, payl
     if not game_state:
         return
 
-    if player_id != game_state.get('currentPlayerIndex', 0):
+    # 使用get_player通过ID查找玩家，然后获取其数组索引
+    player = get_player(game_state, player_id)
+    if not player:
+        await send_error(websocket, '玩家不存在')
+        return
+
+    player_index = game_state['players'].index(player)
+    if player_index != game_state.get('currentPlayerIndex', 0):
         await send_error(websocket, '不是你的回合')
         return
 
@@ -234,7 +252,7 @@ async def handle_area_action(websocket, room_id, player_id, rooms, manager, payl
         if remaining_actions > 1:
             game_state['settlementState']['remainingActions'] = remaining_actions - 1
             await broadcast_game_state(room_id, rooms, manager)
-            player = game_state['players'][player_id]
+            player = get_player(game_state, player_id)
             await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
                 make_action_message(ServerAreaActionTypes.AREA_WAITING_UI, {
                     'areaType': area_name,
