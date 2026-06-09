@@ -251,15 +251,15 @@ async def start_game(room_id: str, rooms: dict, manager):
     game_state['currentRound'] = 1
     game_state['lastPlacement'] = None
 
+    for player in game_state['players']:
+        player['tributesThisRound'] = 0
+        player['inn_headman'] = False
+
     starting_player_idx = 0
     for idx, player in enumerate(game_state['players']):
         if player.get('isStartingPlayer', False):
             starting_player_idx = idx
             break
-
-        # 初始化新的状态追踪
-        player['tributesThisRound'] = 0
-        player['inn_headman'] = False
 
     game_state['currentPlayerIndex'] = starting_player_idx
 

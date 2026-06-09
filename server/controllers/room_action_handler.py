@@ -65,8 +65,8 @@ async def _add_player_to_room(websocket, rooms, manager, room_id, player_name, u
     while new_player_id in used_ids:
         new_player_id += 1
     player = create_player(new_player_id, player_name, is_host, user_id, position=new_player_id)
-    game_state['players'].append(player)
-    
+    game_state['players'].insert(new_player_id, player)
+
     manager.lobby_connections[user_id] = websocket
     manager.user_rooms[user_id] = room_id
     
@@ -75,10 +75,10 @@ async def _add_player_to_room(websocket, rooms, manager, room_id, player_name, u
 
 async def _send_join_success(websocket, room_id, manager, game_state, is_reconnect=False, user_id=None):
     """发送加入成功消息并广播房间状态更新"""
-    if is_reconnect and user_id:
+    if user_id:
         player = next((p for p in game_state['players'] if p.get('userId') == user_id), None)
         if not player:
-            log_info(f"Warning: reconnect player with userId={user_id} not found, using last player as fallback")
+            log_info(f"Warning: player with userId={user_id} not found, using last player as fallback")
             player = game_state['players'][-1]
     else:
         player = game_state['players'][-1]
@@ -405,7 +405,7 @@ async def handle_add_ai(websocket, room_id, player_id, rooms, manager, payload):
         new_id += 1
     position = new_id
     ai_player = create_ai_player(new_id, position=position)
-    game_state['players'].append(ai_player)
+    game_state['players'].insert(new_id, ai_player)
 
     await manager.send_to_room(room_id, ServerEvents.SERVER_ROOM_ACTION,
         make_action_message(ServerRoomActionTypes.AI_ADDED, {
