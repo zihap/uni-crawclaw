@@ -285,9 +285,9 @@ class AIActionScheduler:
                 log_info(f"[schedule_ai_placement] exiting: no AI player found")
                 return
 
-            # 获取AI玩家在数组中的索引（currentPlayerIndex使用数组索引，不是玩家ID）
-            ai_player_index = gs['players'].index(ai_player)
-            log_info(f"[schedule_ai_placement] AI player {ai_player['id']} ({ai_player.get('name')}) thinking... (index={ai_player_index})")
+            # 使用玩家ID而不是数组索引
+            ai_player_id = ai_player['id']
+            log_info(f"[schedule_ai_placement] AI player {ai_player_id} ({ai_player.get('name')}) thinking...")
             think_time = random.uniform(1.0, 3.0)
             ai_player['aiState'] = 'thinking'
             await asyncio.sleep(think_time)
@@ -296,18 +296,18 @@ class AIActionScheduler:
 
             from services.ai_decision_engine import decide_placement
             decision = decide_placement(gs, ai_player)
-            log_info(f"[schedule_ai_placement] AI player {ai_player['id']} decision: area={decision['area_index']}, slot={decision['slot_index']}")
+            log_info(f"[schedule_ai_placement] AI player {ai_player_id} decision: area={decision['area_index']}, slot={decision['slot_index']}")
 
             ai_ws = AIWebSocket()
 
             area_index = decision['area_index']
             slot_index = decision['slot_index']
-            await handle_place_headman_fn(ai_ws, room_id, ai_player_index, rooms, manager, {
+            await handle_place_headman_fn(ai_ws, room_id, ai_player_id, rooms, manager, {
                 'areaIndex': area_index,
                 'slotIndex': slot_index
             })
 
-            await handle_next_player_fn(ai_ws, room_id, ai_player_index, rooms, manager, {})
+            await handle_next_player_fn(ai_ws, room_id, ai_player_id, rooms, manager, {})
 
             ai_player['aiState'] = 'idle'
 

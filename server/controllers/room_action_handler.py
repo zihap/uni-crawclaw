@@ -230,7 +230,7 @@ async def handle_set_ready(websocket, room_id, player_id, rooms, manager, payloa
         await broadcast_room_state(room_id, rooms, manager)
 
 
-async def handle_start_game(websocket, room_id, player_id, rooms, manager, payload):
+async def handle_start_game(websocket, room_id, player_id, rooms, manager, payload, ai_scheduler=None):
     """开始游戏（仅房主可用）"""
     game_state = rooms.get(room_id)
     if not game_state:
@@ -260,6 +260,16 @@ async def handle_start_game(websocket, room_id, player_id, rooms, manager, paylo
         return
 
     await start_game(room_id, rooms, manager)
+
+    # 游戏开始后，检查是否需要触发AI行动
+    if ai_scheduler:
+        from controllers.game_action_handler import handle_place_headman, handle_next_player
+        from services.area import process_area_action
+        await ai_scheduler.check_and_trigger(
+            room_id, websocket, rooms, manager,
+            handle_place_headman_fn=handle_place_headman,
+            handle_next_player_fn=handle_next_player,
+            process_area_action_fn=process_area_action)
 
 
 async def handle_kick_player(websocket, room_id, player_id, rooms, manager, payload):

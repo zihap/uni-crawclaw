@@ -9,7 +9,7 @@ import copy
 from utils.constants import FISHING_BAG_ITEMS, SLOT_TEMPLATES, MARKET_PRICES, CHALLENGE_SLOT_DONE, GRADE_VALUES, GRADE_UPGRADE, GRADE_UPGRADE_SEAWEED
 from utils.events import ServerEvents, ServerAreaActionTypes, ServerBattleActionTypes
 from utils.logger import log_info, log_debug
-from utils.helpers import send_error, make_action_message, calculate_market_prices, make_settlement_state, is_ai_player, update_resources, make_broadcast_fn, make_delta_broadcast_fn, _build_resource_snapshot
+from utils.helpers import send_error, make_action_message, calculate_market_prices, make_settlement_state, is_ai_player, update_resources, make_broadcast_fn, make_delta_broadcast_fn, _build_resource_snapshot, get_player
 from services.tribute_card_effects import check_market_rule, check_breed_bonus, check_tribute_discount, check_battle_bonus, check_adjacent_action, get_adjacent_rewards, apply_aura_effect, check_cage_trade
 
 
@@ -99,7 +99,10 @@ async def _resolve_shrimp_catching_step(game_state: dict, manager, room_id, bf, 
             current_slot_index += 1
             continue
 
-        player = game_state['players'][player_id]
+        player = get_player(game_state, player_id)
+        if not player:
+            current_slot_index += 1
+            continue
         template = templates[current_slot_index]
         remaining_actions = template['actionCount']
         reward_given = False
@@ -154,7 +157,10 @@ async def _resolve_seafood_market_step(game_state: dict, manager, room_id, bf, d
     while current_slot_index < len(slots):
         player_id = slots[current_slot_index]
         if player_id is not None:
-            player = game_state['players'][player_id]
+            player = get_player(game_state, player_id)
+            if not player:
+                current_slot_index += 1
+                continue
             template = templates[current_slot_index]
             action_count = template['actionCount']
             reward = template['reward']
@@ -205,7 +211,10 @@ async def _resolve_breeding_step(game_state: dict, manager, room_id, bf, dbf):
     while current_slot_index < len(slots):
         player_id = slots[current_slot_index]
         if player_id is not None:
-            player = game_state['players'][player_id]
+            player = get_player(game_state, player_id)
+            if not player:
+                current_slot_index += 1
+                continue
             template = templates[current_slot_index]
             action_count = template['actionCount'] if template else 1
 
@@ -339,7 +348,10 @@ async def _resolve_tribute_actions(game_state: dict, manager, room_id):
         if player_id is not None:
             template = templates[current_slot_index]
             action_count = template['actionCount'] if template else 1
-            player = game_state['players'][player_id]
+            player = get_player(game_state, player_id)
+            if not player:
+                current_slot_index += 1
+                continue
             log_debug(f"[_resolve_tribute_actions] slot={current_slot_index}, player_id={player_id}, action_count={action_count}")
 
             game_state['settlementState'] = make_settlement_state('tribute', current_slot_index, action_count, player_id)
@@ -366,7 +378,10 @@ async def _resolve_marketplace_step(game_state: dict, manager, room_id, bf, dbf)
     while current_slot_index < len(slots):
         player_id = slots[current_slot_index]
         if player_id is not None:
-            player = game_state['players'][player_id]
+            player = get_player(game_state, player_id)
+            if not player:
+                current_slot_index += 1
+                continue
             raw_available_cards = [c for c in game_state.get('downtownCards', []) if not c.get('usedThisRound', False)]
 
             if len(raw_available_cards) == 0:
@@ -1259,7 +1274,7 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             return
 
         choice_type = pending.get('choiceType')
-        player = game_state['players'][player['id']]
+        player = get_player(game_state, player['id'])
 
         if choice_type == 'buy_advanced_lobster':
             grade = choice.get('grade', 'normal')

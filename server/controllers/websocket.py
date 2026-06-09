@@ -169,7 +169,7 @@ async def handle_game_websocket(websocket: WebSocket, room_id: str, player_id: i
                 elif action_type == ClientRoomActionTypes.KICK_PLAYER:
                     result = await handle_kick_player(websocket, room_id, player_id, rooms, manager, payload)
                 elif action_type == ClientRoomActionTypes.START_GAME:
-                    result = await handle_start_game(websocket, room_id, player_id, rooms, manager, payload)
+                    result = await handle_start_game(websocket, room_id, player_id, rooms, manager, payload, ai_scheduler=ai_scheduler)
                 elif action_type == ClientRoomActionTypes.ADD_AI:
                     result = await handle_add_ai(websocket, room_id, player_id, rooms, manager, payload)
                 elif action_type == ClientRoomActionTypes.KICK_AI:
