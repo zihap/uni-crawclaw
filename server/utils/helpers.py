@@ -17,6 +17,11 @@ def make_action_message(action_type: str, data: dict = None, **kwargs) -> dict:
     return {'actionType': action_type, **kwargs}
 
 
+def is_ai_player(player: dict) -> bool:
+    """检查是否为AI玩家（包括AI接管的人类玩家）"""
+    return player.get('isAI', False) or player.get('isAITakeover', False)
+
+
 def create_lobster(grade: str = 'normal') -> dict:
     """创建一只龙虾对象"""
     return {
@@ -32,6 +37,23 @@ def make_broadcast_fn(broadcast_fn, room_id: str) -> Callable:
             'playerId': player_id, 'resources': resources
         })
     return bf
+
+
+def make_delta_broadcast_fn(broadcast_fn, room_id: str) -> Callable:
+    """创建资源变化量广播闭包"""
+    async def bf(player_id: int, deltas: dict):
+        await broadcast_fn(room_id, ServerEvents.PLAYER_RESOURCE_DELTA, {
+            'playerId': player_id, 'deltas': deltas
+        })
+    return bf
+
+
+def make_resource_broadcast_fns(broadcast_fn, room_id: str) -> tuple:
+    """创建资源快照和变化量广播闭包 (bf, dbf)"""
+    return (
+        make_broadcast_fn(broadcast_fn, room_id),
+        make_delta_broadcast_fn(broadcast_fn, room_id)
+    )
 
 
 def calculate_market_prices(lobster_count: int) -> dict:
@@ -145,10 +167,12 @@ def _build_resource_snapshot(player: dict) -> dict:
         'de': player.get('de', 0),
         'wang': player.get('wang', 0),
         'liZhang': player.get('liZhang', 0),
-        'bubbles': player.get('bubbles', 0),
         'bonusGold': player.get('bonusGold', 0),
+        'bonusPoints': player.get('bonusPoints', 0),
         'lobsters': player.get('lobsters', []),
         'titleCards': player.get('titleCards', []),
+        'completedTasks': player.get('completedTasks', []),
+        'tavernCompletions': player.get('tavernCompletions', {}),
         'tributeCards': player.get('tributeCards', []),
     }
 
@@ -170,18 +194,33 @@ def has_resources(player: dict, cost: dict) -> bool:
     return True
 
 
-async def update_resources(player: dict, deltas: dict, broadcast_fn=None):
-    """更新玩家资源。delta 正数增加，负数减少。
-    广播完整资源快照，客户端直接替换。"""
+async def update_resources(player: dict, deltas: dict, broadcast_fn=None, delta_broadcast_fn=None):
+    """更新玩家资源并广播变化量和快照。
+    delta 正数增加，负数减少。
+    支持的 delta 格式:
+      - int: 直接加减 (coins, seaweed, cages, de, wang, liZhang, bonusPoints, bonusGold)
+      - dict with grade keys: 龙虾增减 (lobsters: {'grade3': 1, 'normal': -1})
+      - dict with 'add': 数组追加 (titleCards: {'add': [obj]}, completedTasks: {'add': [id]})
+      - dict with 'set': 字典设置 (tavernCompletions: {'set': {tavern_id: order}})
+    """
     for k, v in deltas.items():
         if k in LOBSTER_GRADES:
             _update_lobster_grade(player, k, v)
         elif k == 'lobsters':
-            for grade, amount in v.items():
-                _update_lobster_grade(player, grade, amount)
+            if isinstance(v, dict):
+                for grade, amount in v.items():
+                    _update_lobster_grade(player, grade, amount)
+        elif k in ('titleCards', 'completedTasks'):
+            if isinstance(v, dict) and 'add' in v:
+                player.setdefault(k, []).extend(v['add'])
+        elif k == 'tavernCompletions':
+            if isinstance(v, dict) and 'set' in v:
+                player.setdefault(k, {}).update(v['set'])
         else:
             player[k] = player.get(k, 0) + v
 
+    if delta_broadcast_fn:
+        await delta_broadcast_fn(player['id'], deltas)
     if broadcast_fn:
         await broadcast_fn(player['id'], _build_resource_snapshot(player))
 

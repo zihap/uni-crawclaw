@@ -77,6 +77,7 @@ class ServerEvents:
 
     # 资源 (独立事件)
     PLAYER_RESOURCE_UPDATE = 'playerResourceUpdate'
+    PLAYER_RESOURCE_DELTA = 'playerResourceDelta'
 
     # 错误 (独立事件)
     ERROR = 'error'
@@ -98,6 +99,8 @@ class ServerRoomActionTypes:
     PLAYER_KICKED = 'playerKicked'
     AI_ADDED = 'aiAdded'
     AI_KICKED = 'aiKicked'
+    AI_TAKEOVER_STARTED = 'aiTakeoverStarted'
+    AI_TAKEOVER_ENDED = 'aiTakeoverEnded'
 
 
 class ServerGameActionTypes:
@@ -129,6 +132,4 @@ class ServerAreaActionTypes:
     SETTLEMENT_COMPLETE = 'settlementComplete'
 
 
-from utils.error_codes import ErrorCodes
 
-ServerErrorCodes = ErrorCodes

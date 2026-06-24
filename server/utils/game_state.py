@@ -107,12 +107,10 @@ def create_player(player_id: int, name: str, is_host: bool = False, user_id: str
         'wang': 0,
         'bonusPoints': 0,
         'liZhang': resources['liZhang'],
-        'bubbles': 0,
         'lobsters': lobsters,
 
         'completedTasks': [],
         'tavernCompletions': {},
-        'royalCountThisRound': 0,
         'bonusGold': 0,
 
         'permaBuffs': [],
@@ -123,12 +121,15 @@ def create_player(player_id: int, name: str, is_host: bool = False, user_id: str
         'isHost': is_host,
         'isStartingPlayer': position == 0,
 
-        'tempBubbles': 0,
         'hiredLaborersBonus': [],
 
         # 闹市区新增状态记录
         'tributesThisRound': 0,
-        'inn_headman': False
+        'inn_headman': False,
+
+        # AI接管状态
+        'isAITakeover': False,
+        'aiTakeoverTime': None
     }
 
 

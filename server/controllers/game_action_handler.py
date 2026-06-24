@@ -19,7 +19,7 @@
 
 from utils.constants import AREAS
 from utils.events import ClientGameActionTypes, ServerEvents, ServerGameActionTypes, ServerAreaActionTypes
-from utils.helpers import send_error, has_resources, update_resources, get_player, make_action_message, make_broadcast_fn, make_settlement_state
+from utils.helpers import send_error, has_resources, update_resources, get_player, make_action_message, make_broadcast_fn, make_delta_broadcast_fn, make_settlement_state, is_ai_player
 from utils.logger import log_info, log_debug
 from services.game import broadcast_game_state, start_area_settlement, complete_settlement, update_market_prices, calculate_final_score
 from services.area import process_area_action
@@ -35,7 +35,9 @@ async def handle_use_seaweed(websocket, room_id, player_id, rooms, manager, payl
     if not player or player['seaweed'] <= 0:
         await send_error(websocket, '海草不足')
         return
-    await update_resources(player, {'seaweed': -1}, broadcast_fn=make_broadcast_fn(manager.send_to_room, room_id))
+    bf = make_broadcast_fn(manager.send_to_room, room_id)
+    dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+    await update_resources(player, {'seaweed': -1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
 
 async def handle_place_headman(websocket, room_id, player_id, rooms, manager, payload):
@@ -48,7 +50,14 @@ async def handle_place_headman(websocket, room_id, player_id, rooms, manager, pa
         await send_error(websocket, '游戏未开始')
         return
 
-    if player_id != game_state.get('currentPlayerIndex'):
+    # 使用get_player通过ID查找玩家，然后获取其数组索引
+    player = get_player(game_state, player_id)
+    if not player:
+        await send_error(websocket, '玩家不存在')
+        return
+
+    player_index = game_state['players'].index(player)
+    if player_index != game_state.get('currentPlayerIndex'):
         await send_error(websocket, '不是你的回合')
         return
 
@@ -57,8 +66,7 @@ async def handle_place_headman(websocket, room_id, player_id, rooms, manager, pa
         await send_error(websocket, '本回合已放置过里长，请点击下一阶段')
         return
 
-    player = game_state['players'][player_id]
-    if not player or player['liZhang'] <= 0:
+    if player['liZhang'] <= 0:
         await send_error(websocket, '没有米宝了')
         return
 
@@ -89,11 +97,12 @@ async def handle_place_headman(websocket, room_id, player_id, rooms, manager, pa
 
     slots = area_data['slots']
     bf = make_broadcast_fn(manager.send_to_room, room_id)
+    dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
     if slot_index < 0 or slot_index >= len(slots) or slots[slot_index] is not None:
         await send_error(websocket, '该位置已有米宝')
         return
 
-    await update_resources(player, {'liZhang': -1}, broadcast_fn=bf)
+    await update_resources(player, {'liZhang': -1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
     slots[slot_index] = player_id
     game_state['lastPlacement'] = {
         'playerId': player_id,
@@ -112,7 +121,14 @@ async def handle_cancel_headman(websocket, room_id, player_id, rooms, manager, p
         await send_error(websocket, '游戏未开始')
         return
 
-    if player_id != game_state.get('currentPlayerIndex'):
+    # 使用get_player通过ID查找玩家，然后获取其数组索引
+    player = get_player(game_state, player_id)
+    if not player:
+        await send_error(websocket, '玩家不存在')
+        return
+
+    player_index = game_state['players'].index(player)
+    if player_index != game_state.get('currentPlayerIndex'):
         await send_error(websocket, '不是你的回合')
         return
 
@@ -134,12 +150,11 @@ async def handle_cancel_headman(websocket, room_id, player_id, rooms, manager, p
         game_state['lastPlacement'] = None
         await send_error(websocket, '放置位置已变更')
         return
-
-    player = game_state['players'][player_id]
     slots[slot_index] = None
     game_state['lastPlacement'] = None
     bf = make_broadcast_fn(manager.send_to_room, room_id)
-    await update_resources(player, {'liZhang': 1}, broadcast_fn=bf)
+    dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+    await update_resources(player, {'liZhang': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
     await broadcast_game_state(room_id, rooms, manager)
 
 
@@ -149,7 +164,14 @@ async def handle_next_player(websocket, room_id, player_id, rooms, manager, payl
     if not game_state:
         return
 
-    if player_id != game_state.get('currentPlayerIndex', 0):
+    # 使用get_player通过ID查找玩家，然后获取其数组索引
+    player = get_player(game_state, player_id)
+    if not player:
+        await send_error(websocket, '玩家不存在')
+        return
+
+    player_index = game_state['players'].index(player)
+    if player_index != game_state.get('currentPlayerIndex', 0):
         await send_error(websocket, '不是你的回合')
         return
 
@@ -230,7 +252,7 @@ async def handle_area_action(websocket, room_id, player_id, rooms, manager, payl
         if remaining_actions > 1:
             game_state['settlementState']['remainingActions'] = remaining_actions - 1
             await broadcast_game_state(room_id, rooms, manager)
-            player = game_state['players'][player_id]
+            player = get_player(game_state, player_id)
             await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
                 make_action_message(ServerAreaActionTypes.AREA_WAITING_UI, {
                     'areaType': area_name,
@@ -300,16 +322,21 @@ async def handle_endgame_score_choice(websocket, room_id, player_id, rooms, mana
     player = game_state['players'][player_id]
 
     if choice:
-        apply_endgame_choice(player, card, choice)
+        result = apply_endgame_choice(player, card, choice)
     elif choice_index is not None:
         choices = get_endgame_choices(player, card)
         if choice_index < 0 or choice_index >= len(choices):
             await send_error(websocket, '无效的选择')
             return
-        apply_endgame_choice(player, card, choices[choice_index])
+        result = apply_endgame_choice(player, card, choices[choice_index])
     else:
         await send_error(websocket, '无效的请求')
         return
+
+    if result:
+        bf = make_broadcast_fn(manager.send_to_room, room_id)
+        dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+        await update_resources(player, result, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
     game_state['endgameChoiceIndex'] = current_index + 1
 
@@ -317,11 +344,15 @@ async def handle_endgame_score_choice(websocket, room_id, player_id, rooms, mana
     while game_state['endgameChoiceIndex'] < len(waiting_list):
         next_player_info = waiting_list[game_state['endgameChoiceIndex']]
         next_player_obj = game_state['players'][next_player_info['playerId']]
-        if not next_player_obj.get('isAI'):
+        if not is_ai_player(next_player_obj):
             break
         from services.ai_decision_engine import decide_endgame_score_choice
         choice_result = decide_endgame_score_choice(next_player_obj, next_player_info['card'])
-        apply_endgame_choice(next_player_obj, next_player_info['card'], choice_result)
+        result = apply_endgame_choice(next_player_obj, next_player_info['card'], choice_result)
+        if result:
+            bf = make_broadcast_fn(manager.send_to_room, room_id)
+            dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+            await update_resources(next_player_obj, result, broadcast_fn=bf, delta_broadcast_fn=dbf)
         game_state['endgameChoiceIndex'] += 1
 
     if game_state['endgameChoiceIndex'] >= len(waiting_list):

@@ -14,8 +14,9 @@ LOBSTER_GRADES = {'normal', 'grade3', 'grade2', 'grade1', 'royal'}
 # 龙虾等级价值（用于上供区计算）
 GRADE_VALUES = {'normal': 0, 'grade3': 1, 'grade2': 2, 'grade1': 3, 'royal': 4}
 
-# 龙虾升级
-GRADE_UPGRADE = {'grade3': 'grade2', 'grade2': 'grade1', 'grade1': 'royal'}
+# 龙虾升级（普通升级 + 吃草跳级）
+GRADE_UPGRADE = {'normal': 'grade3', 'grade3': 'grade2', 'grade2': 'grade1', 'grade1': 'royal', 'royal': 'royal'}
+GRADE_UPGRADE_SEAWEED = {'normal': 'grade2', 'grade3': 'grade1', 'grade2': 'royal', 'grade1': 'royal', 'royal': 'royal'}
 
 # 上供区挑战槽状态
 CHALLENGE_SLOT_DONE = 'Done'
@@ -211,8 +212,7 @@ TRIBUTE_TASKS = card_config.get('tributeCards', _CARD_CONFIG_DEFAULT['tributeCar
 DOWNTOWN_CARDS = card_config.get('marketplaceCards', _CARD_CONFIG_DEFAULT['marketplaceCards'])
 
 FISHING_BAG_ITEMS = [
-    {'type': 'bubble', 'weight': 30},
-    {'type': 'lobster', 'weight': 25},
-    {'type': 'seaweed', 'weight': 25},
+    {'type': 'lobster', 'weight': 40},
+    {'type': 'seaweed', 'weight': 40},
     {'type': 'either', 'weight': 20}
 ]

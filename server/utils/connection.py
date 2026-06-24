@@ -35,7 +35,7 @@ class ConnectionManager:
         disconnected = []
 
         if room_id in self.active_connections:
-            for player_id, ws in self.active_connections[room_id].items():
+            for player_id, ws in list(self.active_connections[room_id].items()):
                 try:
                     await ws.send_json({"event": event, "data": data})
                 except Exception:
@@ -70,16 +70,12 @@ class ConnectionManager:
                 del self.active_connections[room_id]
         self.heartbeat_timestamps.pop(fingerprint, None)
 
-        for uid in list(self.user_rooms.keys()):
-            if self.user_rooms[uid] == room_id:
-                self.user_rooms.pop(uid, None)
-
         log_info(f"Client {player_id} disconnected from room {room_id}")
 
     async def send_to_room(self, room_id: str, event: str, data: dict):
         if room_id in self.active_connections:
             disconnected = []
-            for player_id, ws in self.active_connections[room_id].items():
+            for player_id, ws in list(self.active_connections[room_id].items()):
                 try:
                     await ws.send_json({"event": event, "data": data})
                 except Exception:

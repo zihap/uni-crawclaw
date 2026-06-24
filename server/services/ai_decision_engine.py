@@ -6,8 +6,7 @@ AI决策引擎 — 加权随机 + 个性系统
 import random
 import math
 from typing import List, Dict, Any, Optional
-from utils.constants import AREAS, MARKET_PRICES
-from utils.helpers import calculate_market_prices
+from utils.constants import AREAS, MARKET_PRICES, GRADE_UPGRADE_SEAWEED
 from services.tribute_card_effects import check_cage_trade
 
 
@@ -247,7 +246,7 @@ def _decide_breeding(game_state: dict, ai_player: dict, settlement_state: dict) 
 
     # 判断是否吃草跳级
     use_seaweed = False
-    seaweed_target = {'normal': 'grade2', 'grade3': 'grade1', 'grade2': 'royal', 'grade1': 'royal'}.get(old_grade)
+    seaweed_target = GRADE_UPGRADE_SEAWEED.get(old_grade)
     if has_seaweed and seaweed_target:
         # 吃草跳到royal需要额外资源
         if seaweed_target == 'royal' and not can_afford_royal:
@@ -258,7 +257,7 @@ def _decide_breeding(game_state: dict, ai_player: dict, settlement_state: dict) 
     payload = {'lobsterIndex': lobster_index}
     if use_seaweed:
         payload['useSeaweed'] = True
-        target = {'normal': 'grade2', 'grade3': 'grade1', 'grade2': 'royal', 'grade1': 'royal'}.get(old_grade)
+        target = GRADE_UPGRADE_SEAWEED.get(old_grade)
         if target == 'royal':
             if has_cage and has_coins_for_royal:
                 payload['royalCostType'] = random.choice(['cage', 'coin'])

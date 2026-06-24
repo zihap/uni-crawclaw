@@ -12,7 +12,7 @@
 
 from utils.events import ClientRoomActionTypes, ServerEvents, ServerRoomActionTypes
 from utils.error_codes import ErrorCodes
-from utils.helpers import generate_room_id, get_player, send_error, make_action_message
+from utils.helpers import generate_room_id, get_player, send_error, make_action_message, is_ai_player
 from utils.logger import log_info
 from utils.game_state import create_game_state, create_player
 from services.game import broadcast_room_state, start_game, transfer_host, cleanup_room, cancel_pending_host_transfer
@@ -65,8 +65,8 @@ async def _add_player_to_room(websocket, rooms, manager, room_id, player_name, u
     while new_player_id in used_ids:
         new_player_id += 1
     player = create_player(new_player_id, player_name, is_host, user_id, position=new_player_id)
-    game_state['players'].append(player)
-    
+    game_state['players'].insert(new_player_id, player)
+
     manager.lobby_connections[user_id] = websocket
     manager.user_rooms[user_id] = room_id
     
@@ -75,10 +75,10 @@ async def _add_player_to_room(websocket, rooms, manager, room_id, player_name, u
 
 async def _send_join_success(websocket, room_id, manager, game_state, is_reconnect=False, user_id=None):
     """发送加入成功消息并广播房间状态更新"""
-    if is_reconnect and user_id:
+    if user_id:
         player = next((p for p in game_state['players'] if p.get('userId') == user_id), None)
         if not player:
-            log_info(f"Warning: reconnect player with userId={user_id} not found, using last player as fallback")
+            log_info(f"Warning: player with userId={user_id} not found, using last player as fallback")
             player = game_state['players'][-1]
     else:
         player = game_state['players'][-1]
@@ -230,7 +230,7 @@ async def handle_set_ready(websocket, room_id, player_id, rooms, manager, payloa
         await broadcast_room_state(room_id, rooms, manager)
 
 
-async def handle_start_game(websocket, room_id, player_id, rooms, manager, payload):
+async def handle_start_game(websocket, room_id, player_id, rooms, manager, payload, ai_scheduler=None):
     """开始游戏（仅房主可用）"""
     game_state = rooms.get(room_id)
     if not game_state:
@@ -260,6 +260,16 @@ async def handle_start_game(websocket, room_id, player_id, rooms, manager, paylo
         return
 
     await start_game(room_id, rooms, manager)
+
+    # 游戏开始后，检查是否需要触发AI行动
+    if ai_scheduler:
+        from controllers.game_action_handler import handle_place_headman, handle_next_player
+        from services.area import process_area_action
+        await ai_scheduler.check_and_trigger(
+            room_id, websocket, rooms, manager,
+            handle_place_headman_fn=handle_place_headman,
+            handle_next_player_fn=handle_next_player,
+            process_area_action_fn=process_area_action)
 
 
 async def handle_kick_player(websocket, room_id, player_id, rooms, manager, payload):
@@ -382,7 +392,7 @@ async def handle_add_ai(websocket, room_id, player_id, rooms, manager, payload):
         })
         return
 
-    player = game_state['players'][player_id] if player_id < len(game_state['players']) else None
+    player = get_player(game_state, player_id)
     if not player or not player.get('isHost'):
         await websocket.send_json({
             'event': ServerEvents.ERROR,
@@ -405,7 +415,7 @@ async def handle_add_ai(websocket, room_id, player_id, rooms, manager, payload):
         new_id += 1
     position = new_id
     ai_player = create_ai_player(new_id, position=position)
-    game_state['players'].append(ai_player)
+    game_state['players'].insert(new_id, ai_player)
 
     await manager.send_to_room(room_id, ServerEvents.SERVER_ROOM_ACTION,
         make_action_message(ServerRoomActionTypes.AI_ADDED, {
@@ -431,7 +441,7 @@ async def handle_kick_ai(websocket, room_id, player_id, rooms, manager, payload)
         })
         return
 
-    player = game_state['players'][player_id] if player_id < len(game_state['players']) else None
+    player = get_player(game_state, player_id)
     if not player or not player.get('isHost'):
         await websocket.send_json({
             'event': ServerEvents.ERROR,
@@ -445,7 +455,7 @@ async def handle_kick_ai(websocket, room_id, player_id, rooms, manager, payload)
         await send_error(websocket, '目标玩家不存在')
         return
 
-    if not target.get('isAI'):
+    if not is_ai_player(target):
         await websocket.send_json({
             'event': ServerEvents.ERROR,
             'data': {'message': '只能踢出AI玩家', 'errorCode': 'NOT_AI'}

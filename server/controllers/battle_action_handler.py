@@ -6,9 +6,9 @@
 import random
 import math
 import asyncio
-from utils.constants import AREAS, GRADE_UPGRADE, CHALLENGE_SLOT_DONE, CHALLENGE_TO_DEFENDER_SLOT_MAP
+from utils.constants import AREAS, CHALLENGE_SLOT_DONE, CHALLENGE_TO_DEFENDER_SLOT_MAP
 from utils.events import ServerEvents, ServerBattleActionTypes, ServerAreaActionTypes
-from utils.helpers import send_error, get_player, update_resources, make_action_message, make_broadcast_fn, make_settlement_state, _build_resource_snapshot
+from utils.helpers import send_error, get_player, update_resources, make_action_message, make_broadcast_fn, make_delta_broadcast_fn, make_settlement_state, _build_resource_snapshot, is_ai_player
 from utils.logger import log_info, log_debug
 from utils.game_state import arena_betting_state
 from services.game import broadcast_game_state, start_area_settlement, complete_settlement
@@ -395,7 +395,10 @@ async def handle_rpg_battle_action(websocket, room_id, player_id, rooms, manager
         if use_weed and active_p['seaweed'] > 0:
             active_p['seaweed'] -= 1
             player_entity = get_player(game_state, player_id)
-            if player_entity: player_entity['seaweed'] -= 1
+            if player_entity:
+                bf = make_broadcast_fn(manager.send_to_room, room_id)
+                dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+                await update_resources(player_entity, {'seaweed': -1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
             grade = active_p['lobsterGrade']
             if grade == 'grade2': bonus = 1
@@ -474,12 +477,13 @@ async def handle_rpg_battle_action(websocket, room_id, player_id, rooms, manager
 
         if battle['phase'] == 'reward_choice':
             bf = make_broadcast_fn(manager.send_to_room, room_id)
+            dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
             for p_key in ['p1', 'p2']:
                 p = battle[p_key]
                 if p.get('survivedAttacks', 0) >= 3:
                     p_entity = get_player(game_state, p['id'])
                     if p_entity:
-                        await update_resources(p_entity, {'wang': 1}, broadcast_fn=bf)
+                        await update_resources(p_entity, {'wang': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
                         battle['lastLog'] += f"<br/>🎖️ 【{p['name']}】在狂暴下撑过了3次攻击，毅力惊人，<br/>获得 <color=#ffaa00>1点望</color> 奖励！"
             battle['lastLog'] += f"<br/>🏆 战斗结束！请胜者【{battle['winnerName']}】选择胜利奖励！"
         else:
@@ -492,7 +496,8 @@ async def handle_rpg_battle_action(websocket, room_id, player_id, rooms, manager
         if player_id != battle.get('winnerId'): return
         winner_p = get_player(game_state, player_id)
         bf = make_broadcast_fn(manager.send_to_room, room_id)
-        if reward_type == 'coins': await update_resources(winner_p, {'coins': 2}, broadcast_fn=bf)
+        dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+        if reward_type == 'coins': await update_resources(winner_p, {'coins': 2}, broadcast_fn=bf, delta_broadcast_fn=dbf)
         elif reward_type == 'upgrade':
             winner_lobster_id = battle['p1']['lobsterId'] if player_id == battle['p1']['id'] else battle['p2']['lobsterId']
             for lob in winner_p.get('lobsters', []):
@@ -583,6 +588,8 @@ async def _finalize_rpg_battle(websocket, room_id, game_state, manager, rooms):
     state = arena_betting_state.get(key)
 
     if state and state.get('completed'):
+        bf = make_broadcast_fn(manager.send_to_room, room_id)
+        dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
         for sid, bet in state.get('bets', {}).items():
             bet_target = bet.get('target')
             bet_amount = bet.get('amount', 0)
@@ -593,10 +600,9 @@ async def _finalize_rpg_battle(websocket, room_id, game_state, manager, rooms):
             if is_correct and bet_amount > 0:
                 reward = bet_amount * 2
                 if sp:
-                    sp['coins'] += reward
-                    if check_bet_bonus(sp):
-                        sp['coins'] += 1
-                        reward += 1
+                    bonus = 1 if check_bet_bonus(sp) else 0
+                    reward += bonus
+                    await update_resources(sp, {'coins': reward}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             elif not is_correct and bet_amount > 0:
                 reward = 0
 
@@ -606,13 +612,6 @@ async def _finalize_rpg_battle(websocket, room_id, game_state, manager, rooms):
                 'isCorrect': is_correct,
                 'reward': reward
             }
-
-        if bet_results:
-            bf = make_broadcast_fn(manager.send_to_room, room_id)
-            for sid in bet_results:
-                sp = get_player(game_state, sid)
-                if sp:
-                    await bf(sid, _build_resource_snapshot(sp))
 
         arena_betting_state.pop(key, None)
 
@@ -742,7 +741,7 @@ async def handle_lobster_selected(websocket, room_id, player_id, rooms, manager,
                 auto_bet_spectators = []
                 for sid in spectators:
                     sp = get_player(game_state, sid)
-                    if sp and (sp.get('coins', 0) == 0 or sp.get('isAI')):
+                    if sp and (sp.get('coins', 0) == 0 or is_ai_player(sp)):
                         # 0金币或AI观战者自动跳过下注
                         state['bets'][sid] = {'amount': 0, 'target': None}
                         auto_bet_spectators.append(sid)
@@ -829,9 +828,9 @@ async def handle_spectator_bet(websocket, room_id, player_id, rooms, manager, pa
         return
 
     if bet_amount > 0:
-        player['coins'] -= bet_amount
         bf = make_broadcast_fn(manager.send_to_room, room_id)
-        await bf(player_id, _build_resource_snapshot(player))
+        dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+        await update_resources(player, {'coins': -bet_amount}, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
     state['bets'][player_id] = {'amount': bet_amount, 'target': bet_target}
 

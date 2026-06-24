@@ -10,7 +10,7 @@ from utils.constants import AREAS, MARKET_PRICES, CHALLENGE_SLOT_DONE
 from utils.events import ServerEvents, ServerRoomActionTypes, ServerGameActionTypes, ServerAreaActionTypes
 from utils.game_state import distribute_tavern_cards, draw_downtown_cards, draw_title_cards
 from utils.logger import log_info, log_debug
-from utils.helpers import make_action_message, calculate_market_prices
+from utils.helpers import make_action_message, calculate_market_prices, is_ai_player, update_resources, make_broadcast_fn, make_delta_broadcast_fn
 from services.tribute_card_effects import get_endgame_choices
 
 
@@ -18,12 +18,6 @@ def update_market_prices(game_state: dict):
     """根据市场龙虾数量更新动态价格"""
     market_area = game_state['areas']['seafood_market']
     market_area['dynamicPrices'] = calculate_market_prices(market_area['marketLobsterCount'])
-
-
-def prepare_phase(game_state: dict):
-    """准备阶段处理"""
-    game_state['areas']['shrimp_catching']['wildLobsterPool'] = 8
-    update_market_prices(game_state)
 
 
 def cleanup_phase(game_state: dict):
@@ -42,9 +36,6 @@ def cleanup_phase(game_state: dict):
         if player.get('inn_headman'):
             player['liZhang'] += 1
             player['inn_headman'] = False
-
-    for player in game_state['players']:
-        player['coins'] += 2 + player.get('bonusGold', 0)
 
     if 'taverns' in game_state:
         for tavern in game_state['taverns']:
@@ -77,10 +68,31 @@ def cleanup_room(room_id: str, rooms: dict, manager):
             if key.startswith(f"{room_id}_"):
                 del arena_betting_state[key]
 
+        # 清理AI接管定时器
+        ai_scheduler = manager.ai_schedulers.get(room_id)
+        if ai_scheduler:
+            ai_scheduler.cleanup_room_timers(room_id)
+
         log_info(f"Room {room_id} deleted")
 
 
 scheduled_transfers: Dict[int, asyncio.Task] = {}
+scheduled_deletions: Dict[str, asyncio.Task] = {}
+
+
+async def _delayed_room_cleanup(room_id: str, rooms: dict, manager):
+    """延迟5分钟后删除房间，若有人重连则取消"""
+    try:
+        await asyncio.sleep(300)  # 5分钟 = 300秒
+        game_state = rooms.get(room_id)
+        if game_state:
+            all_offline = all(not p.get('isOnline', True) for p in game_state['players'])
+            if all_offline:
+                cleanup_room(room_id, rooms, manager)
+    except asyncio.CancelledError:
+        log_info(f"Room deletion cancelled for {room_id}")
+    finally:
+        scheduled_deletions.pop(room_id, None)
 
 
 async def _delayed_host_transfer(room_id: str, player_id: int, rooms: dict, manager, broadcast_func):
@@ -117,7 +129,7 @@ def transfer_host(room_id: str, game_state: dict):
     if not game_state or game_state['status'] != 'waiting':
         return
 
-    online_players = [p for p in game_state['players'] if p.get('isOnline') and not p.get('isAI')]
+    online_players = [p for p in game_state['players'] if p.get('isOnline') and not is_ai_player(p)]
     if not online_players:
         return
 
@@ -150,6 +162,10 @@ async def handle_player_disconnect(room_id: str, player_id: int, player_name: st
     if player_name is None:
         player_name = player.get('name')
 
+    if not player.get('isOnline', True):
+        log_info(f"handle_player_disconnect: player {player_id} ({player_name}) already offline, skipping")
+        return
+
     player['isOnline'] = False
     player['ready'] = False
     player['lastSeen'] = int(time.time())
@@ -166,8 +182,19 @@ async def handle_player_disconnect(room_id: str, player_id: int, player_name: st
     await broadcast_func(room_id)
 
     if all_offline:
-        cleanup_room(room_id, rooms, manager)
+        if room_id not in scheduled_deletions:
+            log_info(f"Scheduling room deletion for {room_id} in 5 minutes")
+            scheduled_deletions[room_id] = asyncio.create_task(
+                _delayed_room_cleanup(room_id, rooms, manager)
+            )
         return
+
+    # 启动AI接管定时器（仅对人类玩家，且不是所有玩家都离线）
+    if not player.get('isAI'):
+        ai_scheduler = manager.ai_schedulers.get(room_id)
+        if ai_scheduler:
+            log_info(f"handle_player_disconnect: starting AI takeover timer for player {player_id}")
+            await ai_scheduler.start_takeover_timer(room_id, player_id, rooms, manager)
 
     await manager.broadcast_to_room_members(room_id, ServerEvents.SERVER_ROOM_ACTION,
         make_action_message(ServerRoomActionTypes.PLAYER_STATUS_CHANGE,
@@ -224,20 +251,19 @@ async def start_game(room_id: str, rooms: dict, manager):
     game_state['currentRound'] = 1
     game_state['lastPlacement'] = None
 
+    for player in game_state['players']:
+        player['tributesThisRound'] = 0
+        player['inn_headman'] = False
+
     starting_player_idx = 0
     for idx, player in enumerate(game_state['players']):
         if player.get('isStartingPlayer', False):
             starting_player_idx = idx
             break
 
-        # 初始化新的状态追踪
-        player['tributesThisRound'] = 0
-        player['inn_headman'] = False
-
     game_state['currentPlayerIndex'] = starting_player_idx
 
     for p in game_state['players']:
-        p['bubbles'] = 0
         p['ready'] = False
 
     for area_name in AREAS:
@@ -304,6 +330,13 @@ async def complete_settlement(room_id, game_state, rooms, manager):
     """完成结算阶段，进入清理和下一回合"""
     cleanup_phase(game_state)
 
+    # Broadcast round start resource changes
+    bf = make_broadcast_fn(manager.send_to_room, room_id)
+    dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+    for player in game_state['players']:
+        delta = 2 + player.get('bonusGold', 0)
+        await update_resources(player, {'coins': delta}, broadcast_fn=bf, delta_broadcast_fn=dbf)
+
     if game_state['currentRound'] >= game_state['maxRounds']:
         # （...此处保留原有的 endgameChoice 逻辑...）
         players_need_endgame_choice = []
@@ -327,12 +360,16 @@ async def complete_settlement(room_id, game_state, rooms, manager):
             while game_state['endgameChoiceIndex'] < len(players_need_endgame_choice):
                 cur = players_need_endgame_choice[game_state['endgameChoiceIndex']]
                 cur_player = game_state['players'][cur['playerId']]
-                if not cur_player.get('isAI'):
+                if not is_ai_player(cur_player):
                     break  # 遇到真人玩家，停止自动处理，等待客户端交互
                 from services.ai_decision_engine import decide_endgame_score_choice
                 from services.tribute_card_effects import apply_endgame_choice
                 choice_result = decide_endgame_score_choice(cur_player, cur['card'])
-                apply_endgame_choice(cur_player, cur['card'], choice_result)
+                result = apply_endgame_choice(cur_player, cur['card'], choice_result)
+                if result:
+                    bf = make_broadcast_fn(manager.send_to_room, room_id)
+                    dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+                    await update_resources(cur_player, result, broadcast_fn=bf, delta_broadcast_fn=dbf)
                 game_state['endgameChoiceIndex'] += 1
 
             # 如果所有玩家都处理完了（全是AI或已全部选完）
@@ -386,14 +423,16 @@ async def complete_settlement(room_id, game_state, rooms, manager):
     game_state['currentRound'] += 1
 
     # 触发每轮 aura 效果
+    bf = make_broadcast_fn(manager.send_to_room, room_id)
+    dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
     for player in game_state['players']:
         tribute_cards = player.get('tributeCards', [])
         for card in tribute_cards:
             effect_type = card.get('effectType')
             if effect_type == 'aura_round_coin':
-                player['coins'] = player.get('coins', 0) + 1
+                await update_resources(player, {'coins': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             elif effect_type == 'aura_round_seaweed':
-                player['seaweed'] = player.get('seaweed', 0) + 1
+                await update_resources(player, {'seaweed': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
     
     # 清空本局的下注信息
     from utils.game_state import arena_betting_state
@@ -417,9 +456,6 @@ async def complete_settlement(room_id, game_state, rooms, manager):
         if area_name in game_state['areas']:
             slot_count = len(game_state['areas'][area_name]['slots'])
             game_state['areas'][area_name]['slots'] = [None] * slot_count
-
-    for p in game_state['players']:
-        p['royalCountThisRound'] = 0
 
     distribute_tavern_cards(game_state)
     # 【重点修复】：已删除 draw_downtown_cards(game_state) ，不再每回合刷新卡牌！

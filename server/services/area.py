@@ -6,16 +6,11 @@
 import json
 import random
 import copy
-from utils.constants import FISHING_BAG_ITEMS, SLOT_TEMPLATES, MARKET_PRICES, CHALLENGE_SLOT_DONE, GRADE_VALUES
+from utils.constants import FISHING_BAG_ITEMS, SLOT_TEMPLATES, MARKET_PRICES, CHALLENGE_SLOT_DONE, GRADE_VALUES, GRADE_UPGRADE, GRADE_UPGRADE_SEAWEED
 from utils.events import ServerEvents, ServerAreaActionTypes, ServerBattleActionTypes
 from utils.logger import log_info, log_debug
-from services.game import broadcast_game_state
-from utils.helpers import send_error, make_action_message, create_lobster as _make_lobster, calculate_market_prices, make_settlement_state
+from utils.helpers import send_error, make_action_message, calculate_market_prices, make_settlement_state, is_ai_player, update_resources, make_broadcast_fn, make_delta_broadcast_fn, _build_resource_snapshot, get_player
 from services.tribute_card_effects import check_market_rule, check_breed_bonus, check_tribute_discount, check_battle_bonus, check_adjacent_action, get_adjacent_rewards, apply_aura_effect, check_cage_trade
-
-
-def _create_lobster(grade='normal'):
-    return _make_lobster(grade)
 
 
 def draw_from_bag(game_state: dict) -> str:
@@ -73,15 +68,18 @@ async def resolve_area_step(game_state: dict, area_index: int, manager, room_id)
     area_data = game_state['areas'].get(area_name)
     if not area_data: return 'auto_next'
 
-    if area_name == 'shrimp_catching': return await _resolve_shrimp_catching_step(game_state, manager, room_id)
-    elif area_name == 'seafood_market': return await _resolve_seafood_market_step(game_state, manager, room_id)
-    elif area_name == 'breeding': return await _resolve_breeding_step(game_state, manager, room_id)
-    elif area_name == 'tribute': return await _resolve_tribute_step(game_state, manager, room_id)
-    elif area_name == 'marketplace': return await _resolve_marketplace_step(game_state, manager, room_id)
+    bf = make_broadcast_fn(manager.send_to_room, room_id)
+    dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+
+    if area_name == 'shrimp_catching': return await _resolve_shrimp_catching_step(game_state, manager, room_id, bf, dbf)
+    elif area_name == 'seafood_market': return await _resolve_seafood_market_step(game_state, manager, room_id, bf, dbf)
+    elif area_name == 'breeding': return await _resolve_breeding_step(game_state, manager, room_id, bf, dbf)
+    elif area_name == 'tribute': return await _resolve_tribute_step(game_state, manager, room_id, bf, dbf)
+    elif area_name == 'marketplace': return await _resolve_marketplace_step(game_state, manager, room_id, bf, dbf)
     return 'auto_next'
 
 
-async def _resolve_shrimp_catching_step(game_state: dict, manager, room_id):
+async def _resolve_shrimp_catching_step(game_state: dict, manager, room_id, bf, dbf):
     area_data = game_state['areas']['shrimp_catching']
     slots = area_data['slots']
     templates = SLOT_TEMPLATES['shrimp_catching']
@@ -101,7 +99,10 @@ async def _resolve_shrimp_catching_step(game_state: dict, manager, room_id):
             current_slot_index += 1
             continue
 
-        player = game_state['players'][player_id]
+        player = get_player(game_state, player_id)
+        if not player:
+            current_slot_index += 1
+            continue
         template = templates[current_slot_index]
         remaining_actions = template['actionCount']
         reward_given = False
@@ -125,7 +126,7 @@ async def _resolve_shrimp_catching_step(game_state: dict, manager, room_id):
     return 'auto_next'
 
 
-async def _resolve_seafood_market_step(game_state: dict, manager, room_id):
+async def _resolve_seafood_market_step(game_state: dict, manager, room_id, bf, dbf):
     area_data = game_state['areas']['seafood_market']
     slots = area_data['slots']
     templates = SLOT_TEMPLATES['seafood_market']
@@ -156,21 +157,24 @@ async def _resolve_seafood_market_step(game_state: dict, manager, room_id):
     while current_slot_index < len(slots):
         player_id = slots[current_slot_index]
         if player_id is not None:
-            player = game_state['players'][player_id]
+            player = get_player(game_state, player_id)
+            if not player:
+                current_slot_index += 1
+                continue
             template = templates[current_slot_index]
             action_count = template['actionCount']
             reward = template['reward']
 
-            if reward.get('coins'):
-                player['coins'] += reward['coins']
+            slot_deltas = {}
+            if reward.get('coins'): slot_deltas['coins'] = reward['coins']
+            if slot_deltas:
+                await update_resources(player, slot_deltas, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
             if check_adjacent_action(player):
                 total_slots = len(slots)
                 adjacent_reward = get_adjacent_rewards('seafood_market', current_slot_index, total_slots)
-                for res_type, res_value in adjacent_reward.items():
-                    if res_type == 'coins': player['coins'] = player.get('coins', 0) + res_value
-                    elif res_type == 'cages': player['cages'] = player.get('cages', 0) + res_value
-                    elif res_type == 'seaweed': player['seaweed'] = player.get('seaweed', 0) + res_value
+                if adjacent_reward:
+                    await update_resources(player, adjacent_reward, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
             if action_count > 0:
                 prices = calculate_market_prices(area_data['marketLobsterCount'])
@@ -196,7 +200,7 @@ async def _resolve_seafood_market_step(game_state: dict, manager, room_id):
     return 'auto_next'
 
 
-async def _resolve_breeding_step(game_state: dict, manager, room_id):
+async def _resolve_breeding_step(game_state: dict, manager, room_id, bf, dbf):
     area_data = game_state['areas']['breeding']
     slots = area_data['slots']
     templates = SLOT_TEMPLATES['breeding']
@@ -207,7 +211,10 @@ async def _resolve_breeding_step(game_state: dict, manager, room_id):
     while current_slot_index < len(slots):
         player_id = slots[current_slot_index]
         if player_id is not None:
-            player = game_state['players'][player_id]
+            player = get_player(game_state, player_id)
+            if not player:
+                current_slot_index += 1
+                continue
             template = templates[current_slot_index]
             action_count = template['actionCount'] if template else 1
 
@@ -216,16 +223,17 @@ async def _resolve_breeding_step(game_state: dict, manager, room_id):
             reward = template.get('reward', {})
 
             if not is_arena_override:
-                if reward.get('seaweed'): player['seaweed'] = player.get('seaweed', 0) + reward['seaweed']
-                if reward.get('coins'): player['coins'] = player.get('coins', 0) + reward['coins']
+                slot_deltas = {}
+                if reward.get('seaweed'): slot_deltas['seaweed'] = reward['seaweed']
+                if reward.get('coins'): slot_deltas['coins'] = reward['coins']
+                if slot_deltas:
+                    await update_resources(player, slot_deltas, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
                 if check_adjacent_action(player):
                     total_slots = len(slots)
                     adjacent_reward = get_adjacent_rewards('breeding', current_slot_index, total_slots)
-                    for res_type, res_value in adjacent_reward.items():
-                        if res_type == 'coins': player['coins'] = player.get('coins', 0) + res_value
-                        elif res_type == 'seaweed': player['seaweed'] = player.get('seaweed', 0) + res_value
-                        elif res_type == 'cages': player['cages'] = player.get('cages', 0) + res_value
+                    if adjacent_reward:
+                        await update_resources(player, adjacent_reward, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
             if len(player['lobsters']) == 0:
                 if is_arena_override:
@@ -233,7 +241,7 @@ async def _resolve_breeding_step(game_state: dict, manager, room_id):
                     game_state['settlementState']['currentSlotIndex'] += 1
                     game_state['settlementState']['waitingForPlayer'] = None
                     return 'action_complete'
-                if player.get('isAI'):
+                if is_ai_player(player):
                     # AI没有龙虾，直接跳过
                     current_slot_index += 1
                     continue
@@ -263,7 +271,7 @@ async def _resolve_breeding_step(game_state: dict, manager, room_id):
     return 'auto_next'
 
 
-async def _resolve_tribute_step(game_state: dict, manager, room_id):
+async def _resolve_tribute_step(game_state: dict, manager, room_id, bf, dbf):
     area_data = game_state['areas']['tribute']
     slots = area_data['slots']
     log_debug(f"[_resolve_tribute_step] slots={slots}, battleQueue={game_state.get('battleQueue')}, challengeSlots={area_data.get('challengeSlots')}")
@@ -340,7 +348,10 @@ async def _resolve_tribute_actions(game_state: dict, manager, room_id):
         if player_id is not None:
             template = templates[current_slot_index]
             action_count = template['actionCount'] if template else 1
-            player = game_state['players'][player_id]
+            player = get_player(game_state, player_id)
+            if not player:
+                current_slot_index += 1
+                continue
             log_debug(f"[_resolve_tribute_actions] slot={current_slot_index}, player_id={player_id}, action_count={action_count}")
 
             game_state['settlementState'] = make_settlement_state('tribute', current_slot_index, action_count, player_id)
@@ -358,7 +369,7 @@ async def _resolve_tribute_actions(game_state: dict, manager, room_id):
     return 'auto_next'
 
 
-async def _resolve_marketplace_step(game_state: dict, manager, room_id):
+async def _resolve_marketplace_step(game_state: dict, manager, room_id, bf, dbf):
     area_data = game_state['areas']['marketplace']
     slots = area_data['slots']
     settlement_state = game_state.get('settlementState', {})
@@ -367,7 +378,10 @@ async def _resolve_marketplace_step(game_state: dict, manager, room_id):
     while current_slot_index < len(slots):
         player_id = slots[current_slot_index]
         if player_id is not None:
-            player = game_state['players'][player_id]
+            player = get_player(game_state, player_id)
+            if not player:
+                current_slot_index += 1
+                continue
             raw_available_cards = [c for c in game_state.get('downtownCards', []) if not c.get('usedThisRound', False)]
 
             if len(raw_available_cards) == 0:
@@ -426,15 +440,18 @@ async def process_area_action(game_state: dict, action_type: str, action_payload
         log_debug(f"[process_area_action] ERROR-E0b: player not found for id={player_id}, players={[p['id'] for p in game_state['players']]}")
         return 'error'
 
-    if area_type == 'shrimp_catching': return await _process_shrimp_catching_action(game_state, action_type, action_payload, player, manager, room_id, websocket)
-    elif area_type == 'seafood_market': return await _process_seafood_market_action(game_state, action_type, action_payload, player, manager, room_id, websocket)
-    elif area_type == 'breeding': return await _process_breeding_action(game_state, action_type, action_payload, player, manager, room_id, websocket)
-    elif area_type == 'tribute': return await _process_tribute_action(game_state, action_type, action_payload, player, manager, room_id, websocket)
-    elif area_type == 'marketplace': return await _process_marketplace_action(game_state, action_type, action_payload, player, manager, room_id, websocket)
+    bf = make_broadcast_fn(manager.send_to_room, room_id)
+    dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
+
+    if area_type == 'shrimp_catching': return await _process_shrimp_catching_action(game_state, action_type, action_payload, player, manager, room_id, websocket, bf, dbf)
+    elif area_type == 'seafood_market': return await _process_seafood_market_action(game_state, action_type, action_payload, player, manager, room_id, websocket, bf, dbf)
+    elif area_type == 'breeding': return await _process_breeding_action(game_state, action_type, action_payload, player, manager, room_id, websocket, bf, dbf)
+    elif area_type == 'tribute': return await _process_tribute_action(game_state, action_type, action_payload, player, manager, room_id, websocket, bf, dbf)
+    elif area_type == 'marketplace': return await _process_marketplace_action(game_state, action_type, action_payload, player, manager, room_id, websocket, bf, dbf)
     return 'error'
 
 
-async def _process_shrimp_catching_action(game_state: dict, action_type: str, action_payload: dict, player: dict, manager, room_id, websocket):
+async def _process_shrimp_catching_action(game_state: dict, action_type: str, action_payload: dict, player: dict, manager, room_id, websocket, bf, dbf):
     settlement_state = game_state.get('settlementState', {})
     remaining_actions = settlement_state.get('remainingActions', 0)
     current_slot_index = settlement_state.get('currentSlotIndex', 0)
@@ -465,26 +482,26 @@ async def _process_shrimp_catching_action(game_state: dict, action_type: str, ac
                 }))
             return 'continue_ui'
 
-        elif item == 'bubble':
-            player['tempBubbles'] += 1
-            result_msg = '获得1个气泡'
         elif item == 'lobster':
             shrimp_area = game_state['areas']['shrimp_catching']
             pool = shrimp_area.get('wildLobsterPool', 0)
             if pool > 0:
                 shrimp_area['wildLobsterPool'] = pool - 1
-                player['lobsters'].append(_create_lobster('normal'))
+                await update_resources(player, {'lobsters': {'normal': 1}}, broadcast_fn=bf, delta_broadcast_fn=dbf)
                 result_msg = '获得1只幼型灵螯'
             else:
                 result_msg = '幼型灵螯已空'
         elif item == 'seaweed':
-            player['seaweed'] += 1
+            await update_resources(player, {'seaweed': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             result_msg = '获得1株琅玕仙草'
 
         if not reward_given:
             reward = template.get('reward', {})
-            if reward.get('cages'): player['cages'] += reward['cages']
-            if reward.get('coins'): player['coins'] += reward['coins']
+            reward_deltas = {}
+            if reward.get('cages'): reward_deltas['cages'] = reward['cages']
+            if reward.get('coins'): reward_deltas['coins'] = reward['coins']
+            if reward_deltas:
+                await update_resources(player, reward_deltas, broadcast_fn=bf, delta_broadcast_fn=dbf)
             if reward.get('stealStart'):
                 game_state['startingPlayerIndex'] = settlement_state.get('waitingForPlayer')
                 for p in game_state['players']: p['isStartingPlayer'] = False
@@ -494,9 +511,8 @@ async def _process_shrimp_catching_action(game_state: dict, action_type: str, ac
             if check_adjacent_action(player):
                 total_slots = len(game_state['areas']['shrimp_catching']['slots'])
                 adjacent_reward = get_adjacent_rewards('shrimp_catching', current_slot_index, total_slots)
-                for res_type, res_value in adjacent_reward.items():
-                    if res_type == 'coins': player['coins'] = player.get('coins', 0) + res_value
-                    elif res_type == 'cages': player['cages'] = player.get('cages', 0) + res_value
+                if adjacent_reward:
+                    await update_resources(player, adjacent_reward, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
         remaining_actions -= 1
         if remaining_actions <= 0:
@@ -533,17 +549,20 @@ async def _process_shrimp_catching_action(game_state: dict, action_type: str, ac
             pool = shrimp_area.get('wildLobsterPool', 0)
             if pool > 0:
                 shrimp_area['wildLobsterPool'] = pool - 1
-                player['lobsters'].append(_create_lobster('normal'))
+                await update_resources(player, {'lobsters': {'normal': 1}}, broadcast_fn=bf, delta_broadcast_fn=dbf)
                 result_msg = '获得1只幼型灵螯'
             else: result_msg = '幼型灵螯已空'
         elif choice == 'seaweed':
-            player['seaweed'] += 1
+            await update_resources(player, {'seaweed': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             result_msg = '获得1株琅玕仙草'
 
         if not reward_given:
             reward = template.get('reward', {})
-            if reward.get('cages'): player['cages'] += reward['cages']
-            if reward.get('coins'): player['coins'] += reward['coins']
+            reward_deltas = {}
+            if reward.get('cages'): reward_deltas['cages'] = reward['cages']
+            if reward.get('coins'): reward_deltas['coins'] = reward['coins']
+            if reward_deltas:
+                await update_resources(player, reward_deltas, broadcast_fn=bf, delta_broadcast_fn=dbf)
             if reward.get('stealStart'):
                 game_state['startingPlayerIndex'] = settlement_state.get('waitingForPlayer')
                 for p in game_state['players']: p['isStartingPlayer'] = False
@@ -578,7 +597,7 @@ async def _process_shrimp_catching_action(game_state: dict, action_type: str, ac
     return 'error'
 
 
-async def _process_seafood_market_action(game_state: dict, action_type: str, action_payload: dict, player: dict, manager, room_id, websocket):
+async def _process_seafood_market_action(game_state: dict, action_type: str, action_payload: dict, player: dict, manager, room_id, websocket, bf, dbf):
     settlement_state = game_state.get('settlementState', {})
     remaining_actions = settlement_state.get('remainingActions', 0)
 
@@ -601,9 +620,8 @@ async def _process_seafood_market_action(game_state: dict, action_type: str, act
 
     if action_type == 'buy_lobster':
         if player['coins'] >= buy_price and area_data['marketLobsterCount'] > 0:
-            player['coins'] -= buy_price
+            await update_resources(player, {'coins': -buy_price, 'lobsters': {'normal': 1}}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             area_data['marketLobsterCount'] -= 1
-            player['lobsters'].append(_create_lobster('normal'))
             success = True
         else: return 'error'
     elif action_type == 'sell_lobster':
@@ -620,8 +638,7 @@ async def _process_seafood_market_action(game_state: dict, action_type: str, act
                 break
 
         if normal_idx != -1:
-            player['lobsters'].pop(normal_idx)
-            player['coins'] += prices['sellLobster']
+            await update_resources(player, {'coins': prices['sellLobster'], 'lobsters': {'normal': -1}}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             area_data['marketLobsterCount'] += 1
             if area_data['marketLobsterCount'] > 8: area_data['marketLobsterCount'] = 8
             success = True
@@ -631,38 +648,32 @@ async def _process_seafood_market_action(game_state: dict, action_type: str, act
 
     elif action_type == 'buy_cage':
         if player['coins'] >= cage_buy_price:
-            player['coins'] -= cage_buy_price
-            player['cages'] += 1
+            await update_resources(player, {'coins': -cage_buy_price, 'cages': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             success = True
         else: return 'error'
     elif action_type == 'sell_cage':
         if player['cages'] > 0:
-            player['cages'] -= 1
-            player['coins'] += cage_sell_price
+            await update_resources(player, {'coins': cage_sell_price, 'cages': -1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             success = True
         else: return 'error'
     elif action_type == 'buy_seaweed':
         if player['coins'] >= prices['buySeaweed']:
-            player['coins'] -= prices['buySeaweed']
-            player['seaweed'] += 1
+            await update_resources(player, {'coins': -prices['buySeaweed'], 'seaweed': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             success = True
         else: return 'error'
     elif action_type == 'sell_seaweed':
         if player['seaweed'] > 0:
-            player['seaweed'] -= 1
-            player['coins'] += prices['sellSeaweed']
+            await update_resources(player, {'coins': prices['sellSeaweed'], 'seaweed': -1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             success = True
         else: return 'error'
     elif action_type == 'buy_seaweed_3':
         if player['coins'] >= prices['buySeaweed3']:
-            player['coins'] -= prices['buySeaweed3']
-            player['seaweed'] += 3
+            await update_resources(player, {'coins': -prices['buySeaweed3'], 'seaweed': 3}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             success = True
         else: return 'error'
     elif action_type == 'sell_seaweed_3':
         if player['seaweed'] >= 3:
-            player['seaweed'] -= 3
-            player['coins'] += prices['sellSeaweed3']
+            await update_resources(player, {'coins': prices['sellSeaweed3'], 'seaweed': -3}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             success = True
         else: return 'error'
 
@@ -672,16 +683,17 @@ async def _process_seafood_market_action(game_state: dict, action_type: str, act
         if 'hireSlots' not in game_state: game_state['hireSlots'] = [None] * 8
         if game_state['hireSlots'][slot_index] is not None: return 'error'
 
-        player['coins'] -= 6
         game_state['hireSlots'][slot_index] = player['id']
 
         if 'hiredLaborersBonus' not in player: player['hiredLaborersBonus'] = []
         player['hiredLaborersBonus'].append(slot_index)
 
-        if slot_index in [0, 1]: player['seaweed'] = player.get('seaweed', 0) + 1
-        elif slot_index in [2, 3]: player['lobsters'].append(_create_lobster('normal'))
-        elif slot_index in [4, 5]: player['lobsters'].append(_create_lobster('grade3'))
-        elif slot_index in [6, 7]: player['lobsters'].append(_create_lobster('grade2'))
+        hire_deltas = {'coins': -6}
+        if slot_index in [0, 1]: hire_deltas['seaweed'] = 1
+        elif slot_index in [2, 3]: hire_deltas['lobsters'] = {'normal': 1}
+        elif slot_index in [4, 5]: hire_deltas['lobsters'] = {'grade3': 1}
+        elif slot_index in [6, 7]: hire_deltas['lobsters'] = {'grade2': 1}
+        await update_resources(player, hire_deltas, broadcast_fn=bf, delta_broadcast_fn=dbf)
         success = True
     elif action_type == 'skip':
         game_state['settlementState']['waitingForPlayer'] = None
@@ -722,7 +734,7 @@ async def _process_seafood_market_action(game_state: dict, action_type: str, act
         return 'continue_ui'
 
 
-async def _process_breeding_action(game_state: dict, action_type: str, action_payload: dict, player: dict, manager, room_id, websocket):
+async def _process_breeding_action(game_state: dict, action_type: str, action_payload: dict, player: dict, manager, room_id, websocket, bf, dbf):
     settlement_state = game_state.get('settlementState', {})
     remaining_actions = settlement_state.get('remainingActions', 0)
 
@@ -759,46 +771,47 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
             await send_error(websocket, '虾王已达最高品级，无法继续培养')
             return 'error'
 
-        def get_next_grade(g):
-            mapping = {'normal': 'grade3', 'grade3': 'grade2', 'grade2': 'grade1', 'grade1': 'royal', 'royal': 'royal'}
-            return mapping.get(g, g)
-
-        target_grade = get_next_grade(old_grade)
+        target_grade = GRADE_UPGRADE.get(old_grade, old_grade)
 
         if use_seaweed:
             if player.get('seaweed', 0) < 1: return 'error'
-            if old_grade == 'normal': target_grade = 'grade2'
-            elif old_grade == 'grade3': target_grade = 'grade1'
-            else: target_grade = 'royal'
+            target_grade = GRADE_UPGRADE_SEAWEED.get(old_grade, old_grade)
 
         is_upgrading_to_royal = (old_grade != 'royal' and target_grade == 'royal')
 
         if is_upgrading_to_royal:
+            royal_cost_deltas = {}
             if royal_cost_type == 'cage':
                 if player.get('cages', 0) < 1: return 'error'
-                player['cages'] -= 1
+                royal_cost_deltas['cages'] = -1
             elif royal_cost_type == 'coin':
                 if player.get('coins', 0) < 3: return 'error'
-                player['coins'] -= 3
+                royal_cost_deltas['coins'] = -3
             else: return 'error'
 
-            if royal_reward_type == 'de': player['de'] = player.get('de', 0) + 1
-            elif royal_reward_type == 'wang': player['wang'] = player.get('wang', 0) + 1
+            if royal_reward_type == 'de': royal_cost_deltas['de'] = 1
+            elif royal_reward_type == 'wang': royal_cost_deltas['wang'] = 1
 
             if selected_title_id:
                 game_titles = game_state.get('gameTitleCards', [])
                 for i, tc in enumerate(game_titles):
                     if tc.get('id') == selected_title_id:
                         player['titleCards'].append(game_titles.pop(i))
-                        player['lobsters'].pop(lobster_index)
+                        removed_lobster = player['lobsters'].pop(lobster_index)
+                        removed_grade = removed_lobster.get('grade', 'normal')
+                        await dbf(player['id'], {'lobsters': {removed_grade: -1}})
+                        await bf(player['id'], _build_resource_snapshot(player))
                         break
 
-        if use_seaweed: player['seaweed'] -= 1
+            await update_resources(player, royal_cost_deltas, broadcast_fn=bf, delta_broadcast_fn=dbf)
+
+        if use_seaweed:
+            await update_resources(player, {'seaweed': -1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
         lobster['grade'] = target_grade
 
         has_breed_bonus = check_breed_bonus(player)
         if has_breed_bonus and lobster['grade'] != 'royal':
-            lobster['grade'] = get_next_grade(lobster['grade'])
+            lobster['grade'] = GRADE_UPGRADE.get(lobster['grade'], lobster['grade'])
 
         remaining_actions -= 1
         game_state['settlementState']['remainingActions'] = remaining_actions
@@ -827,7 +840,7 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
     return 'error'
 
 
-async def _process_marketplace_action(game_state: dict, action_type: str, action_payload: dict, player: dict, manager, room_id, websocket):
+async def _process_marketplace_action(game_state: dict, action_type: str, action_payload: dict, player: dict, manager, room_id, websocket, bf, dbf):
     settlement_state = game_state.get('settlementState', {})
 
     if action_type == 'executeDowntownAction':
@@ -851,34 +864,43 @@ async def _process_marketplace_action(game_state: dict, action_type: str, action
             reward = options[option_index].get('reward', {})
             log_info(f"[marketplace] exchange: cost={cost}, reward={reward}")
 
+            exchange_deltas = {}
+            lobster_removals = {}
             for res_type, res_amount in cost.items():
                 if res_type == 'lobsters':
                     if len(player['lobsters']) < res_amount: return 'error'
-                    for _ in range(res_amount): player['lobsters'].pop(0)
+                    for _ in range(res_amount):
+                        removed = player['lobsters'].pop(0)
+                        removed_grade = removed.get('grade', 'normal')
+                        lobster_removals[removed_grade] = lobster_removals.get(removed_grade, 0) - 1
                 elif res_type == 'de':
                     if player['de'] < res_amount: return 'error'
-                    player['de'] -= res_amount
+                    exchange_deltas['de'] = exchange_deltas.get('de', 0) - res_amount
                 elif res_type == 'wang':
                     if player['wang'] < res_amount: return 'error'
-                    player['wang'] -= res_amount
+                    exchange_deltas['wang'] = exchange_deltas.get('wang', 0) - res_amount
                 elif res_type == 'coins':
                     if player['coins'] < res_amount: return 'error'
-                    player['coins'] -= res_amount
+                    exchange_deltas['coins'] = exchange_deltas.get('coins', 0) - res_amount
                 elif res_type == 'seaweed':
                     if player['seaweed'] < res_amount: return 'error'
-                    player['seaweed'] -= res_amount
+                    exchange_deltas['seaweed'] = exchange_deltas.get('seaweed', 0) - res_amount
                 elif res_type == 'cages':
                     if player['cages'] < res_amount: return 'error'
-                    player['cages'] -= res_amount
+                    exchange_deltas['cages'] = exchange_deltas.get('cages', 0) - res_amount
 
             for res_type, res_amount in reward.items():
                 if res_type == 'lobsters':
-                    for _ in range(res_amount): player['lobsters'].append(_create_lobster('normal'))
-                elif res_type == 'de': player['de'] += res_amount
-                elif res_type == 'wang': player['wang'] += res_amount
-                elif res_type == 'coins': player['coins'] += res_amount
-                elif res_type == 'seaweed': player['seaweed'] += res_amount
-                elif res_type == 'cages': player['cages'] += res_amount
+                    exchange_deltas.setdefault('lobsters', {})['normal'] = exchange_deltas.get('lobsters', {}).get('normal', 0) + res_amount
+                elif res_type == 'de': exchange_deltas['de'] = exchange_deltas.get('de', 0) + res_amount
+                elif res_type == 'wang': exchange_deltas['wang'] = exchange_deltas.get('wang', 0) + res_amount
+                elif res_type == 'coins': exchange_deltas['coins'] = exchange_deltas.get('coins', 0) + res_amount
+                elif res_type == 'seaweed': exchange_deltas['seaweed'] = exchange_deltas.get('seaweed', 0) + res_amount
+                elif res_type == 'cages': exchange_deltas['cages'] = exchange_deltas.get('cages', 0) + res_amount
+            if lobster_removals:
+                await dbf(player['id'], {'lobsters': lobster_removals})
+                await bf(player['id'], _build_resource_snapshot(player))
+            await update_resources(player, exchange_deltas, broadcast_fn=bf, delta_broadcast_fn=dbf)
             log_info(f"[marketplace] exchange done: player {player['id']} coins={player['coins']} seaweed={player['seaweed']} lobsters={len(player['lobsters'])}")
 
         elif action_type_inner == 'post_station':
@@ -886,8 +908,7 @@ async def _process_marketplace_action(game_state: dict, action_type: str, action
             log_info(f"[marketplace] post_station: tributes_count={tributes_count}, option_index={option_index}")
             if tributes_count > 0:
                 if option_index < 0 or option_index > tributes_count: return 'error'
-                player['de'] = player.get('de', 0) + option_index
-                player['wang'] = player.get('wang', 0) + (tributes_count - option_index)
+                await update_resources(player, {'de': option_index, 'wang': tributes_count - option_index}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             log_info(f"[marketplace] post_station done: player {player['id']} de={player['de']} wang={player['wang']}")
 
         elif action_type_inner == 'breeding_4':
@@ -903,30 +924,34 @@ async def _process_marketplace_action(game_state: dict, action_type: str, action
                 return 'continue_ui'
 
         elif action_type_inner == 'black_market':
-            player['lobsters'].append(_create_lobster('grade2'))
+            await update_resources(player, {'lobsters': {'grade2': 1}}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             log_info(f"[marketplace] black_market: gave grade2 lobster to player {player['id']}, now has {len(player['lobsters'])} lobsters")
 
         elif action_type_inner == 'academy':
-            if player.get('de', 0) < player.get('wang', 0): player['de'] += 1
-            elif player.get('wang', 0) < player.get('de', 0): player['wang'] += 1
+            if player.get('de', 0) < player.get('wang', 0):
+                await update_resources(player, {'de': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
+            elif player.get('wang', 0) < player.get('de', 0):
+                await update_resources(player, {'wang': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             else:
-                if option_index == 0: player['de'] += 1
-                else: player['wang'] += 1
+                if option_index == 0:
+                    await update_resources(player, {'de': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
+                else:
+                    await update_resources(player, {'wang': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
         elif action_type_inner == 'charity':
             min_de = min(p.get('de', 0) for p in game_state['players'])
             min_wang = min(p.get('wang', 0) for p in game_state['players'])
             for p in game_state['players']:
+                charity_deltas = {}
                 if p.get('de', 0) == min_de:
-                    p['lobsters'].append(_create_lobster('normal'))
-                    p['lobsters'].append(_create_lobster('normal'))
-                if p.get('wang', 0) == min_wang: p['coins'] += 2
+                    charity_deltas['lobsters'] = {'normal': 2}
+                if p.get('wang', 0) == min_wang:
+                    charity_deltas['coins'] = 2
+                if charity_deltas:
+                    await update_resources(p, charity_deltas, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
         elif action_type_inner == 'bazaar':
-            player['seaweed'] = player.get('seaweed', 0) + 1
-            player['coins'] = player.get('coins', 0) + 1
-            player['cages'] = player.get('cages', 0) + 1
-            player['lobsters'].append(_create_lobster('normal'))
+            await update_resources(player, {'seaweed': 1, 'coins': 1, 'cages': 1, 'lobsters': {'normal': 1}}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             log_info(f"[marketplace] bazaar done: player {player['id']} coins={player['coins']} seaweed={player['seaweed']} cages={player['cages']} lobsters={len(player['lobsters'])}")
 
         elif action_type_inner == 'inn':
@@ -947,7 +972,7 @@ async def _process_marketplace_action(game_state: dict, action_type: str, action
     return 'error'
 
 
-async def _process_tribute_action(game_state: dict, action_type: str, action_payload: dict, player: dict, manager, room_id, websocket):
+async def _process_tribute_action(game_state: dict, action_type: str, action_payload: dict, player: dict, manager, room_id, websocket, bf, dbf):
     settlement_state = game_state.get('settlementState', {})
     current_slot_index = settlement_state.get('currentSlotIndex', 0)
 
@@ -991,26 +1016,34 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                 log_debug(f"[_process_tribute_action] ERROR-T4: lobster grade too low, grade={lobster.get('grade')}, name={lobster.get('name')}")
                 return 'error'
 
-            if naked_lobster_index < len(player_lobsters): del player_lobsters[naked_lobster_index]
+            if naked_lobster_index < len(player_lobsters):
+                removed = player_lobsters[naked_lobster_index]
+                del player_lobsters[naked_lobster_index]
+                await dbf(player['id'], {'lobsters': {removed.get('grade', 'normal'): -1}})
             else:
                 tc_index = naked_lobster_index - len(player_lobsters)
+                removed = player_title_cards[tc_index]
                 del player_title_cards[tc_index]
+            await bf(player['id'], _build_resource_snapshot(player))
 
             # ==============================================================
             # 【核心修复】：分离基础裸交奖励与称号带来的额外奖励，防止重复计分
             # ==============================================================
             # 1. 发放裸交的基础 1 分
+            tribute_deltas = {}
             if naked_reward_type == 'de':
-                player['de'] += 1
+                tribute_deltas['de'] = tribute_deltas.get('de', 0) + 1
             else:
-                player['wang'] += 1
+                tribute_deltas['wang'] = tribute_deltas.get('wang', 0) + 1
 
             # 2. 如果前端传来了称号带来的额外加成，严格按照前端发来的执行
             bonus_choice = action_payload.get('bonusTributeChoice')
             if bonus_choice == 'de':
-                player['de'] += 1
+                tribute_deltas['de'] = tribute_deltas.get('de', 0) + 1
             elif bonus_choice == 'wang':
-                player['wang'] += 1
+                tribute_deltas['wang'] = tribute_deltas.get('wang', 0) + 1
+            if tribute_deltas:
+                await update_resources(player, tribute_deltas, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
             if player['id'] not in tavern['occupants']: tavern['occupants'].append(player['id'])
             if 'tavernCompletionOrder' not in game_state: game_state['tavernCompletionOrder'] = {}
@@ -1020,7 +1053,7 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             order = len(game_state['tavernCompletionOrder'][tavern_id_str])
 
             if 'tavernCompletions' not in player: player['tavernCompletions'] = {}
-            player['tavernCompletions'][tavern_id] = order
+            await update_resources(player, {'tavernCompletions': {'set': {tavern_id: order}}}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             player['tributesThisRound'] = player.get('tributesThisRound', 0) + 1
 
         else:
@@ -1045,8 +1078,10 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                 cards_to_process.append((card, card_index))
 
             bonus_choice = action_payload.get('bonusTributeChoice')
-            if bonus_choice == 'de': player['de'] = player.get('de', 0) + 1
-            elif bonus_choice == 'wang': player['wang'] = player.get('wang', 0) + 1
+            if bonus_choice == 'de':
+                await update_resources(player, {'de': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
+            elif bonus_choice == 'wang':
+                await update_resources(player, {'wang': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
             if player['id'] not in tavern['occupants'] and len(tavern['occupants']) < 4:
                 tavern['occupants'].append(player['id'])
@@ -1059,7 +1094,7 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             order = len(game_state['tavernCompletionOrder'][tavern_id_str])
 
             if 'tavernCompletions' not in player: player['tavernCompletions'] = {}
-            player['tavernCompletions'][tavern_id] = order
+            await update_resources(player, {'tavernCompletions': {'set': {tavern_id: order}}}, broadcast_fn=bf, delta_broadcast_fn=dbf)
             player['tributesThisRound'] = player.get('tributesThisRound', 0) + len(cards_to_process)
 
             total_coins = sum(c.get('requirements', {}).get('coins', 0) for c, _ in cards_to_process)
@@ -1143,20 +1178,29 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                         await send_error(websocket, '所选祭品品级不足以满足卡牌要求')
                         return 'error'
 
+                lobster_removals = {}
                 for lid in selected_lobster_ids:
                     for i, lobster in enumerate(player_lobsters):
                         if lobster.get('id') == lid:
+                            removed_grade = lobster.get('grade', 'normal')
                             del player_lobsters[i]
+                            lobster_removals[removed_grade] = lobster_removals.get(removed_grade, 0) - 1
                             break
                     else:
                         for i, tc in enumerate(player_title_cards):
                             if tc.get('id') == lid:
                                 del player_title_cards[i]
                                 break
+                if lobster_removals:
+                    await dbf(player['id'], {'lobsters': lobster_removals})
+                await bf(player['id'], _build_resource_snapshot(player))
 
-            player['coins'] = player.get('coins', 0) - total_coins
-            player['seaweed'] = player.get('seaweed', 0) - total_seaweed
-            player['cages'] = player.get('cages', 0) - total_cages
+            cost_deltas = {}
+            if total_coins > 0: cost_deltas['coins'] = -total_coins
+            if total_seaweed > 0: cost_deltas['seaweed'] = -total_seaweed
+            if total_cages > 0: cost_deltas['cages'] = -total_cages
+            if cost_deltas:
+                await update_resources(player, cost_deltas, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
             sorted_indices = sorted([ci for _, ci in cards_to_process], reverse=True)
             for ci in sorted_indices: del tavern['cards'][ci]
@@ -1167,11 +1211,16 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                     deck = game_state.get('tributeCardDeck', [])
                     game_state['tributeCardDeck'] = [c for c in deck if c.get('id') != card_id]
                 reward = card.get('reward', {})
-                player['de'] = player.get('de', 0) + reward.get('de', 0)
-                player['wang'] = player.get('wang', 0) + reward.get('wang', 0)
+                reward_deltas = {}
+                if reward.get('de', 0) > 0: reward_deltas['de'] = reward['de']
+                if reward.get('wang', 0) > 0: reward_deltas['wang'] = reward['wang']
+                if reward_deltas:
+                    await update_resources(player, reward_deltas, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
                 from services.tribute_card_effects import apply_instant_effect
                 instant_result = apply_instant_effect(player, card, game_state)
+                if instant_result.get('resourceDeltas'):
+                    await update_resources(player, instant_result['resourceDeltas'], broadcast_fn=bf, delta_broadcast_fn=dbf)
 
                 if 'tributeCards' not in player: player['tributeCards'] = []
                 player['tributeCards'].append(card)
@@ -1225,7 +1274,7 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             return
 
         choice_type = pending.get('choiceType')
-        player = game_state['players'][player['id']]
+        player = get_player(game_state, player['id'])
 
         if choice_type == 'buy_advanced_lobster':
             grade = choice.get('grade', 'normal')
@@ -1234,13 +1283,7 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             if player_coins < cost:
                 await send_error(websocket, '金币不足')
                 return
-            player['coins'] -= cost
-            if grade == 'grade3':
-                player['lobsters'].append(create_lobster('grade3'))
-            elif grade == 'grade2':
-                player['lobsters'].append(create_lobster('grade2'))
-            elif grade == 'grade1':
-                player['lobsters'].append(create_lobster('grade1'))
+            await update_resources(player, {'coins': -cost, 'lobsters': {grade: 1}}, broadcast_fn=bf, delta_broadcast_fn=dbf)
         elif choice_type == 'discard_attack':
             action = choice.get('action', 'discard')
             if action == 'attack':
@@ -1253,9 +1296,12 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
                         continue
                     if target_type == 'lobster':
                         if other_player.get('lobsters'):
-                            other_player['lobsters'].pop(0)
+                            removed = other_player['lobsters'].pop(0)
+                            await update_resources(other_player, {'lobsters': {removed.get('grade', 'normal'): -1}}, broadcast_fn=bf, delta_broadcast_fn=dbf)
                     elif target_type == 'cage':
-                        other_player['cages'] = max(0, other_player.get('cages', 0) - 1)
+                        cage_delta = max(0, other_player.get('cages', 0) - 1) - other_player.get('cages', 0)
+                        if cage_delta != 0:
+                            await update_resources(other_player, {'cages': cage_delta}, broadcast_fn=bf, delta_broadcast_fn=dbf)
 
         game_state['pendingTributeChoice'] = None
         current_slot_index = game_state['settlementState'].get('currentSlotIndex', 0)
@@ -1289,7 +1335,6 @@ def _serialize_player(player: dict) -> dict:
         'lobsters': player['lobsters'],
         'titleCards': player['titleCards'],
         'tributeCards': player.get('tributeCards', []),
-        'tempBubbles': player.get('tempBubbles', 0),
         'tavernCompletions': player.get('tavernCompletions', {}),
         'hiredLaborersBonus': player.get('hiredLaborersBonus', [])
     }
