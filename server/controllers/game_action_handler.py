@@ -4,14 +4,14 @@
 将客户端发送的 clientGameAction 事件按 actionType 分发到具体 handler
 
 包含的事件:
-  - USE_SEAWEED: 使用海草
-  - PLACE_HEADMAN: 放置里长
+  - USE_SEAWEED: 使用仙草
+  - PLACE_HEADMAN: 放置寻山客
   - NEXT_PLAYER: 下一个玩家
   - NEXT_AREA: 下一个区域
   - EXCHANGE_SIGNALS: 交换信号
   - BUY_ITEM: 购买物品
   - SELL_ITEM: 出售物品
-  - CULTIVATE_LOBSTER: 培养龙虾
+  - CULTIVATE_LOBSTER: 培养灵螯
   - SUBMIT_TRIBUTE: 提交上供
   - DOWNTOWN_ACTION: 闹市行动
   - AREA_ACTION: 区域行动
@@ -27,13 +27,13 @@ from services.tribute_card_effects import get_endgame_choices, apply_endgame_cho
 
 
 async def handle_use_seaweed(websocket, room_id, player_id, rooms, manager, payload):
-    """使用海草"""
+    """使用仙草"""
     game_state = rooms.get(room_id)
     if not game_state:
         return
     player = get_player(game_state, player_id)
     if not player or player['seaweed'] <= 0:
-        await send_error(websocket, '海草不足')
+        await send_error(websocket, '仙草不足')
         return
     bf = make_broadcast_fn(manager.send_to_room, room_id)
     dbf = make_delta_broadcast_fn(manager.send_to_room, room_id)
@@ -41,7 +41,7 @@ async def handle_use_seaweed(websocket, room_id, player_id, rooms, manager, payl
 
 
 async def handle_place_headman(websocket, room_id, player_id, rooms, manager, payload):
-    """放置里长"""
+    """放置寻山客"""
     area_index = payload.get('areaIndex')
     slot_index = payload.get('slotIndex')
 
@@ -63,7 +63,7 @@ async def handle_place_headman(websocket, room_id, player_id, rooms, manager, pa
 
     last_placement = game_state.get('lastPlacement')
     if last_placement and last_placement.get('playerId') == player_id:
-        await send_error(websocket, '本回合已放置过里长，请点击下一阶段')
+        await send_error(websocket, '本回合已放置过寻山客，请点击下一阶段')
         return
 
     if player['liZhang'] <= 0:
@@ -115,7 +115,7 @@ async def handle_place_headman(websocket, room_id, player_id, rooms, manager, pa
 
 
 async def handle_cancel_headman(websocket, room_id, player_id, rooms, manager, payload):
-    """取消放置里长"""
+    """取消放置寻山客"""
     game_state = rooms.get(room_id)
     if not game_state or game_state.get('status') != 'playing':
         await send_error(websocket, '游戏未开始')

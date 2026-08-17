@@ -64,7 +64,7 @@ def _get_slot_position_value(slot_index: int, total_slots: int, decay: float = 0
 
 
 def _has_upgradeable_lobster(ai_player: dict) -> bool:
-    """检测AI是否有可培养的龙虾（可升级的非royal龙虾）"""
+    """检测AI是否有可培养的灵螯（可升级的非royal灵螯）"""
     has_seaweed = ai_player.get('seaweed', 0) > 0
     has_cage = ai_player.get('cages', 0) > 0
     has_coins_for_royal = ai_player.get('coins', 0) >= 3
@@ -218,7 +218,7 @@ def _decide_breeding(game_state: dict, ai_player: dict, settlement_state: dict) 
     has_coins_for_royal = ai_player.get('coins', 0) >= 3
     can_afford_royal = has_cage or has_coins_for_royal
 
-    # 过滤掉无法升级到下一等级的龙虾
+    # 过滤掉无法升级到下一等级的灵螯
     def is_upgradeable(lobster):
         g = lobster.get('grade', 'normal')
         if g == 'grade1' and not can_afford_royal:
@@ -230,14 +230,14 @@ def _decide_breeding(game_state: dict, ai_player: dict, settlement_state: dict) 
     upgradeable = [l for l in upgradeable if is_upgradeable(l)]
     if not upgradeable: return {'action_type': 'skip', 'payload': {}}
 
-    # 构建候选列表：每只龙虾作为一个候选，权重=品级越高权重越高
+    # 构建候选列表：每只灵螯作为一个候选，权重=品级越高权重越高
     grade_weight = {'normal': 1, 'grade3': 2, 'grade2': 3, 'grade1': 4}
     candidates = []
     for lobster in upgradeable:
         w = grade_weight.get(lobster.get('grade', 'normal'), 1)
         candidates.append((lobster, w))
 
-    # 加权随机选择龙虾
+    # 加权随机选择灵螯
     lobsters_list = [c[0] for c in candidates]
     weights = [c[1] for c in candidates]
     chosen_lobster = random.choices(lobsters_list, weights=weights, k=1)[0]

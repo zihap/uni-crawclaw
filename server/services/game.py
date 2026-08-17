@@ -15,7 +15,7 @@ from services.tribute_card_effects import get_endgame_choices
 
 
 def update_market_prices(game_state: dict):
-    """根据市场龙虾数量更新动态价格"""
+    """根据市场灵螯数量更新动态价格"""
     market_area = game_state['areas']['seafood_market']
     market_area['dynamicPrices'] = calculate_market_prices(market_area['marketLobsterCount'])
 
@@ -32,7 +32,7 @@ def cleanup_phase(game_state: dict):
         base_headmen = 3
         hired_count = len(player.get('hiredLaborersBonus', []))
         player['liZhang'] = base_headmen + hired_count
-        # 处理闹市卡“客栈”的专属里长
+        # 处理闹市卡“客栈”的专属寻山客
         if player.get('inn_headman'):
             player['liZhang'] += 1
             player['inn_headman'] = False

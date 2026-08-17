@@ -242,10 +242,10 @@ async def _resolve_breeding_step(game_state: dict, manager, room_id, bf, dbf):
                     game_state['settlementState']['waitingForPlayer'] = None
                     return 'action_complete'
                 if is_ai_player(player):
-                    # AI没有龙虾，直接跳过
+                    # AI没有灵螯，直接跳过
                     current_slot_index += 1
                     continue
-                # 人类玩家没有龙虾，显示UI（前端显示空状态和跳过按钮）
+                # 人类玩家没有灵螯，显示UI（前端显示空状态和跳过按钮）
                 game_state['settlementState'] = make_settlement_state('breeding', current_slot_index, 0, player_id)
                 await manager.send_to_room(room_id, ServerEvents.SERVER_AREA_ACTION,
                     make_action_message(ServerAreaActionTypes.AREA_WAITING_UI, {
@@ -628,7 +628,7 @@ async def _process_seafood_market_action(game_state: dict, action_type: str, act
         if market_rule and not market_rule.get('canSell', True): return 'error'
 
         if area_data.get('marketLobsterCount', 0) >= 8:
-            await send_error(websocket, '市场摊位已满，无法卖出龙虾')
+            await send_error(websocket, '市场摊位已满，无法卖出灵螯')
             return 'error'
 
         normal_idx = -1
@@ -643,7 +643,7 @@ async def _process_seafood_market_action(game_state: dict, action_type: str, act
             if area_data['marketLobsterCount'] > 8: area_data['marketLobsterCount'] = 8
             success = True
         else:
-            await send_error(websocket, '没有普通龙虾可卖')
+            await send_error(websocket, '没有普通灵螯可卖')
             return 'error'
 
     elif action_type == 'buy_cage':
@@ -738,7 +738,7 @@ async def _process_breeding_action(game_state: dict, action_type: str, action_pa
     settlement_state = game_state.get('settlementState', {})
     remaining_actions = settlement_state.get('remainingActions', 0)
 
-    # skip 在 remaining_actions 检查之前处理（没有龙虾时 actionCount=0 仍可 skip）
+    # skip 在 remaining_actions 检查之前处理（没有灵螯时 actionCount=0 仍可 skip）
     if action_type == 'skip':
         is_arena_override = settlement_state.get('overrideActionCount') is not None
         if is_arena_override:
@@ -1281,7 +1281,7 @@ async def _process_tribute_action(game_state: dict, action_type: str, action_pay
             cost = choice.get('cost', 0)
             player_coins = player.get('coins', 0)
             if player_coins < cost:
-                await send_error(websocket, '金币不足')
+                await send_error(websocket, '贝币不足')
                 return
             await update_resources(player, {'coins': -cost, 'lobsters': {grade: 1}}, broadcast_fn=bf, delta_broadcast_fn=dbf)
         elif choice_type == 'discard_attack':

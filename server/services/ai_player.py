@@ -7,7 +7,7 @@ import random
 from utils.game_state import create_player
 
 AI_NAME_PREFIXES = ['聪明的', '机智的', '冷静的', '果断的', '谨慎的', '狡猾的', '勇猛的', '沉稳的']
-AI_NAME_SUFFIXES = ['龙虾', '渔夫', '船长', '商人', '里长', '水手', '舵手', '渔翁']
+AI_NAME_SUFFIXES = ['灵螯', '渔夫', '船长', '商人', '寻山客', '水手', '舵手', '渔翁']
 
 
 def generate_ai_name() -> str:

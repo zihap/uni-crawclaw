@@ -34,7 +34,7 @@ def check_tribute_discount(player: dict) -> Optional[Dict]:
 
 
 def check_battle_bonus(player: dict) -> bool:
-    """检查是否有斗龙虾奖励光环"""
+    """检查是否有斗灵螯奖励光环"""
     return has_perma_buff(player, 'permaBuff_battle_bonus')
 
 
@@ -44,14 +44,14 @@ def check_bet_bonus(player: dict) -> bool:
 
 
 def check_cage_trade(player: dict) -> Optional[Dict]:
-    """检查是否有虾笼交易优化光环，返回配置"""
+    """检查是否有灵鼎交易优化光环，返回配置"""
     if not has_perma_buff(player, 'permaBuff_cage_trade'):
         return None
     return {'buyDiscount': 1, 'sellBonus': 1}
 
 
 def check_adjacent_action(player: dict) -> bool:
-    """检查是否有里长相邻行动光环"""
+    """检查是否有寻山客相邻行动光环"""
     return has_perma_buff(player, 'permaBuff_adjacent_action')
 
 
@@ -157,7 +157,7 @@ def apply_instant_effect(player: dict, card: dict, game_state: dict) -> dict:
     effect_type = card.get('effectType', '')
     
     if effect_type == 'instant_breed':
-        # 执行3次培养龙虾升级（每次升级1个龙虾1品）
+        # 执行3次培养灵螯升级（每次升级1个灵螯1品）
         breed_count = 3
         lobsters = player.get('lobsters', [])
         upgrade_count = 0

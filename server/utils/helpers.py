@@ -23,7 +23,7 @@ def is_ai_player(player: dict) -> bool:
 
 
 def create_lobster(grade: str = 'normal') -> dict:
-    """创建一只龙虾对象"""
+    """创建一只灵螯对象"""
     return {
         'id': ''.join(random.choices(string.ascii_lowercase + string.digits, k=9)),
         'grade': grade
@@ -57,9 +57,9 @@ def make_resource_broadcast_fns(broadcast_fn, room_id: str) -> tuple:
 
 
 def calculate_market_prices(lobster_count: int) -> dict:
-    """根据市场龙虾数量计算动态价格"""
+    """根据市场灵螯数量计算动态价格"""
 
-    # 市场流通龙虾数大于5只并且小于等于8只 (即 6, 7, 8)
+    # 市场流通灵螯数大于5只并且小于等于8只 (即 6, 7, 8)
     if lobster_count > 5:
         return {
             'buyLobster': 1, 'sellLobster': 1,
@@ -67,7 +67,7 @@ def calculate_market_prices(lobster_count: int) -> dict:
             'buySeaweed': 1, 'sellSeaweed': 1,
             'buySeaweed3': 4, 'sellSeaweed3': 4
         }
-    # 市场流通龙虾数大于3只并且小于等于5只 (即 4, 5)
+    # 市场流通灵螯数大于3只并且小于等于5只 (即 4, 5)
     elif lobster_count > 3:
         return {
             'buyLobster': 2, 'sellLobster': 2,
@@ -75,7 +75,7 @@ def calculate_market_prices(lobster_count: int) -> dict:
             'buySeaweed': 1, 'sellSeaweed': 1,
             'buySeaweed3': 4, 'sellSeaweed3': 4
         }
-    # 市场流通龙虾数小于等于3只 (即 0, 1, 2, 3)
+    # 市场流通灵螯数小于等于3只 (即 0, 1, 2, 3)
     else:
         return {
             'buyLobster': 3, 'sellLobster': 3,
@@ -130,7 +130,7 @@ async def send_error(websocket, message: str):
 
 
 def _count_lobsters_by_grade(player: dict) -> dict:
-    """统计玩家各等级龙虾数量"""
+    """统计玩家各等级灵螯数量"""
     counts = {}
     for lobster in player.get('lobsters', []):
         grade = lobster.get('grade', 'normal')
@@ -139,7 +139,7 @@ def _count_lobsters_by_grade(player: dict) -> dict:
 
 
 def _find_lobster_by_grade(player: dict, grade: str) -> dict:
-    """找到一只指定等级的龙虾"""
+    """找到一只指定等级的灵螯"""
     for lobster in player.get('lobsters', []):
         if lobster.get('grade') == grade:
             return lobster
@@ -147,7 +147,7 @@ def _find_lobster_by_grade(player: dict, grade: str) -> dict:
 
 
 def _update_lobster_grade(player: dict, grade: str, delta: int):
-    """添加或移除指定等级的龙虾"""
+    """添加或移除指定等级的灵螯"""
     if delta > 0:
         for _ in range(delta):
             player['lobsters'].append(create_lobster(grade))
@@ -199,7 +199,7 @@ async def update_resources(player: dict, deltas: dict, broadcast_fn=None, delta_
     delta 正数增加，负数减少。
     支持的 delta 格式:
       - int: 直接加减 (coins, seaweed, cages, de, wang, liZhang, bonusPoints, bonusGold)
-      - dict with grade keys: 龙虾增减 (lobsters: {'grade3': 1, 'normal': -1})
+      - dict with grade keys: 灵螯增减 (lobsters: {'grade3': 1, 'normal': -1})
       - dict with 'add': 数组追加 (titleCards: {'add': [obj]}, completedTasks: {'add': [id]})
       - dict with 'set': 字典设置 (tavernCompletions: {'set': {tavern_id: order}})
     """

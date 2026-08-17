@@ -108,7 +108,7 @@ class SkillExecutor:
                 ctx['roll'] = 6
                 logs.append(f"<br/><color=#00ffff>✨[技能生效-稳扎] 点数过低，强制拉升视为 6 点！</color>")
 
-        # 5. 吃海草修饰
+        # 5. 吃仙草修饰
         elif event_name == 'seaweed_calc':
             if 's15' in skills:
                 ctx['bonus'] = 3
@@ -484,7 +484,7 @@ async def handle_rpg_battle_action(websocket, room_id, player_id, rooms, manager
                     p_entity = get_player(game_state, p['id'])
                     if p_entity:
                         await update_resources(p_entity, {'wang': 1}, broadcast_fn=bf, delta_broadcast_fn=dbf)
-                        battle['lastLog'] += f"<br/>🎖️ 【{p['name']}】在狂暴下撑过了3次攻击，毅力惊人，<br/>获得 <color=#ffaa00>1点望</color> 奖励！"
+                        battle['lastLog'] += f"<br/>🎖️ 【{p['name']}】在狂暴下撑过了3次攻击，毅力惊人，<br/>获得 <color=#ffaa00>1点运</color> 奖励！"
             battle['lastLog'] += f"<br/>🏆 战斗结束！请胜者【{battle['winnerName']}】选择胜利奖励！"
         else:
             battle['activePlayerId'] = battle['nextActivePlayerId']
@@ -742,7 +742,7 @@ async def handle_lobster_selected(websocket, room_id, player_id, rooms, manager,
                 for sid in spectators:
                     sp = get_player(game_state, sid)
                     if sp and (sp.get('coins', 0) == 0 or is_ai_player(sp)):
-                        # 0金币或AI观战者自动跳过下注
+                        # 0贝币或AI观战者自动跳过下注
                         state['bets'][sid] = {'amount': 0, 'target': None}
                         auto_bet_spectators.append(sid)
 
@@ -824,7 +824,7 @@ async def handle_spectator_bet(websocket, room_id, player_id, rooms, manager, pa
 
     player_coins = player.get('coins', 0)
     if bet_amount < 0 or bet_amount > player_coins:
-        await send_error(websocket, f'下注金额无效，你当前拥有{player_coins}金币')
+        await send_error(websocket, f'下注金额无效，你当前拥有{player_coins}贝币')
         return
 
     if bet_amount > 0:

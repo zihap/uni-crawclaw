@@ -8,13 +8,13 @@ import json
 
 AREAS = ['shrimp_catching', 'seafood_market', 'breeding', 'tribute', 'marketplace']
 
-# 龙虾等级集合（用于资源检查与更新）
+# 灵螯等级集合（用于资源检查与更新）
 LOBSTER_GRADES = {'normal', 'grade3', 'grade2', 'grade1', 'royal'}
 
-# 龙虾等级价值（用于上供区计算）
+# 灵螯等级价值（用于上供区计算）
 GRADE_VALUES = {'normal': 0, 'grade3': 1, 'grade2': 2, 'grade1': 3, 'royal': 4}
 
-# 龙虾升级（普通升级 + 吃草跳级）
+# 灵螯升级（普通升级 + 吃草跳级）
 GRADE_UPGRADE = {'normal': 'grade3', 'grade3': 'grade2', 'grade2': 'grade1', 'grade1': 'royal', 'royal': 'royal'}
 GRADE_UPGRADE_SEAWEED = {'normal': 'grade2', 'grade3': 'grade1', 'grade2': 'royal', 'grade1': 'royal', 'royal': 'royal'}
 
@@ -84,7 +84,7 @@ _CARD_CONFIG_DEFAULT = {
             'name': '王爷',
             'requirements': {'lobsters': {'grade1': 1}, 'seaweed': 2},
             'reward': {'de': 3},
-            'aura': {'type': 'doubleWinReward', 'description': '龙虾斗场获胜奖励翻倍'},
+            'aura': {'type': 'doubleWinReward', 'description': '灵螯斗场获胜奖励翻倍'},
             'bonusScore': 0
         },
         {
@@ -92,7 +92,7 @@ _CARD_CONFIG_DEFAULT = {
             'name': '知府',
             'requirements': {'lobsters': {'grade3': 2}, 'coins': 5},
             'reward': {'wang': 2},
-            'aura': {'type': 'bonusGold', 'value': 1, 'description': '每回合额外获得1金币'},
+            'aura': {'type': 'bonusGold', 'value': 1, 'description': '每回合额外获得1贝币'},
             'bonusScore': 2
         },
         {
@@ -116,7 +116,7 @@ _CARD_CONFIG_DEFAULT = {
             'name': '举人',
             'requirements': {'lobsters': {'grade3': 3}},
             'reward': {'de': 1},
-            'aura': {'type': 'extraCage', 'value': 1, 'description': '游戏开始时额外获得1个虾笼'},
+            'aura': {'type': 'extraCage', 'value': 1, 'description': '游戏开始时额外获得1个灵鼎'},
             'bonusScore': 2
         }
     ],
@@ -131,7 +131,7 @@ _CARD_CONFIG_DEFAULT = {
                     {"cost": {"lobsters": 3}, "reward": {"wang": 2}}
                 ]
             },
-            "description": "玩家支付1只龙虾换1望，或者支付3只龙虾换2望",
+            "description": "玩家支付1只灵螯换1运，或者支付3只灵螯换2运",
             "auto": False
         },
         {
@@ -144,56 +144,56 @@ _CARD_CONFIG_DEFAULT = {
                     {"cost": {"coins": 5}, "reward": {"de": 2}}
                 ]
             },
-            "description": "玩家支付2金币换1德，或者支付5金币换2德",
+            "description": "玩家支付2贝币换1道，或者支付5贝币换2道",
             "auto": False
         },
         {
             "id": "marketplace_3",
             "name": "驿站",
             "action": {"type": "post_station"},
-            "description": "本回合游戏中每完成一张进贡卡，都可以直接额外获得1德或者1望",
+            "description": "本回合游戏中每完成一张进贡卡，都可以直接额外获得1道或者1运",
             "auto": True
         },
         {
             "id": "marketplace_4",
             "name": "斗场",
             "action": {"type": "breeding_4"},
-            "description": "直接进行4次培养龙虾升级",
+            "description": "直接进行4次培养灵螯升级",
             "auto": True
         },
         {
             "id": "marketplace_5",
             "name": "黑市",
             "action": {"type": "black_market"},
-            "description": "直接获得一只2品龙虾",
+            "description": "直接获得一只2品灵螯",
             "auto": True
         },
         {
             "id": "marketplace_6",
             "name": "学堂",
             "action": {"type": "academy"},
-            "description": "你的德望轨最低者提升一格（如果德望值一样，则自己选择+1德或者+1望）",
+            "description": "你的道运轨最低者提升一格（如果道运值一样，则自己选择+1道或者+1运）",
             "auto": True
         },
         {
             "id": "marketplace_7",
             "name": "善堂",
             "action": {"type": "charity"},
-            "description": "德轨最低的玩家直接获得2只普通龙虾，望轨最低的玩家直接获得2个金币",
+            "description": "道轨最低的玩家直接获得2只普通灵螯，运轨最低的玩家直接获得2个贝币",
             "auto": True
         },
         {
             "id": "marketplace_8",
             "name": "市集",
             "action": {"type": "bazaar"},
-            "description": "直接获取1根海草+1个金币+1只普通龙虾+1个虾笼",
+            "description": "直接获取1根仙草+1个贝币+1只普通灵螯+1个灵鼎",
             "auto": True
         },
         {
             "id": "marketplace_9",
             "name": "客栈",
             "action": {"type": "inn"},
-            "description": "本卡上会有一个专属里长，获得后在下一回合增加1个放置名额",
+            "description": "本卡上会有一个专属寻山客，获得后在下一回合增加1个放置名额",
             "auto": True
         }
     ]

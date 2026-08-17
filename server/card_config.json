@@ -88,7 +88,7 @@
             "id": "title_15",
             "name": "贪食",
             "skillId": "s15",
-            "description": "你使用海草时，投掷骰子的点数+3"
+            "description": "你使用仙草时，投掷骰子的点数+3"
         },
         {
             "id": "title_16",
@@ -200,7 +200,7 @@
             "reward": {
                 "wang": 2
             },
-            "effectDesc": "获得卡片时执行3次培养龙虾升级",
+            "effectDesc": "获得卡片时执行3次培养灵螯升级",
             "effectType": "instant_breed"
         },
         {
@@ -213,7 +213,7 @@
             "reward": {
                 "de": 2
             },
-            "effectDesc": "每次培养升级龙虾可以额外升1品",
+            "effectDesc": "每次培养升级灵螯可以额外升1品",
             "effectType": "aura_breed_bonus"
         },
         {
@@ -225,7 +225,7 @@
             "reward": {
                 "wang": 2
             },
-            "effectDesc": "你的里长可以拿取相邻格的奖励资源",
+            "effectDesc": "你的寻山客可以拿取相邻格的奖励资源",
             "effectType": "aura_adjacent_action"
         },
         {
@@ -240,7 +240,7 @@
             "reward": {
                 "de": 3
             },
-            "effectDesc": "指定龙虾或者虾笼，所有其他玩家需要弃置1个对应的资源",
+            "effectDesc": "指定灵螯或者灵鼎，所有其他玩家需要弃置1个对应的资源",
             "effectType": "instant_discard_attack"
         },
         {
@@ -255,7 +255,7 @@
             "reward": {
                 "de": 1
             },
-            "effectDesc": "在上贡区上贡支付上贡卡的资源清单时可以少付1个金币",
+            "effectDesc": "在上贡区上贡支付上贡卡的资源清单时可以少付1个贝币",
             "effectType": "aura_tribute_discount_coin"
         },
         {
@@ -270,7 +270,7 @@
             "reward": {
                 "wang": 1
             },
-            "effectDesc": "在上贡区上贡支付上贡卡的资源清单时可以少付1只普通龙虾",
+            "effectDesc": "在上贡区上贡支付上贡卡的资源清单时可以少付1只普通灵螯",
             "effectType": "aura_tribute_discount_lobster"
         },
         {
@@ -284,7 +284,7 @@
             "reward": {
                 "de": 2
             },
-            "effectDesc": "集市里购买普通龙虾只需要支付1金币，但不能再卖龙虾给集市",
+            "effectDesc": "集市里购买普通灵螯只需要支付1贝币，但不能再卖灵螯给集市",
             "effectType": "aura_market_rule"
         },
         {
@@ -300,7 +300,7 @@
             "reward": {
                 "wang": 2
             },
-            "effectDesc": "每次斗龙虾挑战时可以先获得1个资源（金币/仙草/普通龙虾自选）",
+            "effectDesc": "每次斗灵螯挑战时可以先获得1个资源（贝币/仙草/普通灵螯自选）",
             "effectType": "aura_battle_bonus"
         },
         {
@@ -313,7 +313,7 @@
             "reward": {
                 "wang": 1
             },
-            "effectDesc": "获得本卡时支付1/2/3个金币，获取3/2/1品龙虾",
+            "effectDesc": "获得本卡时支付1/2/3个贝币，获取3/2/1品灵螯",
             "effectType": "instant_buy_advanced_lobster"
         },
         {
@@ -339,7 +339,7 @@
             "reward": {
                 "wang": 1
             },
-            "effectDesc": "获得本卡时玩家所有龙虾都升1品",
+            "effectDesc": "获得本卡时玩家所有灵螯都升1品",
             "effectType": "instant_upgrade_all"
         },
         {
@@ -354,7 +354,7 @@
             "reward": {
                 "wang": 1
             },
-            "effectDesc": "押注成功可以额外获得1个金币",
+            "effectDesc": "押注成功可以额外获得1个贝币",
             "effectType": "aura_bet_bonus"
         },
         {
@@ -366,7 +366,7 @@
             "reward": {
                 "de": 1
             },
-            "effectDesc": "游戏结束最终结算前可以支付3/5/8个金币增加1/2/3德",
+            "effectDesc": "游戏结束最终结算前可以支付3/5/8个贝币增加1/2/3道",
             "effectType": "aura_endgame_score",
             "costResourceType": "coins"
         },
@@ -382,7 +382,7 @@
             "reward": {
                 "de": 2
             },
-            "effectDesc": "获得2个虾笼",
+            "effectDesc": "获得2个灵鼎",
             "effectType": "instant_gain_cages"
         },
         {
@@ -409,7 +409,7 @@
             "reward": {
                 "wang": 2
             },
-            "effectDesc": "玩家以后卖虾笼可以多获得1个金币，买虾笼少支付1个金币",
+            "effectDesc": "玩家以后卖灵鼎可以多获得1个贝币，买灵鼎少支付1个贝币",
             "effectType": "aura_cage_trade"
         },
         {
@@ -423,7 +423,7 @@
             "reward": {
                 "wang": 1
             },
-            "effectDesc": "获得本卡时以及后续每轮游戏开始时获得1个金币",
+            "effectDesc": "获得本卡时以及后续每轮游戏开始时获得1个贝币",
             "effectType": "aura_round_coin"
         },
         {
@@ -438,7 +438,7 @@
             "reward": {
                 "de": 1
             },
-            "effectDesc": "游戏结束最终结算前可以支付2/4/7个仙草增加1/2/3德",
+            "effectDesc": "游戏结束最终结算前可以支付2/4/7个仙草增加1/2/3道",
             "effectType": "aura_endgame_score",
             "costResourceType": "seaweed"
         }
@@ -468,7 +468,7 @@
                     }
                 ]
             },
-            "description": "玩家支付1只龙虾换1望，或者支付3只龙虾换2望",
+            "description": "玩家支付1只灵螯换1运，或者支付3只灵螯换2运",
             "auto": false
         },
         {
@@ -495,7 +495,7 @@
                     }
                 ]
             },
-            "description": "玩家支付2金币换1德，或者支付5金币换2德",
+            "description": "玩家支付2贝币换1道，或者支付5贝币换2道",
             "auto": false
         },
         {
@@ -504,7 +504,7 @@
             "action": {
                 "type": "post_station"
             },
-            "description": "本回合游戏中每完成一张进贡卡，都可以直接额外获得1德或者1望",
+            "description": "本回合游戏中每完成一张进贡卡，都可以直接额外获得1道或者1运",
             "auto": true
         },
         {
@@ -513,7 +513,7 @@
             "action": {
                 "type": "breeding_4"
             },
-            "description": "直接进行4次培养龙虾升级",
+            "description": "直接进行4次培养灵螯升级",
             "auto": true
         },
         {
@@ -522,7 +522,7 @@
             "action": {
                 "type": "black_market"
             },
-            "description": "直接获得一只2品龙虾",
+            "description": "直接获得一只2品灵螯",
             "auto": true
         },
         {
@@ -531,7 +531,7 @@
             "action": {
                 "type": "academy"
             },
-            "description": "你的德望轨最低者提升一格（如果德望值一样，则自己选择+1德或者+1望）",
+            "description": "你的道运轨最低者提升一格（如果道运值一样，则自己选择+1道或者+1运）",
             "auto": true
         },
         {
@@ -540,7 +540,7 @@
             "action": {
                 "type": "charity"
             },
-            "description": "德轨最低的玩家直接获得2只普通龙虾，望轨最低的玩家直接获得2个金币",
+            "description": "道轨最低的玩家直接获得2只普通灵螯，运轨最低的玩家直接获得2个贝币",
             "auto": true
         },
         {
@@ -549,7 +549,7 @@
             "action": {
                 "type": "bazaar"
             },
-            "description": "直接获取1根仙草+1个金币+1只普通龙虾+1个虾笼",
+            "description": "直接获取1根仙草+1个贝币+1只普通灵螯+1个灵鼎",
             "auto": true
         },
         {
@@ -558,7 +558,7 @@
             "action": {
                 "type": "inn"
             },
-            "description": "本卡上会有一个专属里长，获得后在下一回合增加1个放置名额",
+            "description": "本卡上会有一个专属寻山客，获得后在下一回合增加1个放置名额",
             "auto": true
         }
     ]

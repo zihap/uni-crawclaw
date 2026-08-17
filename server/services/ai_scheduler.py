@@ -124,7 +124,7 @@ class AIActionScheduler:
             log_info(f"[takeover] cleanup timer {key} for room {room_id}")
 
     async def _handle_tribute_lobster_selection(self, room_id: str, gs: dict, manager):
-        """处理tribute战斗的AI龙虾选择和判负逻辑"""
+        """处理tribute战斗的AI灵螯选择和判负逻辑"""
         from controllers.battle_action_handler import arena_betting_state, start_rpg_battle
         battle_queue = gs.get('battleQueue', [])
         if not battle_queue:
@@ -159,7 +159,7 @@ class AIActionScheduler:
                     best['selectedForBattle'] = True
                     state[role] = best
                     log_info(f"[tribute_lobster] AI player {pid} auto-selected lobster {best.get('id')} ({best.get('grade')})")
-                    # 通知前端AI已选龙虾
+                    # 通知前端AI已选灵螯
                     await manager.send_to_room(room_id, ServerEvents.SERVER_BATTLE_ACTION,
                         make_action_message(ServerBattleActionTypes.LOBSTER_SELECTED, {
                             'playerId': pid, 'lobster': best
@@ -206,7 +206,7 @@ class AIActionScheduler:
 
                 continue  # 判负处理完成，继续处理下一个战斗
 
-            # 双方都已选龙虾
+            # 双方都已选灵螯
             c_player = next((p for p in gs['players'] if p['id'] == cid), None)
             d_player = next((p for p in gs['players'] if p['id'] == did), None)
             both_ai = (c_player and is_ai_player(c_player)) and (d_player and is_ai_player(d_player))
@@ -248,7 +248,7 @@ class AIActionScheduler:
                     log_info(f"[tribute_lobster] both AI lobsters selected, starting RPG battle directly")
                     await start_rpg_battle(room_id, bid, gs, manager)
 
-        # 检查是否有人类玩家需要选龙虾，如果是，发送BATTLE_START通知前端
+        # 检查是否有人类玩家需要选灵螯，如果是，发送BATTLE_START通知前端
         needs_human_input = False
         for battle_info in gs.get('battleQueue', []):
             cid = battle_info['challengerId']
@@ -396,7 +396,7 @@ class AIActionScheduler:
                         if has_active_betting:
                             return  # 等待下注完成
                         await self._handle_tribute_lobster_selection(room_id, gs, manager)
-                        # 龙虾选择处理后，如果战斗队列仍非空（等待RPG战斗），退出调度
+                        # 灵螯选择处理后，如果战斗队列仍非空（等待RPG战斗），退出调度
                         if gs.get('battleQueue'):
                             return
                         continue
@@ -542,7 +542,7 @@ class AIActionScheduler:
                         if gs.get('current_battle'):
                             continue  # 战斗已开始
                         if gs.get('battleQueue'):
-                            return  # 等待人类选龙虾/下注
+                            return  # 等待人类选灵螯/下注
                         continue  # 队列已清空
                     current_area = gs.get('currentArea', 0)
                     log_info(f"[check_and_trigger] no waiting player, resolving area {current_area}")
@@ -573,13 +573,13 @@ class AIActionScheduler:
                         # 检查是否有战斗队列（tribute挑战已创建但未开始）
                         battle_queue = gs.get('battleQueue', [])
                         if battle_queue:
-                            # 为AI玩家选龙虾 + 判负处理
+                            # 为AI玩家选灵螯 + 判负处理
                             await self._handle_tribute_lobster_selection(room_id, gs, manager)
                             # 检查战斗是否已开始或队列是否已清空
                             if gs.get('current_battle'):
                                 continue  # 战斗已开始，重新循环检测AI操作
                             if gs.get('battleQueue'):
-                                return  # 仍有战斗队列但无法开始（等待人类选龙虾），停止循环
+                                return  # 仍有战斗队列但无法开始（等待人类选灵螯），停止循环
                             continue  # 队列已清空（判负），继续检测后续区域
                         # 检查是否有等待中的战斗Bonus选择
                         if gs.get('pendingBattleBonusChoices'):

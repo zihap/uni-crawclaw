@@ -196,7 +196,7 @@ class TestAIFullGame:
         gs, human, ai1, ai2 = game_setup
         gs['phase'] = 'settlement'
 
-        # 设置AI玩家有可升级的龙虾
+        # 设置AI玩家有可升级的灵螯
         ai1['lobsters'] = [
             {'id': 'lob1', 'grade': 'grade3'},
             {'id': 'lob2', 'grade': 'normal'}
@@ -267,11 +267,11 @@ class TestAIFullGame:
         assert decision['action_type'] in valid_actions
 
     def test_battle_phase_lobster_select(self, game_setup):
-        """验证AI在战斗阶段选择龙虾"""
+        """验证AI在战斗阶段选择灵螯"""
         gs, human, ai1, ai2 = game_setup
         gs['phase'] = 'battle'
 
-        # 设置AI玩家有可用的龙虾
+        # 设置AI玩家有可用的灵螯
         ai1['lobsters'] = [
             {'id': 'lob1', 'grade': 'grade2', 'used': False},
             {'id': 'lob2', 'grade': 'normal', 'used': False}
@@ -289,7 +289,7 @@ class TestAIFullGame:
 
         if decision['actionType'] == 'lobster_selected':
             assert 'lobsterId' in decision['payload']
-            # 验证选择的龙虾ID有效
+            # 验证选择的灵螯ID有效
             valid_ids = [l['id'] for l in ai1['lobsters']]
             assert decision['payload']['lobsterId'] in valid_ids
 
@@ -315,11 +315,11 @@ class TestAIFullGame:
         assert decision['actionType'] == 'roll_dice'
 
     def test_battle_phase_seaweed_choice(self, game_setup):
-        """验证AI在战斗阶段选择是否使用海草"""
+        """验证AI在战斗阶段选择是否使用仙草"""
         gs, human, ai1, ai2 = game_setup
         gs['phase'] = 'battle'
 
-        # AI有海草
+        # AI有仙草
         ai1['seaweed'] = 2
 
         battle = {
@@ -335,10 +335,10 @@ class TestAIFullGame:
         assert 'useSeaweed' in decision['payload']
         assert isinstance(decision['payload']['useSeaweed'], bool)
 
-        # AI没有海草
+        # AI没有仙草
         ai1['seaweed'] = 0
         decision = decide_battle_action(gs, ai1, battle)
-        assert decision['payload']['useSeaweed'] is False, "没有海草时应返回False"
+        assert decision['payload']['useSeaweed'] is False, "没有仙草时应返回False"
 
     def test_battle_phase_reward_choice(self, game_setup):
         """验证AI在战斗阶段选择奖励"""
@@ -360,11 +360,11 @@ class TestAIFullGame:
         assert decision['payload']['rewardType'] in ['coins', 'upgrade']
 
     def test_battle_phase_no_lobster(self, game_setup):
-        """验证AI在没有龙虾可用时的处理"""
+        """验证AI在没有灵螯可用时的处理"""
         gs, human, ai1, ai2 = game_setup
         gs['phase'] = 'battle'
 
-        # AI没有龙虾
+        # AI没有灵螯
         ai1['lobsters'] = []
 
         battle = {
@@ -389,7 +389,7 @@ class TestAIFullGame:
         # 创建终局得分卡
         card = {
             'id': 'endgame_coins',
-            'name': '金币得分',
+            'name': '贝币得分',
             'costResourceType': 'coins'
         }
 
@@ -399,10 +399,10 @@ class TestAIFullGame:
         assert isinstance(decision['cost'], int)
         assert isinstance(decision['reward'], int)
 
-        # 测试海草类型得分卡
+        # 测试仙草类型得分卡
         card_seaweed = {
             'id': 'endgame_seaweed',
-            'name': '海草得分',
+            'name': '仙草得分',
             'costResourceType': 'seaweed'
         }
 
@@ -477,7 +477,7 @@ class TestAIFullGame:
         ai1['lobsters'] = [{'id': 'lob1', 'grade': 'grade2', 'used': False}]
         ai1['seaweed'] = 2
 
-        # 龙虾选择
+        # 灵螯选择
         battle = {
             'phase': 'lobster_select',
             'attackerId': ai1['id'],
@@ -491,7 +491,7 @@ class TestAIFullGame:
         decision = decide_battle_action(gs, ai1, battle)
         assert decision['actionType'] == 'roll_dice'
 
-        # 海草选择
+        # 仙草选择
         battle['phase'] = 'seaweed_choice'
         battle['currentRoll'] = 3
         battle['targetValue'] = 6
